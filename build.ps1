@@ -9,7 +9,8 @@
 #
 # Everything bundled is downloaded from its publisher and verified before use:
 #   PHP 8.3 NTS x64 (windows.php.net sha256), ExifTool (exiftool.org sha256),
-#   Mozilla CA bundle (curl.se sha256), VC++ runtime (Microsoft Authenticode signature).
+#   Mozilla CA bundle (curl.se sha256). The Microsoft VC++ runtime is NOT bundled: Setup downloads
+#   it from Microsoft only on a PC that lacks it, and checks Microsoft's signature first.
 #
 # -SignCommand: optional Authenticode signing during compile (setup AND uninstaller), passed to
 #   Inno Setup as a SignTool; $f is replaced with the file to sign, $q with a double quote.
@@ -77,17 +78,6 @@ $caSha = ($caRaw.Trim() -split '\s+')[0]
 if ($caSha -notmatch '^[0-9a-fA-F]{64}$') { throw 'unexpected cacert.pem.sha256 content' }
 $caFile = Get-Verified 'https://curl.se/ca/cacert.pem' 'cacert.pem' $caSha
 
-$vcFile = Join-Path $cache 'vc_redist\vc_redist.x64.exe'
-if (-not (Test-Path $vcFile) -or (Get-Item $vcFile).LastWriteTime -lt (Get-Date).AddDays(-30)) {
-    New-Item -ItemType Directory -Force -Path (Split-Path $vcFile) | Out-Null
-    Write-Host '  downloading https://aka.ms/vs/17/release/vc_redist.x64.exe'
-    Invoke-WebRequest 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $vcFile -UseBasicParsing
-}
-$sig = Get-AuthenticodeSignature $vcFile
-if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
-    throw "vc_redist.x64.exe signature is not a valid Microsoft signature ($($sig.Status) $($sig.SignerCertificate.Subject))"
-}
-Write-Host "  VC++ runtime $((Get-Item $vcFile).VersionInfo.ProductVersion) (Microsoft signature valid)"
 
 # ---- 2. stage ----
 Write-Host '[2/4] Staging'
@@ -96,9 +86,9 @@ $app = Join-Path $stage 'app'
 New-Item -ItemType Directory -Force -Path $app, (Join-Path $app 'lib'), (Join-Path $app 'bin') | Out-Null
 
 $appFiles = 'index.php', 'api.php', 'file.php', 'thumb.php', 'worker.php', 'router.php', 'configure.php',
-            'install.ps1', 'uninstall.ps1', 'claude-login.ps1', 'install.bat', 'uninstall.bat',
+            'install.ps1', 'uninstall.ps1', 'install.bat', 'uninstall.bat',
             'start.bat', 'worker.bat', 'silent-worker.vbs', 'silent-server.vbs', 'launch.vbs',
-            'LICENSE', 'PRIVACY.md'
+            'LICENSE', 'PRIVACY.md', 'THIRD-PARTY-NOTICES.md'
 foreach ($f in $appFiles) { Copy-Item (Join-Path $src $f) (Join-Path $app $f) }
 Copy-Item (Join-Path $src 'lib\*.php') (Join-Path $app 'lib')
 
@@ -148,7 +138,6 @@ Remove-Item $exifTmp -Recurse -Force
 $php = Join-Path $phpDir 'php.exe'   # the bundled PHP (it has GD) draws the icon
 & $php (Join-Path $src 'installer\make-icon.php') (Join-Path $app 'photofinder.ico')
 if ($LASTEXITCODE -ne 0) { throw 'icon generation failed' }
-Copy-Item $vcFile (Join-Path $stage 'vc_redist.x64.exe')
 
 # ---- 3. prove the staged runtime works from an unrelated working directory ----
 Write-Host '[3/4] Checking the bundled runtime'

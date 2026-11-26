@@ -2,115 +2,110 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/util.php';
+require_once __DIR__ . '/Describer.php';
 
-final class Claude {
-    private const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-    private const API_VERSION = '2023-06-01';
-    private const SYSTEM_PROMPT = <<<TXT
-        You are an image cataloging assistant building a searchable photo library.
-        For each image, return ONLY a JSON object with these keys:
-        - "description": one or two sentences (max ~200 chars) factually describing the scene, subjects, setting, colors, mood, and notable details. Be specific and concrete.
-        - "tags": array of 8-20 lowercase single-word or short-phrase keywords for search (objects, scene, colors, activity, time-of-day, season, weather, emotions, style). Include synonyms a person might search.
-        - "text_in_image": any readable text visible in the image (signs, labels, screenshots, captions). Empty string if none.
-        Do not include people's identities, just descriptive labels (e.g. "man with beard", "two children", "elderly woman").
-        Return strictly valid JSON. No markdown fences. No prose outside the JSON.
-        TXT;
+/**
+ * Anthropic Messages API, with the user's own API key (Settings). One photo per request.
+ * Structured output guarantees the JSON shape; low effort keeps thinking (on by default on
+ * current models) short for a simple description task.
+ */
+final class Claude implements PhotoDescriber {
+    public const DEFAULT_MODEL = 'claude-haiku-5-5';
+    /** Offered in Settings: label => model id. */
+    public const MODELS = [
+        'claude-haiku-5-5' => 'Claude Haiku 5.5 (fast, lowest cost; recommended)',
+        'claude-sonnet-5-5' => 'Claude Sonnet 5.5 (more detail, about 20x the cost)',
+        'claude-opus-5-5' => 'Claude Opus 5.5 (most capable, about 40x the cost)',
+    ];
+    private const API_VERSION = '2026-10-21';
+
+    /** ANTHROPIC_BASE_URL (the variable Anthropic's own tools honour) can point at a gateway or proxy. */
+    private static function endpoint(): string {
+        $base = getenv('ANTHROPIC_BASE_URL');
+        $base = is_string($base) && trim($base) !== '' ? rtrim(trim($base), '/') : 'https://api.anthropic.com';
+        return $base . '/v1/messages';
+    }
 
     public function __construct(
         private string $apiKey,
         private string $model,
-    ) {}
+    ) {
+        if ($this->model === '' || $this->model === 'claude-haiku-4-5-20251001') $this->model = self::DEFAULT_MODEL;
+    }
+
+    public function label(): string { return 'anthropic:' . $this->model; }
 
     public function analyzeImage(string $jpegBytes): array {
         $payload = [
             'model' => $this->model,
-            'max_tokens' => 700,
-            'system' => [[
-                'type' => 'text',
-                'text' => self::SYSTEM_PROMPT,
-                'cache_control' => ['type' => 'ephemeral'],
-            ]],
+            'max_tokens' => 4000,
+            'system' => Describer::PROMPT,
+            'output_config' => [
+                'effort' => 'low',
+                'format' => ['type' => 'json_schema', 'schema' => Describer::schema()],
+            ],
             'messages' => [[
                 'role' => 'user',
                 'content' => [
-                    [
-                        'type' => 'image',
-                        'source' => [
-                            'type' => 'base64',
-                            'media_type' => 'image/jpeg',
-                            'data' => base64_encode($jpegBytes),
-                        ],
-                    ],
-                    [
-                        'type' => 'text',
-                        'text' => 'Catalog this image. Return JSON only.',
-                    ],
+                    ['type' => 'image', 'source' => [
+                        'type' => 'base64', 'media_type' => 'image/jpeg', 'data' => base64_encode($jpegBytes),
+                    ]],
+                    ['type' => 'text', 'text' => Describer::USER_TEXT],
                 ],
             ]],
         ];
+        $headers = [];
+        // Sonnet 5.5 / Opus 5.5 can hand a declined request to another model server-side.
+        if (str_starts_with($this->model, 'claude-sonnet-5-5') || str_starts_with($this->model, 'claude-opus-5-5')) {
+            $payload['fallbacks'] = 'default';
+            $headers[] = 'anthropic-beta: server-side-fallback-2026-07-01';
+        }
 
-        [$status, $body] = $this->postJson($payload);
-        if ($status !== 200) {
-            $errMsg = 'HTTP ' . $status;
-            $decoded = json_decode($body, true);
-            if (isset($decoded['error']['message'])) {
-                $errMsg .= ': ' . $decoded['error']['message'];
-            } else {
-                $errMsg .= ': ' . substr($body, 0, 300);
-            }
-            throw new RuntimeException($errMsg);
-        }
+        [$status, $body] = $this->postJson($payload, $headers);
         $decoded = json_decode($body, true);
-        if (!isset($decoded['content'][0]['text'])) {
-            throw new RuntimeException('Unexpected response shape');
+        if ($status !== 200) {
+            $msg = is_array($decoded) && isset($decoded['error']['message']) ? $decoded['error']['message'] : substr($body, 0, 300);
+            if ($status === 401) $msg = 'the Anthropic API key was rejected (check it in Settings)';
+            throw new RuntimeException("Anthropic API HTTP {$status}: {$msg}");
         }
-        $text = trim($decoded['content'][0]['text']);
-        $text = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', $text) ?? $text;
-        $parsed = json_decode($text, true);
-        if (!is_array($parsed)) {
-            $brace = strpos($text, '{');
-            $end = strrpos($text, '}');
-            if ($brace !== false && $end !== false && $end > $brace) {
-                $parsed = json_decode(substr($text, $brace, $end - $brace + 1), true);
-            }
+        if (!is_array($decoded)) throw new RuntimeException('Anthropic API returned an unreadable response.');
+
+        $stop = (string)($decoded['stop_reason'] ?? '');
+        if ($stop === 'refusal') {
+            $cat = (string)($decoded['stop_details']['category'] ?? '');
+            throw new RuntimeException('Claude declined to describe this photo' . ($cat !== '' ? " ({$cat})" : '') . '.');
         }
-        if (!is_array($parsed)) {
-            throw new RuntimeException('Could not parse JSON from model output: ' . substr($text, 0, 200));
+        if ($stop === 'max_tokens') throw new RuntimeException('Claude\'s answer was cut off (max_tokens).');
+
+        $text = '';
+        foreach ((array)($decoded['content'] ?? []) as $block) {
+            if (($block['type'] ?? '') === 'text') $text .= (string)($block['text'] ?? '');
         }
-        return [
-            'description' => (string)($parsed['description'] ?? ''),
-            'tags' => array_values(array_filter(
-                (array)($parsed['tags'] ?? []),
-                fn($t) => is_string($t) && trim($t) !== ''
-            )),
-            'text_in_image' => (string)($parsed['text_in_image'] ?? ''),
-            'usage' => $decoded['usage'] ?? [],
-        ];
+        if (trim($text) === '') throw new RuntimeException('Claude returned no description.');
+        return Describer::parse($text);
     }
 
-    private function postJson(array $payload): array {
-        $ch = curl_init(self::ENDPOINT);
+    /** @return array{0:int,1:string} */
+    private function postJson(array $payload, array $extraHeaders): array {
+        $ch = curl_init(self::endpoint());
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_HTTPHEADER => [
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
+            CURLOPT_HTTPHEADER => array_merge([
                 'Content-Type: application/json',
                 'x-api-key: ' . $this->apiKey,
                 'anthropic-version: ' . self::API_VERSION,
-            ],
-            CURLOPT_TIMEOUT => 120,
+            ], $extraHeaders),
+            CURLOPT_TIMEOUT => 180,
             CURLOPT_CONNECTTIMEOUT => 15,
         ]);
         pf_curl_tls($ch);
         $body = curl_exec($ch);
         if ($body === false) {
             $err = curl_error($ch);
-            curl_close($ch);
-            throw new RuntimeException('cURL error: ' . $err);
+            throw new RuntimeException('Could not reach the Anthropic API: ' . $err);
         }
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return [(int)$status, (string)$body];
+        return [(int)curl_getinfo($ch, CURLINFO_HTTP_CODE), (string)$body];
     }
 }

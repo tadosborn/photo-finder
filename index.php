@@ -117,6 +117,14 @@ $apiKeySet = $settings['api_key'] !== '';
   .auth-banner strong { color: #fff; }
   .auth-banner button.reauth { background: var(--warn); color: #1a1107; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }
   .auth-banner button.reauth:hover { filter: brightness(1.1); }
+  /* Provider settings. Text colours on these panels: --text on #21262f / #1b2230 > 11:1. */
+  .provider-panel { display: none; border: 1px solid var(--line); border-radius: 8px; padding: 2px 12px 12px; margin-top: 10px; background: var(--panel2); }
+  .provider-panel.show { display: block; }
+  .provider-note { font-size: 12px; color: var(--text); background: #1b2230; border-left: 3px solid #9dbcff; padding: 8px 10px; margin-top: 10px; border-radius: 4px; line-height: 1.45; }
+  .provider-note.warn { border-left-color: var(--warn); }
+  .provider-note ul { margin: 6px 0 6px 18px; padding: 0; }
+  .provider-note li { margin: 3px 0; }
+  .test-result { font-size: 12px; margin-top: 8px; color: var(--text); white-space: pre-wrap; }
   /* Update banner. #c7d8ff on #17233a is 11.6:1; #0b1220 on #9dbcff is 10.4:1 (WCAG AA). */
   .update-banner { background: #17233a; border-bottom: 1px solid var(--line); border-left: 3px solid #9dbcff; padding: 10px 18px; color: #c7d8ff; font-size: 13px; display:none; align-items:center; gap:10px; }
   .update-banner.show { display: flex; }
@@ -163,9 +171,9 @@ $apiKeySet = $settings['api_key'] !== '';
 </style>
 </head>
 <body>
-<div class="auth-banner" id="authBanner">
-  <span>🔐 <strong>Claude session expired.</strong> Indexing paused — click to re-authenticate. A login window will open on your desktop.</span>
-  <button class="reauth" id="reauthBtn">Re-authenticate</button>
+<div class="auth-banner" id="setupBanner" role="status">
+  <span>⚙ <strong>Choose how Photo Finder describes your photos.</strong> <span id="setupText">Pick Anthropic Claude, another AI service, or a local model on this PC.</span></span>
+  <button class="reauth" id="setupBtn" type="button">Open Settings</button>
 </div>
 <div class="update-banner" id="updateBanner" role="status">
   <span id="updateText"></span>
@@ -227,49 +235,99 @@ $apiKeySet = $settings['api_key'] !== '';
       <button type="button" id="purgeExcludedBtn" style="margin-top:6px;">Remove already-indexed photos from these folders</button>
       <button type="button" id="purgeMissingBtn" style="margin-top:6px;">Remove broken entries (files no longer on disk)</button>
 
-      <label>Backend</label>
-      <select id="backend">
-        <option value="cli">Claude Code CLI — uses your Max plan (no API key needed)</option>
-        <option value="api">Anthropic API — needs API key, faster</option>
-      </select>
-      <div class="hint">CLI mode uses the Claude Code binary on your machine under your existing subscription. ~8 sec/image, free under Max.</div>
+      <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);">
+        <h2 style="margin: 0 0 8px; font-size: 14px; color: var(--text);">How photos are described</h2>
+        <div class="hint">Photo Finder sends each photo you index to an AI model, which writes its description and search tags. Nothing is sent until you choose an option here and start indexing. Keys you enter are stored only on this PC (<?= htmlspecialchars(str_replace('/', '\\', PF_SETTINGS_FILE)) ?>).</div>
+        <label for="backend">AI provider</label>
+        <select id="backend">
+          <option value="">Choose…</option>
+          <option value="anthropic">Anthropic Claude (cloud, your API key)</option>
+          <option value="openai">Another AI service (OpenAI-compatible, your API key)</option>
+          <option value="local">On this PC only (local model, nothing leaves this PC)</option>
+        </select>
 
-      <div id="cliSettings">
-        <label>Claude CLI path</label>
-        <div style="display:flex; gap:8px;">
-          <input id="cliPath" type="text" placeholder="auto-detect or paste full path to claude.exe" style="flex:1">
-          <button type="button" id="detectCliBtn">Auto-detect</button>
+        <div class="provider-panel" data-provider="anthropic">
+          <label for="apiKey">Anthropic API key</label>
+          <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-...">
+          <div class="hint">Create a key at console.anthropic.com. Leave blank to keep the saved key.</div>
+          <label for="model">Model</label>
+          <select id="model"></select>
+          <div class="provider-note">
+            <strong>Cost:</strong> billed by Anthropic to your own account. With Claude Haiku 5.5 at the default image size, roughly $3–5 per 10,000 photos (an estimate). Sonnet costs about 20 times as much, Opus about 40 times. Current prices: anthropic.com/pricing.<br>
+            <strong>Privacy:</strong> each photo you index is sent to Anthropic, and Anthropic's privacy policy applies.
+          </div>
         </div>
-        <div class="hint" id="cliPathHint">Path to the Claude Code CLI binary (claude.exe on Windows).</div>
 
-        <label>CLI model</label>
-        <select id="cliModel">
-          <option value="haiku">Haiku — fast & efficient (recommended)</option>
-          <option value="sonnet">Sonnet — better quality, slower</option>
-          <option value="opus">Opus — best quality, slowest</option>
-        </select>
-      </div>
+        <div class="provider-panel" data-provider="openai">
+          <label for="openaiUrl">Service address (API base URL)</label>
+          <input id="openaiUrl" type="text" list="openaiUrlPresets" placeholder="https://api.openai.com/v1">
+          <datalist id="openaiUrlPresets">
+            <option value="https://api.openai.com/v1">OpenAI</option>
+            <option value="https://generativelanguage.googleapis.com/v1beta/openai">Google Gemini</option>
+            <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+          </datalist>
+          <label for="openaiKey">API key</label>
+          <input id="openaiKey" type="password" autocomplete="off">
+          <div class="hint">Leave blank to keep the saved key.</div>
+          <label for="openaiModel">Model (must accept images)</label>
+          <div style="display:flex; gap:8px;">
+            <input id="openaiModel" type="text" list="openaiModels" style="flex:1">
+            <button type="button" id="openaiListBtn">List models</button>
+          </div>
+          <datalist id="openaiModels"></datalist>
+          <div class="provider-note">
+            <strong>Cost:</strong> billed by that service to your own account; it depends on the service and model. A small, low-cost model that accepts images is usually enough for photo descriptions.<br>
+            <strong>Privacy:</strong> each photo you index is sent to that service, and its privacy policy applies.
+          </div>
+        </div>
 
-      <div id="apiSettings" style="display:none">
-        <label>Anthropic API key <?= $apiKeySet ? '<span class="hint" style="color:var(--ok)">(currently set — leave blank to keep)</span>' : '' ?></label>
-        <input id="apiKey" type="password" placeholder="sk-ant-...">
-        <div class="hint">Stored locally in <?= htmlspecialchars(str_replace('/', '\\', PF_SETTINGS_FILE)) ?>. Or set the ANTHROPIC_API_KEY environment variable.</div>
+        <div class="provider-panel" data-provider="local">
+          <div class="provider-note warn">
+            <strong>Runs entirely on this PC: your photos never leave it.</strong> Before choosing this, check:
+            <ul>
+              <li><strong>Software:</strong> install Ollama (ollama.com) or LM Studio (lmstudio.ai), both free, and download a vision model in it (a model that accepts images).</li>
+              <li><strong>Graphics card:</strong> a graphics card with 8 GB or more of video memory is recommended. Without one, the model runs on the processor and can take a minute or more per photo.</li>
+              <li><strong>Time:</strong> roughly 3–10 seconds per photo on a good graphics card, so 10,000 photos take about 8–30 hours; without one, several days.</li>
+              <li><strong>Disk and memory:</strong> a vision model is typically a 3–10 GB download and needs about that much free memory while it runs.</li>
+              <li><strong>Quality:</strong> descriptions are usually less detailed than the cloud options, and reading text in photos is noticeably weaker.</li>
+              <li><strong>Cost:</strong> nothing per photo, just your PC's electricity while it indexes.</li>
+            </ul>
+            These figures are rough; they depend on your hardware and the model you choose.
+          </div>
+          <label for="localUrl">Local server address</label>
+          <input id="localUrl" type="text" list="localUrlPresets">
+          <datalist id="localUrlPresets">
+            <option value="http://localhost:11434/v1">Ollama</option>
+            <option value="http://localhost:1234/v1">LM Studio</option>
+          </datalist>
+          <div class="hint">Only an address on this PC is accepted. Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1</div>
+          <label for="localModel">Model</label>
+          <div style="display:flex; gap:8px;">
+            <input id="localModel" type="text" list="localModels" style="flex:1">
+            <button type="button" id="localListBtn">Find models</button>
+          </div>
+          <datalist id="localModels"></datalist>
+        </div>
 
-        <label>API model</label>
-        <select id="model">
-          <option value="claude-haiku-4-5-20251001">Haiku 4.5 — fast & cheap (recommended)</option>
-          <option value="claude-sonnet-4-6">Sonnet 4.6 — higher quality</option>
-          <option value="claude-opus-4-7">Opus 4.7 — best quality, expensive</option>
-        </select>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+          <button type="button" id="testProviderBtn">Test with a sample picture</button>
+          <span class="hint" style="margin:0">Uses the settings above, saved or not. A cloud test costs a fraction of a cent.</span>
+        </div>
+        <div class="test-result" id="testResult" role="status"></div>
 
-        <label>Max image dimension sent to API (px)</label>
+        <label for="maxDim">Max image dimension sent to the AI (px)</label>
         <input id="maxDim" type="number" min="256" max="2000" step="64">
-        <div class="hint">Lower = cheaper & faster. 1024–1568 is plenty for content search.</div>
+        <div class="hint">Lower = cheaper and faster. 1024–1568 is plenty for content search.</div>
+
+        <div id="reindexBox" style="display:none; margin-top:14px;">
+          <div class="hint" id="reindexText" style="margin:0 0 6px;"></div>
+          <button type="button" id="reindexBtn">Re-describe them with the current model</button>
+        </div>
       </div>
 
       <label>Batch size per indexing tick</label>
       <input id="batchSize" type="number" min="1" max="25">
-      <div class="hint">CLI mode batches multiple images into one CLI call (much more efficient under Max). 10–15 is the sweet spot — higher gives diminishing returns and bigger blast radius if a batch fails. API mode: 5 is fine.</div>
+      <div class="hint">Photos the worker describes before it checks for new instructions (Stop, Settings changes). 5 is fine.</div>
 
       <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);">
         <h2 style="margin: 0 0 8px; font-size: 14px; color: var(--text);">Metadata export to image files</h2>
@@ -376,7 +434,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <label>Text in image (OCR)</label>
     <textarea id="editText"></textarea>
     <div class="edit-actions">
-      <button type="button" class="reset-btn" id="lbResetManual" title="Discard your edits, mark for re-index by Claude">Reset to AI</button>
+      <button type="button" class="reset-btn" id="lbResetManual" title="Discard your edits and have the AI describe this photo again">Reset to AI</button>
       <button type="button" id="lbCancel">Cancel</button>
       <button type="button" class="primary" id="lbSave">Save</button>
     </div>
@@ -632,7 +690,7 @@ async function saveEditor() {
 
 async function resetManual() {
   if (lbIndex < 0) return;
-  if (!confirm('Discard your manual edits and let Claude re-describe this photo? It will be queued for re-indexing.')) return;
+  if (!confirm('Discard your manual edits and let the AI describe this photo again? It will be queued for re-indexing.')) return;
   const r = lastResults[lbIndex];
   try {
     await api('reset_manual', { qs: 'id=' + encodeURIComponent(r.id), body: {} });
@@ -729,8 +787,8 @@ async function refreshWorkerStatus() {
   try {
     const w = await api('worker_status');
     const pill = $('#pill-worker');
-    const authNeeded = (w.last_log || '').toLowerCase().startsWith('auth-required');
-    $('#authBanner').classList.toggle('show', authNeeded);
+    const setupNeeded = (w.last_log || '').toLowerCase().startsWith('setup-required');
+    if (setupNeeded) showSetupBanner(w.last_log.replace(/^setup-required:\s*/i, ''));
     if (w.watchdog && w.watchdog.attempted) {
       const msg = w.watchdog.reason.startsWith('launched')
         ? `Worker auto-relaunched (attempt ${w.watchdog.attempt}/3)`
@@ -739,7 +797,7 @@ async function refreshWorkerStatus() {
     }
     if (w.alive) {
       pill.classList.remove('err'); pill.classList.add('ok');
-      pill.querySelector('.num').textContent = w.active ? 'indexing' : (authNeeded ? 'auth needed' : 'idle');
+      pill.querySelector('.num').textContent = w.active ? 'indexing' : (setupNeeded ? 'setup needed' : 'idle');
       pill.title = `Worker is running and ${w.active ? 'actively indexing' : 'idle'}. Last heartbeat: ${w.seconds_since_heartbeat}s ago. ${w.last_log || ''}`;
     } else {
       pill.classList.remove('ok'); pill.classList.add('err');
@@ -799,10 +857,10 @@ async function startIndexing() {
     w = await waitForWorker(15);
     if (!w) { toast('Worker did not come online in 15s. Try again or run install.bat.', 'err', 6000); return; }
   }
-  const authNeeded = (w.last_log || '').toLowerCase().startsWith('auth-required');
-  if (authNeeded) {
-    $('#authBanner').classList.add('show');
-    toast('Auth required — click Re-authenticate', 'err', 4000);
+  const ps = await api('provider_status');
+  if (!ps.configured) {
+    showSetupBanner(ps.message);
+    toast(ps.message, 'err', 5000);
     return;
   }
   try {
@@ -812,26 +870,19 @@ async function startIndexing() {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-async function reauth() {
-  $('#reauthBtn').disabled = true;
-  $('#reauthBtn').textContent = 'Opening login window…';
-  try {
-    const r = await api('worker_login', { body: {} });
-    if (!r.ok) {
-      toast(r.error || 'Could not open login window. Run install.bat first.', 'err', 8000);
-    } else {
-      toast('Login window opened. Complete the OAuth flow in the popup.', 'ok', 6000);
-      // After 5s, hide the banner and try indexing again
-      setTimeout(async () => {
-        $('#authBanner').classList.remove('show');
-        await refreshWorkerStatus();
-      }, 5000);
-    }
-  } catch (e) { toast(e.message, 'err'); }
-  $('#reauthBtn').disabled = false;
-  $('#reauthBtn').textContent = 'Re-authenticate';
+// ---- AI provider setup ----
+function showSetupBanner(message) {
+  if (message) $('#setupText').textContent = message;
+  $('#setupBanner').classList.add('show');
 }
-$('#reauthBtn').addEventListener('click', reauth);
+async function checkProviderSetup() {
+  try {
+    const ps = await api('provider_status');
+    if (ps.configured) $('#setupBanner').classList.remove('show');
+    else showSetupBanner(ps.message);
+  } catch (e) { /* page still works without it */ }
+}
+$('#setupBtn').addEventListener('click', () => $('#settingsBtn').click());
 
 async function stopIndexing() {
   try {
@@ -910,41 +961,106 @@ $('#detectExiftoolBtn').addEventListener('click', async () => {
 });
 
 function updateBackendVisibility() {
-  const isCli = $('#backend').value === 'cli';
-  $('#cliSettings').style.display = isCli ? '' : 'none';
-  $('#apiSettings').style.display = isCli ? 'none' : '';
+  const b = $('#backend').value;
+  $$('.provider-panel').forEach(p => p.classList.toggle('show', p.dataset.provider === b));
+  $('#testResult').textContent = '';
 }
 $('#backend').addEventListener('change', updateBackendVisibility);
 
-$('#detectCliBtn').addEventListener('click', async () => {
-  $('#detectCliBtn').disabled = true;
+function providerFields() {
+  const body = {
+    backend: $('#backend').value,
+    model: $('#model').value,
+    openai_base_url: $('#openaiUrl').value.trim(),
+    openai_model: $('#openaiModel').value.trim(),
+    local_base_url: $('#localUrl').value.trim(),
+    local_model: $('#localModel').value.trim(),
+  };
+  if ($('#apiKey').value.trim()) body.api_key = $('#apiKey').value.trim();
+  if ($('#openaiKey').value.trim()) body.openai_api_key = $('#openaiKey').value.trim();
+  return body;
+}
+
+async function listModels(backend, urlSel, keySel, listSel, btnSel) {
+  $(btnSel).disabled = true;
   try {
-    const r = await api('detect_cli');
-    if (r.found) {
-      $('#cliPath').value = r.cli_path;
-      toast('Found: ' + r.cli_path);
-    } else {
-      toast('Could not auto-detect. Paste the full path to claude.exe.', 'err', 5000);
-    }
+    const body = { backend, base_url: $(urlSel).value.trim() };
+    if (keySel && $(keySel).value.trim()) body.api_key = $(keySel).value.trim();
+    const r = await api('provider_models', { body });
+    if (!r.ok) { toast(r.error, 'err', 6000); return; }
+    const dl = $(listSel);
+    dl.textContent = '';
+    r.models.forEach(m => { const o = document.createElement('option'); o.value = m; dl.appendChild(o); });
+    toast(r.models.length ? r.models.length + ' models found: pick one in the Model box.' : 'The server lists no models.', r.models.length ? 'ok' : 'err', 4000);
   } catch (e) { toast(e.message, 'err'); }
-  $('#detectCliBtn').disabled = false;
+  finally { $(btnSel).disabled = false; }
+}
+$('#openaiListBtn').addEventListener('click', () => listModels('openai', '#openaiUrl', '#openaiKey', '#openaiModels', '#openaiListBtn'));
+$('#localListBtn').addEventListener('click', () => listModels('local', '#localUrl', null, '#localModels', '#localListBtn'));
+
+$('#testProviderBtn').addEventListener('click', async () => {
+  const btn = $('#testProviderBtn');
+  btn.disabled = true;
+  $('#testResult').textContent = 'Testing… (a local model can take a minute the first time)';
+  try {
+    const r = await api('provider_test', { body: providerFields() });
+    $('#testResult').textContent = r.ok
+      ? '✓ ' + r.label + ' answered in ' + r.seconds + ' s: "' + r.description + '"'
+      : '✗ ' + r.error;
+  } catch (e) { $('#testResult').textContent = '✗ ' + e.message; }
+  finally { btn.disabled = false; }
+});
+
+async function refreshReindexBox() {
+  try {
+    const r = await api('model_stats');
+    const box = $('#reindexBox');
+    if (!r.current || !r.other) { box.style.display = 'none'; return; }
+    $('#reindexText').textContent = r.other + ' indexed photo(s) were described by a different model, or before Photo Finder recorded the model. '
+      + 'Re-describing them sends them to ' + r.current + ' (cloud costs apply). Until each one is redone, its current description stays searchable.';
+    $('#reindexBtn').dataset.armed = '';
+    $('#reindexBtn').textContent = 'Re-describe them with the current model';
+    box.style.display = '';
+  } catch (e) { /* optional */ }
+}
+$('#reindexBtn').addEventListener('click', async () => {
+  const btn = $('#reindexBtn');
+  if (!btn.dataset.armed) {   // two clicks instead of a confirm() dialog
+    btn.dataset.armed = '1';
+    btn.textContent = 'Click again to queue them';
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const r = await api('reindex_other', { body: {} });
+    if (!r.ok) { toast(r.error, 'err', 6000); return; }
+    toast(r.queued + ' photo(s) queued. Start indexing to re-describe them.', 'ok', 6000);
+    if (r.stats) setStats(r.stats);
+    await refreshReindexBox();
+  } catch (e) { toast(e.message, 'err'); }
+  finally { btn.disabled = false; }
 });
 
 $('#settingsBtn').addEventListener('click', async () => {
   const s = await api('settings_get');
   $('#photoDirs').value = (s.photo_dirs || []).join('\n');
   $('#excludedDirs').value = (s.excluded_dirs || []).join('\n');
-  $('#backend').value = s.backend || 'cli';
-  $('#cliPath').value = s.cli_path || s.cli_path_suggested || '';
-  if (s.cli_path_suggested && !s.cli_path) {
-    $('#cliPathHint').innerHTML = '<span style="color:var(--ok)">Auto-detected — click Save to confirm.</span>';
-  } else {
-    $('#cliPathHint').textContent = 'Path to the Claude Code CLI binary (claude.exe on Windows).';
-  }
-  $('#cliModel').value = s.cli_model || 'haiku';
+  $('#backend').value = s.backend || '';
+  const modelSel = $('#model');
+  modelSel.textContent = '';
+  Object.entries(s.anthropic_models || {}).forEach(([id, label]) => {
+    const o = document.createElement('option'); o.value = id; o.textContent = label; modelSel.appendChild(o);
+  });
+  modelSel.value = s.model;
   $('#apiKey').value = '';
-  $('#apiKey').placeholder = s.api_key_set ? '(set — leave blank to keep)' : 'sk-ant-...';
-  $('#model').value = s.model;
+  $('#apiKey').placeholder = s.api_key_set ? '(saved; leave blank to keep)' : 'sk-ant-...';
+  $('#openaiUrl').value = s.openai_base_url || '';
+  $('#openaiKey').value = '';
+  $('#openaiKey').placeholder = s.openai_api_key_set ? '(saved; leave blank to keep)' : '';
+  $('#openaiModel').value = s.openai_model || '';
+  $('#localUrl').value = s.local_base_url || 'http://localhost:11434/v1';
+  $('#localModel').value = s.local_model || '';
+  refreshReindexBox();
   $('#maxDim').value = s.max_image_dim;
   $('#batchSize').value = s.batch_size;
   $('#exiftoolPath').value = s.exiftool_path || s.exiftool_path_suggested || '';
@@ -969,10 +1085,7 @@ $('#saveSettingsBtn').addEventListener('click', async () => {
   const body = {
     photo_dirs: dirs,
     excluded_dirs: excluded,
-    backend: $('#backend').value,
-    model: $('#model').value,
-    cli_model: $('#cliModel').value,
-    cli_path: $('#cliPath').value.trim(),
+    ...providerFields(),
     max_image_dim: parseInt($('#maxDim').value, 10),
     batch_size: parseInt($('#batchSize').value, 10),
   };
@@ -984,11 +1097,11 @@ $('#saveSettingsBtn').addEventListener('click', async () => {
   body.export_overwrite_original = $('#expOverwriteOrig').checked;
   body.update_check = $('#updateAuto').checked;
   body.export_batch_size = parseInt($('#expBatchSize').value, 10);
-  if ($('#apiKey').value.trim()) body.api_key = $('#apiKey').value.trim();
   try {
     await api('settings_save', { body });
     toast('Settings saved');
     $('#settingsDlg').close();
+    checkProviderSetup();
   } catch (e) { toast(e.message, 'err'); }
 });
 
@@ -1318,6 +1431,7 @@ $('#checkUpdatesBtn').addEventListener('click', async () => {
 
 refreshStats().then(() => doSearch());
 checkUpdates(false);
+checkProviderSetup();
 </script>
 </body>
 </html>

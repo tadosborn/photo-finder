@@ -1,24 +1,33 @@
 # Photo Finder privacy statement
 
 Photo Finder runs on your own PC. This page lists everything it sends over the internet, and
-how to turn each part off. The same summary is shown in the installer.
+how to control each part. The same summary is shown in the installer.
 
-## Photo descriptions (Anthropic Claude)
+## Photo descriptions (the AI provider you choose)
 
-To make your photos searchable, Photo Finder asks Anthropic's Claude to describe each photo you
-index (what is in it, any visible text, and some search tags). Depending on the backend you
-choose in Settings, the photo goes to Claude either:
+To make your photos searchable, an AI model describes each photo you index (what is in it, any
+visible text, and some search tags). You choose the provider in **Settings > How photos are
+described**. Nothing is sent anywhere until you have chosen one and start indexing, and only
+photos in the folders you chose are indexed.
 
-- through **Claude Code** signed in on this PC (your own Claude account), or
-- through the **Anthropic API** with an API key you enter.
+- **Anthropic Claude**, with your own Anthropic API key: each photo you index is sent to
+  Anthropic. Anthropic's privacy policy applies: <https://www.anthropic.com/legal/privacy>.
+- **Another AI service** (any OpenAI-compatible service, such as OpenAI, Google Gemini or
+  OpenRouter), with your own key: each photo you index is sent to that service, and its
+  privacy policy applies.
+- **On this PC only** (a local model server such as Ollama or LM Studio): photos are sent only
+  to that server on your own PC and never leave it. Photo Finder accepts only an address on
+  this PC (`localhost` / `127.0.0.1`) for this option.
 
-With the API backend, each photo is reduced to at most 1568 pixels on the long side before it is
-sent (Settings > "Max image dimension sent to API"). With the Claude Code backend, Photo Finder
-gives Claude Code the photo's file path and Claude Code reads the file itself. Nothing is sent
-until you start indexing, and only photos in the folders you chose are indexed. Anthropic's
-privacy policy applies to that processing: <https://www.anthropic.com/legal/privacy>.
+Before a photo is sent, it is reduced to at most 1568 pixels on the long side (Settings >
+"Max image dimension sent to the AI"). The **Test with a sample picture** button in Settings
+sends a small picture Photo Finder draws itself, not one of your photos.
 
-To stop sending photos, stop indexing (or remove the folders) in Photo Finder.
+Your API keys are stored only on your PC, in `%LOCALAPPDATA%\Photo Finder\settings.json`, and
+are sent only to the provider they belong to. Photo Finder contains no keys of its own and
+never reads keys from anywhere else.
+
+To stop sending photos, stop indexing, remove the folders, or switch to the local option.
 
 ## Update checks (infinetinc.com)
 
@@ -31,6 +40,11 @@ before it runs.
 
 Turn automatic checks off in the installer, or later in **Settings > Updates**. "Check now"
 still works when you ask for it.
+
+## Setup
+
+If your PC lacks the Microsoft Visual C++ Runtime, Setup downloads it from Microsoft
+(`aka.ms`) and installs it. Nothing about you is sent beyond that ordinary download.
 
 ## Everything else stays on your PC
 

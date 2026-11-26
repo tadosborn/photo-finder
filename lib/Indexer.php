@@ -3,8 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/util.php';
 require_once __DIR__ . '/Db.php';
-require_once __DIR__ . '/Claude.php';
-require_once __DIR__ . '/ClaudeCli.php';
+require_once __DIR__ . '/Describer.php';
 require_once __DIR__ . '/Thumb.php';
 require_once __DIR__ . '/Faces.php';
 require_once __DIR__ . '/Exif.php';
@@ -172,139 +171,17 @@ final class Indexer {
     }
 
     public static function processBatch(array $settings, int $limit): array {
-        $backend = (string)($settings['backend'] ?? 'api');
-        $maxDim = (int)$settings['max_image_dim'];
-
-        if ($backend === 'cli') {
-            $configured = (string)($settings['cli_path'] ?? '');
-            $cliPath = ClaudeCli::resolvePath($configured);
-            if ($cliPath === null) {
-                return ['processed' => 0, 'errors' => 0,
-                    'message' => 'Claude CLI path not configured or not found. Open Settings and click Auto-detect.'];
-            }
-            if ($cliPath !== $configured) {
-                // The saved path went stale (VS Code removes the old extension folder on
-                // update). Remember the current one so Settings shows what is really used.
-                $saved = pf_load_settings();
-                $saved['cli_path'] = $cliPath;
-                pf_save_settings($saved);
-                pf_log('Claude CLI path updated: ' . $cliPath);
-            }
-            $client = new ClaudeCli($cliPath, (string)($settings['cli_model'] ?? 'haiku'));
-        } else {
-            $apiKey = (string)($settings['api_key'] ?? '');
-            if ($apiKey === '') {
-                return ['processed' => 0, 'errors' => 0, 'message' => 'No API key configured.'];
-            }
-            $client = new Claude($apiKey, (string)$settings['model']);
+        [$client, $why] = Describer::fromSettings($settings);
+        if ($client === null) {
+            return ['processed' => 0, 'errors' => 0, 'message' => $why, 'needs_setup' => true];
         }
+        $maxDim = (int)$settings['max_image_dim'];
+        $label = $client->label();
 
         $items = Db::nextPending($limit);
         $processed = 0;
         $errors = 0;
         $messages = [];
-
-        if ($backend === 'cli' && count($items) > 0) {
-            $usable = [];
-            foreach ($items as $item) {
-                if (!is_file($item['path'])) {
-                    Db::markError($item['id'], 'File missing: ' . $item['path']);
-                    pf_log('  ✗ ' . basename($item['path']) . ': file missing');
-                    $errors++;
-                    continue;
-                }
-                $usable[] = $item;
-            }
-            if ($usable) {
-                $paths = array_column($usable, 'path');
-                $names = array_map('basename', $paths);
-                // Pull GPS + capture date for the whole batch in one ExifTool call.
-                // Doing it up front means errored items still get location/date.
-                $exifMap = Exif::extractBatch($paths);
-                foreach ($usable as $item) {
-                    $e = $exifMap[$item['path']] ?? null;
-                    if ($e) Db::updateExif($item['id'], $e['lat'], $e['lon'], $e['alt'], $e['taken_at']);
-                }
-                $withGps = 0;
-                foreach ($exifMap as $e) if ($e['lat'] !== null) $withGps++;
-                pf_log('  EXIF: ' . count($exifMap) . '/' . count($paths) . ' have date, ' . $withGps . ' have GPS');
-                pf_log('→ analyzing ' . count($paths) . ': ' . implode(', ', $names));
-                $t0 = microtime(true);
-                try {
-                    $analyses = $client->analyzeImages($paths);
-                } catch (ClaudeParseException $e) {
-                    // The CLI answered but nothing in the reply could be used.
-                    // Leave $analyses empty so every photo gets its own retry below.
-                    pf_log('✗ batch reply unusable after ' . round(microtime(true) - $t0, 1) . 's; retrying each photo on its own');
-                    $analyses = [];
-                } catch (Throwable $e) {
-                    pf_log('✗ batch FAILED after ' . round(microtime(true) - $t0, 1) . 's: ' . $e->getMessage());
-                    foreach ($usable as $item) {
-                        Db::markError($item['id'], 'Batch failed: ' . $e->getMessage());
-                        $errors++;
-                    }
-                    $messages[] = 'Batch error: ' . $e->getMessage();
-                    return ['processed' => $processed, 'errors' => $errors, 'messages' => $messages];
-                }
-                $wall = microtime(true) - $t0;
-                $env  = ($client instanceof ClaudeCli) ? ($client->lastEnvelope ?? []) : [];
-                $api  = isset($env['duration_api_ms']) ? ((int)$env['duration_api_ms']) / 1000 : null;
-                $cliTotal = isset($env['duration_ms']) ? ((int)$env['duration_ms']) / 1000 : null;
-                $tokensIn  = $env['usage']['input_tokens']  ?? null;
-                $tokensOut = $env['usage']['output_tokens'] ?? null;
-                $turns     = $env['num_turns'] ?? null;
-                $bits = [sprintf('%.1fs wall', $wall)];
-                if ($cliTotal !== null) $bits[] = sprintf('%.1fs cli', $cliTotal);
-                if ($api !== null)      $bits[] = sprintf('%.1fs api', $api);
-                if ($turns !== null)    $bits[] = $turns . ' turn' . ($turns == 1 ? '' : 's');
-                if ($tokensIn !== null && $tokensOut !== null) {
-                    $bits[] = $tokensIn . ' in / ' . $tokensOut . ' out tokens';
-                    $bits[] = sprintf('%.0f tokens/photo', ($tokensIn + $tokensOut) / max(1, count($paths)));
-                }
-                pf_log('← batch: ' . implode(' · ', $bits));
-                foreach ($usable as $item) {
-                    $analysis = $analyses[$item['path']] ?? null;
-                    $base = basename($item['path']);
-                    if (!self::hasDescription($analysis)) {
-                        // The batch reply skipped this photo, named the wrong path, or left it
-                        // blank. Asking about it on its own recovers nearly all of these.
-                        try {
-                            $analysis = $client->analyzeImage($item['path']);
-                        } catch (Throwable $e) {
-                            Db::markError($item['id'], 'Retry on its own failed: ' . $e->getMessage());
-                            pf_log('  ✗ ' . $base . ': retry failed: ' . $e->getMessage());
-                            $errors++;
-                            $messages[] = $base . ': ' . $e->getMessage();
-                            continue;
-                        }
-                        if (!self::hasDescription($analysis)) {
-                            Db::markError($item['id'], 'Claude returned no description, even when asked about this photo on its own');
-                            pf_log('  ✗ ' . $base . ': no description, even on its own');
-                            $errors++;
-                            continue;
-                        }
-                        pf_log('  ↻ ' . $base . ': recovered by asking on its own');
-                    }
-                    try {
-                        $info = @getimagesize($item['path']) ?: [0, 0];
-                        $analysis['faces'] = $exifMap[$item['path']]['faces'] ?? [];
-                        Db::markIndexed($item['id'], $analysis, (int)$info[0], (int)$info[1]);
-                        Thumb::ensureThumb($item['id'], $item['path']);
-                        $desc = (string)($analysis['description'] ?? '');
-                        if (mb_strlen($desc) > 100) $desc = mb_substr($desc, 0, 100) . '…';
-                        pf_log('  ✓ ' . $base . ': ' . $desc);
-                        self::logVerboseAnalysis($analysis, $exifMap[$item['path']] ?? null, (int)$info[0], (int)$info[1]);
-                        $processed++;
-                    } catch (Throwable $e) {
-                        Db::markError($item['id'], $e->getMessage());
-                        pf_log('  ✗ ' . $base . ': ' . $e->getMessage());
-                        $errors++;
-                        $messages[] = $base . ': ' . $e->getMessage();
-                    }
-                }
-            }
-            return ['processed' => $processed, 'errors' => $errors, 'messages' => $messages];
-        }
 
         foreach ($items as $item) {
             $id = $item['id'];
@@ -317,11 +194,14 @@ final class Indexer {
                     $errors++;
                     continue;
                 }
-                pf_log('→ analyzing ' . $base);
+                pf_log('→ analyzing ' . $base . ' with ' . $label);
                 $t0 = microtime(true);
                 $prepped = Thumb::prepareForApi($path, $maxDim);
                 $analysis = $client->analyzeImage($prepped['bytes']);
-                Db::markIndexed($id, $analysis, $prepped['width'], $prepped['height']);
+                if (trim((string)($analysis['description'] ?? '')) === '') {
+                    throw new RuntimeException('The AI returned an empty description.');
+                }
+                Db::markIndexed($id, $analysis, $prepped['width'], $prepped['height'], $label);
                 $e = Exif::extractBatch([$path])[$path] ?? null;
                 if ($e) Db::updateExif($id, $e['lat'], $e['lon'], $e['alt'], $e['taken_at']);
                 Thumb::ensureThumb($id, $path);
@@ -331,7 +211,11 @@ final class Indexer {
                 self::logVerboseAnalysis($analysis, $e, $prepped['width'], $prepped['height']);
                 $processed++;
             } catch (Throwable $e) {
-                Db::markError($id, $e->getMessage());
+                if (($item['status'] ?? '') === 'ok') {
+                    Db::markRedescribeFailed($id, $e->getMessage());   // keeps the old description
+                } else {
+                    Db::markError($id, $e->getMessage());
+                }
                 pf_log('  ✗ ' . $base . ': ' . $e->getMessage());
                 $errors++;
                 $messages[] = $base . ': ' . $e->getMessage();

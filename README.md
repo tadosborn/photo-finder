@@ -2,14 +2,19 @@
 
 Search your own photo library by what is *in* the photos: "dog at the beach", "blue car",
 "christmas tree", "receipt from the hardware store". Photo Finder runs on your Windows PC,
-asks Anthropic's Claude to describe each photo once, and keeps a local full-text index you
-can search instantly.
+has an AI model of your choice describe each photo once, and keeps a local full-text index
+you can search instantly.
 
+- **Your choice of AI.** Anthropic Claude or another OpenAI-compatible service (OpenAI,
+  Google Gemini, OpenRouter...) with your own API key, or **a local model on your own PC**
+  (Ollama or LM Studio) so photos never leave it. Settings shows costs and requirements for
+  each, and a **Test** button tries your choice on a sample picture.
 - **Your folders.** Setup starts with your OneDrive Pictures folder; add or remove folders any
   time. Subfolders are included; folders named `Screenshots` are skipped by default.
 - **Searchable descriptions.** Each photo gets a description, tags and any text visible in it
   (signs, documents), plus GPS location, capture date and face names from the photo's own
-  metadata (e.g. from digiKam).
+  metadata (e.g. from digiKam). Switch AI models any time; Photo Finder remembers which model
+  described each photo and can re-describe the rest.
 - **Embed metadata.** Optionally write the descriptions and tags into the photo files (XMP /
   IPTC / EXIF) so Windows Explorer, Lightroom, Bridge and others can search them too.
 - **Self-contained.** One installer with its own PHP, SQLite and ExifTool; nothing else to
@@ -20,9 +25,18 @@ can search instantly.
 ## Download and install
 
 Download `PhotoFinderSetup-<version>.exe` from the [Releases](../../releases) page and run it.
-Requirements: Windows 10 or 11 (64-bit), and either
-[Claude Code](https://claude.com/claude-code) signed in on the PC or an
-[Anthropic API key](https://console.anthropic.com/) (enter it in Settings).
+Requirements: Windows 10 or 11 (64-bit), and one of:
+
+- an [Anthropic API key](https://console.anthropic.com/) (Claude Haiku 5.5 costs roughly
+  $3-5 per 10,000 photos at the default image size; an estimate, billed to your account);
+- a key for another OpenAI-compatible service with a model that accepts images (cost depends
+  on the service);
+- a local model server on the PC: [Ollama](https://ollama.com) or
+  [LM Studio](https://lmstudio.ai) with a vision model. Free per photo, but a graphics card
+  with 8 GB or more of video memory is recommended; without one, expect a minute or more per
+  photo. Descriptions are less detailed than the cloud options.
+
+Choose and enter it in **Settings > How photos are described** after installing.
 
 Program files go to `C:\Program Files\Photo Finder`; your index, thumbnails and settings to
 `%LOCALAPPDATA%\Photo Finder`. Open it from the Start menu entry **Photo Finder**.
@@ -31,9 +45,10 @@ the index.
 
 ## Privacy
 
-Photos you index are sent to Anthropic's Claude to be described, and the app can check
-infinetinc.com for updates. Nothing else leaves your PC. Details and how to turn things off:
-[PRIVACY.md](PRIVACY.md).
+Photos you index are sent to the AI provider you choose (or stay on your PC with the local
+option), and the app can check infinetinc.com for updates. Nothing else leaves your PC.
+Details and how to turn things off: [PRIVACY.md](PRIVACY.md). Bundled components and their
+licenses: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Code signing policy
 
@@ -56,8 +71,8 @@ Requires Windows, PowerShell 7 and [Inno Setup 6](https://jrsoftware.org/isinfo.
 pwsh ./build.ps1
 ```
 
-The build downloads PHP, ExifTool, the Mozilla CA bundle and the Microsoft VC++ runtime,
-verifies each one (checksums from the publishers, Microsoft's signature), and writes
+The build downloads PHP, ExifTool and the Mozilla CA bundle, verifies each one against its
+publisher's checksum, and writes
 `dist\PhotoFinderSetup-<version>.exe`. The version comes from `lib/version.php`.
 
 For development without installing, `start.bat` serves the app with a local PHP (bundled
@@ -66,4 +81,5 @@ For development without installing, `start.bat` serves the app with a local PHP 
 ## License
 
 [MIT](LICENSE). Bundled components keep their own licenses: PHP (PHP License), ExifTool
-(Artistic/GPL), Microsoft VC++ runtime (Microsoft redistributable), Mozilla CA bundle (MPL 2.0).
+(Artistic/GPL), Mozilla CA bundle (MPL 2.0); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The Microsoft VC++ runtime is not bundled: Setup downloads it from Microsoft when a PC needs it.

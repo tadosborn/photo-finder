@@ -89,6 +89,16 @@ final class Db {
         if (!in_array('gps_alt', $colNames, true)) {
             $pdo->exec('ALTER TABLE images ADD COLUMN gps_alt REAL');
         }
+        // Which AI backend + model wrote the description ("anthropic:claude-haiku-5-5",
+        // "local:<model>"...). NULL = described before 1.0.3, model not recorded.
+        if (!in_array('described_by', $colNames, true)) {
+            $pdo->exec('ALTER TABLE images ADD COLUMN described_by TEXT');
+        }
+        // Queued to be described again by the current model. The photo stays 'ok' (searchable,
+        // counted as indexed) with its old description until the new one replaces it.
+        if (!in_array('redescribe', $colNames, true)) {
+            $pdo->exec('ALTER TABLE images ADD COLUMN redescribe INTEGER NOT NULL DEFAULT 0');
+        }
         // taken_at already exists in initial schema (top of file) — just make sure
         // there's an index so future map/timeline views are fast.
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_images_taken_at ON images(taken_at)');
@@ -186,7 +196,7 @@ final class Db {
         return true;
     }
 
-    public static function markIndexed(string $id, array $analysis, int $width, int $height): void {
+    public static function markIndexed(string $id, array $analysis, int $width, int $height, ?string $describedBy = null): void {
         $pdo = self::get();
         $pdo->beginTransaction();
         try {
@@ -195,24 +205,32 @@ final class Db {
                 : '';
             $description = (string)($analysis['description'] ?? '');
             $textInImage = (string)($analysis['text_in_image'] ?? '');
-            $faces = isset($analysis['faces']) && is_array($analysis['faces'])
-                ? implode(', ', array_map('strval', $analysis['faces']))
-                : (string)($analysis['faces'] ?? '');
+            // Face names come from the photo's own metadata (read at scan time), not from the
+            // AI. Keep them unless this analysis brings its own, so re-describing a photo never
+            // wipes them.
+            $facesNew = array_key_exists('faces', $analysis)
+                ? (is_array($analysis['faces']) ? implode(', ', array_map('strval', $analysis['faces'])) : (string)$analysis['faces'])
+                : null;
             $u = $pdo->prepare(
-                'UPDATE images SET description = :d, tags = :t, text_in_image = :tx, faces = :f,
-                 width = :w, height = :h, indexed_at = :ia, status = \'ok\', error = NULL
+                'UPDATE images SET description = :d, tags = :t, text_in_image = :tx, faces = COALESCE(:f, faces),
+                 width = :w, height = :h, indexed_at = :ia, status = \'ok\', error = NULL, redescribe = 0,
+                 described_by = COALESCE(:by, described_by)
                  WHERE id = :id'
             );
             $u->execute([
                 ':d' => $description,
                 ':t' => $tags,
                 ':tx' => $textInImage,
-                ':f' => $faces,
+                ':f' => $facesNew,
                 ':w' => $width,
                 ':h' => $height,
                 ':ia' => time(),
+                ':by' => $describedBy,
                 ':id' => $id,
             ]);
+            $fq = $pdo->prepare('SELECT faces FROM images WHERE id = :id');
+            $fq->execute([':id' => $id]);
+            $faces = (string)$fq->fetchColumn();
             $pdo->prepare('DELETE FROM images_fts WHERE id = :id')->execute([':id' => $id]);
             $pathRow = $pdo->prepare('SELECT path FROM images WHERE id = :id');
             $pathRow->execute([':id' => $id]);
@@ -307,6 +325,14 @@ final class Db {
         }
     }
 
+    /** A photo queued only to be described again failed: keep its old description (and
+     *  searchability), drop it from the queue, and record why. */
+    public static function markRedescribeFailed(string $id, string $error): void {
+        self::get()->prepare(
+            'UPDATE images SET redescribe = 0, error = :e WHERE id = :id'
+        )->execute([':e' => substr('Re-describe failed: ' . $error, 0, 500), ':id' => $id]);
+    }
+
     public static function markError(string $id, string $error): void {
         self::get()->prepare(
             'UPDATE images SET status = \'error\', error = :e, indexed_at = :ia WHERE id = :id'
@@ -319,7 +345,7 @@ final class Db {
             "SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS indexed,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN status = 'pending' OR (status = 'ok' AND COALESCE(redescribe, 0) = 1) THEN 1 ELSE 0 END) AS pending,
                 SUM(CASE WHEN status = 'error' AND COALESCE(error_acknowledged, 0) = 0 THEN 1 ELSE 0 END) AS errors,
                 SUM(CASE WHEN status = 'error' AND COALESCE(error_acknowledged, 0) = 1 THEN 1 ELSE 0 END) AS errors_acknowledged,
                 SUM(CASE WHEN status = 'ok' AND exported_at IS NOT NULL AND (indexed_at IS NULL OR exported_at >= indexed_at) THEN 1 ELSE 0 END) AS exported,
@@ -457,9 +483,10 @@ final class Db {
     public static function nextPending(int $limit): array {
         // Skip rows the user has manually edited — they don't want re-indexing.
         $stmt = self::get()->prepare(
-            "SELECT id, path FROM images
-             WHERE status = 'pending' AND description_manual = 0
-             ORDER BY rowid ASC LIMIT :n"
+            "SELECT id, path, status FROM images
+             WHERE (status = 'pending' OR (status = 'ok' AND COALESCE(redescribe, 0) = 1))
+               AND description_manual = 0
+             ORDER BY (status = 'ok') ASC, rowid ASC LIMIT :n"
         );
         $stmt->bindValue(':n', $limit, PDO::PARAM_INT);
         $stmt->execute();
@@ -586,6 +613,33 @@ final class Db {
         }
         $pdo->commit();
         return ['removed' => count($missing), 'scanned' => count($rows)];
+    }
+
+    /** Indexed photos per describing model ('' = before 1.0.3, model unknown). */
+    public static function describedByCounts(): array {
+        $rows = self::get()->query(
+            "SELECT COALESCE(described_by, '') AS m, COUNT(*) AS n FROM images
+             WHERE status = 'ok' AND COALESCE(description_manual, 0) = 0 AND COALESCE(redescribe, 0) = 0
+             GROUP BY COALESCE(described_by, '') ORDER BY n DESC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        $out = [];
+        foreach ($rows as $r) $out[(string)$r['m']] = (int)$r['n'];
+        return $out;
+    }
+
+    public static function redescribeQueued(): int {
+        return (int)self::get()->query("SELECT COUNT(*) FROM images WHERE status = 'ok' AND COALESCE(redescribe, 0) = 1")->fetchColumn();
+    }
+
+    /** Queue every photo described by a model other than $label (hand-written ones are kept). */
+    public static function queueOtherModels(string $label): int {
+        $st = self::get()->prepare(
+            "UPDATE images SET redescribe = 1, error = NULL
+             WHERE status = 'ok' AND COALESCE(description_manual, 0) = 0 AND COALESCE(redescribe, 0) = 0
+               AND COALESCE(described_by, '') != :label"
+        );
+        $st->execute([':label' => $label]);
+        return $st->rowCount();
     }
 
     public static function resetErrors(): int {

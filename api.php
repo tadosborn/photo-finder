@@ -4,7 +4,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/util.php';
 require_once __DIR__ . '/lib/Db.php';
 require_once __DIR__ . '/lib/Indexer.php';
-require_once __DIR__ . '/lib/ClaudeCli.php';
+require_once __DIR__ . '/lib/Describer.php';
+require_once __DIR__ . '/lib/Claude.php';
+require_once __DIR__ . '/lib/OpenAICompat.php';
 require_once __DIR__ . '/lib/Exporter.php';
 require_once __DIR__ . '/lib/Updater.php';
 
@@ -13,24 +15,88 @@ ini_set('memory_limit', '512M');
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
+/** Provider settings from a Settings form post. Blank key fields keep the saved key. */
+function pf_provider_fields(array $in, array $saved): array {
+    $out = [];
+    if (isset($in['backend']) && in_array($in['backend'], ['anthropic', 'openai', 'local', ''], true)) {
+        $out['backend'] = $in['backend'];
+    }
+    if (isset($in['model']) && is_string($in['model']) && array_key_exists($in['model'], Claude::MODELS)) {
+        $out['model'] = $in['model'];
+    }
+    foreach (['api_key', 'openai_api_key'] as $k) {
+        if (isset($in[$k]) && is_string($in[$k]) && trim($in[$k]) !== '') $out[$k] = trim($in[$k]);
+    }
+    foreach (['openai_base_url', 'openai_model', 'local_base_url', 'local_model'] as $k) {
+        if (isset($in[$k]) && is_string($in[$k])) $out[$k] = trim($in[$k]);
+    }
+    return $out;
+}
+
 try {
     switch ($action) {
         case 'settings_get': {
             $s = pf_load_settings();
-            $apiKeySet = $s['api_key'] !== '';
-            unset($s['api_key']);
-            $s['api_key_set'] = $apiKeySet;
-            if (($s['cli_path'] ?? '') === '') {
-                $s['cli_path_suggested'] = ClaudeCli::autoDetect() ?? '';
+            // Keys never leave the server side: the page only learns whether one is set.
+            foreach (['api_key', 'openai_api_key'] as $k) {
+                $s[$k . '_set'] = trim((string)($s[$k] ?? '')) !== '';
+                unset($s[$k]);
             }
+            $s['backend'] = Describer::backendOf($s);
+            $s['anthropic_models'] = Claude::MODELS;
             if (($s['exiftool_path'] ?? '') === '') {
                 $s['exiftool_path_suggested'] = Exporter::autoDetect() ?? '';
             }
             pf_json($s);
         }
-        case 'detect_cli': {
-            $found = ClaudeCli::autoDetect();
-            pf_json(['cli_path' => $found, 'found' => $found !== null]);
+        case 'provider_status': {
+            [$client, $why] = Describer::fromSettings(pf_load_settings());
+            pf_json(['configured' => $client !== null, 'label' => $client ? $client->label() : '', 'message' => $why]);
+        }
+        case 'provider_test': {
+            // Describes a small generated picture with the settings in the form (not yet
+            // saved). A blank key field means "use the saved key".
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $trial = array_merge(pf_load_settings(), pf_provider_fields(pf_input_json(), pf_load_settings()));
+            [$client, $why] = Describer::fromSettings($trial);
+            if ($client === null) pf_json(['ok' => false, 'error' => $why]);
+            $t0 = microtime(true);
+            try {
+                $a = $client->analyzeImage(Describer::testImage());
+            } catch (Throwable $e) {
+                pf_json(['ok' => false, 'error' => $e->getMessage()]);
+            }
+            pf_json(['ok' => true, 'label' => $client->label(), 'seconds' => round(microtime(true) - $t0, 1),
+                     'description' => $a['description'], 'tags' => $a['tags']]);
+        }
+        case 'provider_models': {
+            // Model names offered by an OpenAI-compatible service (or the local server).
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            $local = ($in['backend'] ?? '') === 'local';
+            $saved = pf_load_settings();
+            $url = trim((string)($in['base_url'] ?? ''));
+            $key = $local ? '' : (trim((string)($in['api_key'] ?? '')) ?: (string)($saved['openai_api_key'] ?? ''));
+            if ($local && !OpenAICompat::isLoopbackUrl($url)) pf_json(['ok' => false, 'error' => 'The local option only accepts an address on this PC.']);
+            try {
+                pf_json(['ok' => true, 'models' => (new OpenAICompat($url, $key, 'x', $local))->listModels()]);
+            } catch (Throwable $e) {
+                pf_json(['ok' => false, 'error' => $e->getMessage()]);
+            }
+        }
+        case 'model_stats': {
+            [$client] = Describer::fromSettings(pf_load_settings());
+            $label = $client ? $client->label() : '';
+            $counts = Db::describedByCounts();
+            $other = 0;
+            foreach ($counts as $m => $c) if ($m !== $label) $other += $c;
+            pf_json(['current' => $label, 'counts' => $counts, 'other' => $other, 'queued' => Db::redescribeQueued()]);
+        }
+        case 'reindex_other': {
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            [$client, $why] = Describer::fromSettings(pf_load_settings());
+            if ($client === null) pf_json(['ok' => false, 'error' => $why]);
+            pf_json(['ok' => true, 'queued' => Db::queueOtherModels($client->label()), 'stats' => Db::stats()]);
         }
         case 'detect_exiftool': {
             $found = Exporter::autoDetect();
@@ -82,21 +148,11 @@ try {
                     $in['excluded_dirs']
                 ), fn($d) => $d !== ''));
             }
-            if (isset($in['backend']) && in_array($in['backend'], ['api', 'cli'], true)) {
-                $current['backend'] = $in['backend'];
+            $current = array_merge($current, pf_provider_fields($in, $current));
+            if (($current['backend'] ?? '') === 'local' && !OpenAICompat::isLoopbackUrl((string)$current['local_base_url'])) {
+                pf_json(['error' => 'The local option only accepts an address on this PC (localhost / 127.0.0.1).'], 400);
             }
-            if (isset($in['api_key']) && is_string($in['api_key']) && $in['api_key'] !== '') {
-                $current['api_key'] = $in['api_key'];
-            }
-            if (isset($in['model']) && is_string($in['model']) && $in['model'] !== '') {
-                $current['model'] = $in['model'];
-            }
-            if (isset($in['cli_model']) && is_string($in['cli_model']) && $in['cli_model'] !== '') {
-                $current['cli_model'] = $in['cli_model'];
-            }
-            if (isset($in['cli_path']) && is_string($in['cli_path'])) {
-                $current['cli_path'] = pf_norm_path($in['cli_path']);
-            }
+            unset($current['cli_path'], $current['cli_model']);
             if (isset($in['max_image_dim'])) {
                 $current['max_image_dim'] = max(256, min(2000, (int)$in['max_image_dim']));
             }
@@ -195,18 +251,7 @@ try {
             }
             pf_json(['ok' => true, 'message' => 'Worker launch requested']);
         }
-        case 'worker_login': {
-            // Pops open a visible terminal that runs `claude /login`.
-            $cmd = ['C:\\Windows\\System32\\schtasks.exe', '/run', '/tn', 'PhotoFinderLogin'];
-            [$exit, $stdout, $stderr] = pf_run_cmd($cmd);
-            if ($exit !== 0) {
-                pf_json(['ok' => false,
-                    'error' => 'Could not open login window. Did you run install.bat? ' . trim($stderr ?: $stdout),
-                    'exit' => $exit], 500);
-            }
-            pf_json(['ok' => true,
-                'message' => 'A login window should open on your desktop. Complete the OAuth flow and close it.']);
-        }
+
         case 'search': {
             $q = (string)($_GET['q'] ?? '');
             $limit = max(1, min(500, (int)($_GET['limit'] ?? 120)));

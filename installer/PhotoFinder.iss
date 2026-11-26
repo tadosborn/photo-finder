@@ -72,7 +72,6 @@ Type: filesandordirs; Name: "{app}\installer"
 Source: "{#StageDir}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Pulled out early by [Code], before anything is copied.
 Source: "{#StageDir}\app\uninstall.ps1"; DestDir: "{tmp}"; DestName: "pf-stop.ps1"; Flags: dontcopy
-Source: "{#StageDir}\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\Photo Finder"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\launch.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\photofinder.ico"; Comment: "Search your photos"
@@ -245,10 +244,11 @@ begin
   PrivacyText.Width := PrivacyPage.SurfaceWidth;
   PrivacyText.Height := ScaleY(150);
   PrivacyText.Lines.Text :=
-    'Photo descriptions: to make your photos searchable, Photo Finder sends each photo you index to ' +
-    'Anthropic''s Claude, either through Claude Code signed in on this PC or through an Anthropic API key ' +
-    'you enter. Anthropic''s privacy policy applies to that processing (https://www.anthropic.com/legal/privacy). ' +
-    'Nothing is sent until you start indexing, and you choose which folders are indexed.' + #13#10#13#10 +
+    'Photo descriptions: to make your photos searchable, an AI model describes each photo you index. ' +
+    'You choose which one in Settings after Setup: Anthropic''s Claude or another AI service with your own ' +
+    'API key (each photo is then sent to that service, and its privacy policy applies), or a local model ' +
+    'running on this PC (photos never leave it). Nothing is sent until you choose and start indexing, and ' +
+    'you choose which folders are indexed.' + #13#10#13#10 +
     'Update checks: when it opens, Photo Finder can ask infinetinc.com whether a newer version exists. ' +
     'Only the version number is involved; nothing about you or your photos is sent. You can turn this ' +
     'off below or later in Settings.' + #13#10#13#10 +
@@ -323,9 +323,27 @@ begin
     Result := not ((Installed = 1) and (Major = 14) and (Minor >= 29));
 end;
 
+{ Valid Authenticode signature by Microsoft Corporation (checked with Windows PowerShell). The module is
+  loaded from Windows PowerShell's own folder: if Setup was started from PowerShell 7, the inherited
+  PSModulePath would otherwise make 5.1 try (and fail) to load 7's copy, and every file would look unsigned. }
+function MicrosoftSigned(const FileName: String): Boolean;
+var
+  Code: Integer;
+  PsPath: String;
+begin
+  PsPath := FileName;
+  StringChangeEx(PsPath, '''', '''''', True);   { quote for a PowerShell single-quoted string }
+  Result := Exec('powershell.exe',
+    '-NoProfile -ExecutionPolicy Bypass -Command "Import-Module (Join-Path $PSHOME ''Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1''); ' +
+    '$s = Get-AuthenticodeSignature -LiteralPath ''' + PsPath + '''; ' +
+    'if ($s.Status -eq ''Valid'' -and $s.SignerCertificate.Subject -match ''O=Microsoft Corporation'') { exit 0 } else { exit 1 }"',
+    '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
+  VCFile: String;
 begin
   Result := '';
   { 1. Stop this copy's server and worker so their files can be replaced. }
@@ -337,12 +355,29 @@ begin
     Log('Stopped running Photo Finder (exit ' + IntToStr(Code) + ')');
   end;
 
-  { 2. Microsoft VC++ runtime, once per PC (Setup is already elevated). }
-  if VCRedistNeeded then
+  { 2. Microsoft VC++ runtime, only on a PC that lacks it (Setup is already elevated). It is not
+       bundled: it is downloaded from Microsoft and run only if Microsoft's signature verifies. }
+  if VCRedistNeeded or (ExpandConstant('{param:TESTVCDOWNLOAD|0}') = '1') then
   begin
-    ExtractTemporaryFile('vc_redist.x64.exe');
+    WizardForm.PreparingLabel.Caption := 'Downloading the Microsoft Visual C++ Runtime from Microsoft...';
+    try
+      DownloadTemporaryFile('https://aka.ms/vs/17/release/vc_redist.x64.exe', 'vc_redist.x64.exe', '', nil);
+    except
+      Result := 'Photo Finder needs the Microsoft Visual C++ Runtime, and it could not be downloaded from Microsoft (' +
+                GetExceptionMessage + '). Check the internet connection, or install "Visual C++ Redistributable x64" ' +
+                'from Microsoft, then run Setup again.';
+      Exit;
+    end;
+    VCFile := ExpandConstant('{tmp}\vc_redist.x64.exe');
+    if not MicrosoftSigned(VCFile) then
+    begin
+      Result := 'The downloaded Microsoft Visual C++ Runtime does not carry a valid Microsoft signature, so Setup did not run it. ' +
+                'Install "Visual C++ Redistributable x64" from Microsoft, then run Setup again.';
+      Exit;
+    end;
+    Log('VC++ runtime downloaded and Microsoft signature verified');
     WizardForm.PreparingLabel.Caption := 'Installing the Microsoft Visual C++ Runtime...';
-    if not Exec(ExpandConstant('{tmp}\vc_redist.x64.exe'), '/install /quiet /norestart', '',
+    if not Exec(VCFile, '/install /quiet /norestart', '',
                 SW_SHOW, ewWaitUntilTerminated, Code) then
       Result := 'Photo Finder needs the Microsoft Visual C++ Runtime, and its installer could not be started. ' +
                 'Install "Visual C++ Redistributable x64" from Microsoft, then run Setup again.'

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // Installer helper (command line only): writes the photo folders chosen in the setup
 // wizard into settings.json (in the data folder, see pf_data_dir()) through the app's
-// own settings code, records the timezone, and fills in the Claude CLI path.
+// own settings code, records the timezone, and moves settings from earlier versions forward.
 //
 //   php configure.php [--photo-dirs-file=<UTF-8 text, one folder per line>] [--timezone=<IANA id>]
 //                     [--update-check=0|1]
@@ -14,7 +14,6 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 require_once __DIR__ . '/lib/util.php';
-require_once __DIR__ . '/lib/ClaudeCli.php';
 
 $opts = getopt('', ['photo-dirs-file:', 'timezone:', 'update-check:']);
 $settings = pf_load_settings();
@@ -52,14 +51,23 @@ if (isset($opts['photo-dirs-file'])) {
     }
 }
 
-$cli = ClaudeCli::resolvePath((string)($settings['cli_path'] ?? ''));
-if ($cli !== null && $cli !== ($settings['cli_path'] ?? '')) {
-    $settings['cli_path'] = $cli;
-    $changed[] = 'Claude CLI: ' . $cli;
+// ---- settings from earlier versions ----
+// 1.0.3 removed the Claude Code backend: Anthropic does not allow third-party apps to run
+// work through people's Claude subscriptions (use an API key instead). Those copies now
+// have no provider chosen, and the app asks the user to pick one.
+if (($settings['backend'] ?? '') === 'cli') {
+    $settings['backend'] = '';
+    $changed[] = 'Claude Code option removed: choose how photos are described in Settings';
 }
-if ($cli === null && ($settings['backend'] ?? 'cli') === 'cli' && ($settings['api_key'] ?? '') === '') {
-    echo "Claude Code was not found. Install it, or choose the API backend in Photo Finder's Settings.\n";
+if (($settings['backend'] ?? '') === 'api') {
+    $settings['backend'] = 'anthropic';
+    $changed[] = 'backend: anthropic';
 }
+if (in_array($settings['model'] ?? '', ['', 'claude-haiku-4-5-20251001'], true)) {
+    $settings['model'] = 'claude-haiku-5-5';     // the old default; a deliberate choice is kept
+    $changed[] = 'Anthropic model: claude-haiku-5-5';
+}
+unset($settings['cli_path'], $settings['cli_model']);
 
 pf_save_settings($settings);
 echo $changed ? 'Updated ' . implode(', ', $changed) . "\n" : "Settings unchanged.\n";

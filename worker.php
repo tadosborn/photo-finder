@@ -2,9 +2,9 @@
 declare(strict_types=1);
 
 // Photo Finder background indexing worker.
-// Runs in user context so it can access Claude CLI OAuth credentials.
+// Runs in the signed-in user's context (scheduled task PhotoFinderWorker).
 // Watches the SQLite DB for indexing requests from the web UI (Apache),
-// processes them, and writes results back. The web service never holds creds.
+// processes them, and writes results back. The AI backend and its key come from Settings.
 
 require_once __DIR__ . '/lib/util.php';
 require_once __DIR__ . '/lib/Db.php';
@@ -69,28 +69,30 @@ while (true) {
 
     if (!empty($r['message'])) {
         log_line('Batch message: ' . $r['message']);
-        Db::workerHeartbeat($r['message'], 0, $r['errors']);
+        // "setup-required:" makes the page show the Choose-a-provider banner.
+        Db::workerHeartbeat((!empty($r['needs_setup']) ? 'setup-required: ' : '') . $r['message'], 0, $r['errors']);
         Db::workerSetActive(0);
         $consecutiveErrors = 0;
         continue;
     }
 
-    // Detect auth failures and stop immediately with a clear status the UI can show.
+    // A rejected key fails every photo: stop at once with a status the page can show.
     $authErr = false;
     if ($r['errors'] > 0 && !empty($r['messages'])) {
         foreach ($r['messages'] as $m) {
             if (stripos($m, 'not logged in') !== false
                 || stripos($m, 'please run /login') !== false
                 || stripos($m, 'unauthorized') !== false
-                || stripos($m, '401') !== false) {
+                || stripos($m, 'key was rejected') !== false
+                || stripos($m, 'HTTP 401') !== false) {
                 $authErr = true;
                 break;
             }
         }
     }
     if ($authErr) {
-        log_line('AUTH ERROR detected — stopping. UI should prompt re-authenticate.');
-        Db::workerHeartbeat('auth-required: claude session expired — click Re-authenticate', 0, $r['errors']);
+        log_line('The AI service rejected the API key. Stopping until Settings are fixed.');
+        Db::workerHeartbeat('setup-required: the AI service rejected the API key. Check it in Settings.', 0, $r['errors']);
         Db::workerSetActive(0);
         $consecutiveErrors = 0;
         continue;

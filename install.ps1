@@ -85,7 +85,7 @@ if ($installed) {
     Write-Step "Timezone: $tz (Windows: $winTz)"
 }
 
-# ---- Settings: photo folders from the wizard, timezone, Claude CLI path ----
+# ---- Settings: photo folders from the wizard, timezone, update checks; moves old settings forward ----
 $cfgArgs = @((Join-Path $projectDir 'configure.php'))
 if ($PhotoDirsFile -and (Test-Path $PhotoDirsFile)) { $cfgArgs += "--photo-dirs-file=$PhotoDirsFile" }
 if ($tz) { $cfgArgs += "--timezone=$tz" }
@@ -124,12 +124,17 @@ try {
     Register-PfTask 'PhotoFinderWorker' `
         (New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $projectDir 'silent-worker.vbs')`"" -WorkingDirectory $projectDir) `
         $atLogon ([TimeSpan]::Zero) 'Photo Finder background indexer. Runs in your user context. Triggered by the web UI or at sign-in.'
-    Register-PfTask 'PhotoFinderLogin' `
-        (New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $projectDir 'claude-login.ps1')`"" -WorkingDirectory $projectDir) `
-        $null ([TimeSpan]::FromHours(1)) 'Opens a Claude sign-in window when Photo Finder needs re-authentication.'
 } catch {
     Write-Step "Registering tasks FAILED: $_" 'Red'
     Exit-Setup 1
+}
+
+# 1.0.0 - 1.0.2 had a PhotoFinderLogin task for the Claude Code backend, removed in 1.0.3.
+# Remove it only if it belongs to this copy.
+$oldLogin = Get-ScheduledTask -TaskName 'PhotoFinderLogin' -ErrorAction SilentlyContinue
+if ($oldLogin -and (($oldLogin.Actions | ForEach-Object { "$($_.Arguments) $($_.WorkingDirectory)" }) -join ' ').ToLower().Contains(($projectDir + '\').ToLower())) {
+    Unregister-ScheduledTask -TaskName 'PhotoFinderLogin' -Confirm:$false
+    Write-Step 'Removed the old PhotoFinderLogin task (Claude Code sign-in, no longer used).'
 }
 
 # The old (pre-task) startup shortcut, but only if it starts THIS copy: another copy on the

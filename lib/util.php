@@ -35,13 +35,19 @@ function pf_load_settings(): array {
     $defaults = [
         'photo_dirs' => [],
         'excluded_dirs' => ['Screenshots'],
-        'backend' => 'cli',
-        'api_key' => getenv('ANTHROPIC_API_KEY') ?: '',
-        'model' => 'claude-haiku-4-5-20251001',
-        'cli_model' => 'haiku',
-        'cli_path' => '',
+        // How photos are described: '' until the user chooses in Settings, then
+        // 'anthropic' | 'openai' | 'local' (see lib/Describer.php). No key is ever taken
+        // from the environment: only what the user types into Settings is used.
+        'backend' => '',
+        'api_key' => '',                                  // Anthropic
+        'model' => 'claude-haiku-5-5',
+        'openai_base_url' => '',                          // cloud, OpenAI-compatible
+        'openai_api_key' => '',
+        'openai_model' => '',
+        'local_base_url' => 'http://localhost:11434/v1',  // Ollama's default; LM Studio: :1234/v1
+        'local_model' => '',
         'max_image_dim' => 1568,
-        'batch_size' => 10,
+        'batch_size' => 5,
         'exiftool_path' => '',
         'export_batch_size' => 25,
         'export_description' => true,
