@@ -53,7 +53,7 @@ $apiKeySet = $settings['api_key'] !== '';
   .selbar .sel-spacer { flex: 1; }
   .selbar button.danger { background: var(--err-bg); border-color: var(--err-bg); color: #fff; }
   .selbar button.danger:hover { filter: brightness(1.1); }
-  dialog.lightbox .lb-del-btn { position: absolute; top: 16px; right: 160px; background: rgba(0,0,0,0.5); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-del-btn { position: absolute; top: 16px; right: 160px; background: rgba(0,0,0,0.75); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-del-btn:hover { background: var(--err-bg); }
   .card .meta { padding: 10px 12px; font-size: 12px; color: var(--mute); }
   .card .desc { color: var(--text); font-size: 13px; line-height: 1.4; max-height: 3.6em; overflow: hidden; }
@@ -71,7 +71,34 @@ $apiKeySet = $settings['api_key'] !== '';
   .group-head:first-child { margin-top: 0; }
   .group-head .group-count { font-size: 12px; font-weight: 400; color: var(--mute); }
   .more-wrap { text-align: center; padding: 22px 0 8px; }
-  dialog.settings { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 0; max-width: 600px; width: 92%; }
+  dialog.settings { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 0; max-width: 780px; width: 94%; }
+  /* Settings: tabs, each sized to fit without scrolling; the body keeps one height so the
+     dialog does not jump between tabs (it only scrolls in a window too small for it). */
+  dialog.settings[open] { display: flex; flex-direction: column; max-height: calc(100vh - 24px); overflow: hidden; }
+  dialog.settings form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  dialog.settings .dlg-head { padding: 10px 20px; }
+  dialog.settings .dlg-foot { padding: 10px 20px; }
+  dialog.settings .dlg-body { flex: 0 1 auto; height: 520px; min-height: 0; overflow-y: auto; padding: 12px 20px; }
+  .set-tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .set-tabs button { background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 12px; color: var(--mute); font-size: 13px; }
+  .set-tabs button:hover { color: var(--text); background: var(--panel2); }
+  .set-tabs button[aria-selected="true"] { color: #c7d8ff; background: #1b2a45; border-bottom-color: var(--accent); }
+  .set-tabs button:focus-visible, .set-more summary:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  .set-pane .first { margin-top: 0; }
+  .set-pane textarea { min-height: 70px; }
+  .set-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .set-row.nowrap { flex-wrap: nowrap; margin-top: 0; }
+  .set-inline-btn { margin-top: 8px; }
+  .set-checks { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .set-checks label, label.set-check { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--text); }
+  input.narrow { width: 140px; }
+  .set-more { margin-top: 10px; }
+  .set-more summary { cursor: pointer; color: #9dbcff; font-size: 12px; padding: 2px 0; }
+  .set-more[open] summary { margin-bottom: 6px; }
+  .set-danger { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+  dialog.settings .local-check { margin-top: 8px; padding: 8px 12px; }
+  dialog.settings .local-check .lc-row { margin: 2px 0; }
+  dialog.settings .local-check .lc-last { margin-top: 6px; }
   dialog.settings::backdrop { background: rgba(0,0,0,0.6); }
   .dlg-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
   .dlg-head h2 { margin: 0; font-size: 16px; }
@@ -97,10 +124,10 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox .lb-nav:hover { opacity: 1; background: rgba(0,0,0,0.7); }
   dialog.lightbox .lb-prev { left: 0; border-radius: 0 6px 6px 0; }
   dialog.lightbox .lb-next { right: 0; border-radius: 6px 0 0 6px; }
-  dialog.lightbox .lb-counter { position: absolute; top: 16px; left: 20px; color: #fff; background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 12px; font-size: 12px; }
-  dialog.lightbox .lb-close { position: absolute; top: 16px; right: 20px; color: #fff; background: rgba(0,0,0,0.5); border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 22px; line-height: 1; }
+  dialog.lightbox .lb-counter { position: absolute; top: 16px; left: 20px; color: #fff; background: rgba(0,0,0,0.75); padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+  dialog.lightbox .lb-close { position: absolute; top: 16px; right: 20px; color: #fff; background: rgba(0,0,0,0.75); border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 22px; line-height: 1; }
   dialog.lightbox .lb-close:hover { background: rgba(0,0,0,0.8); }
-  dialog.lightbox .lb-edit-btn { position: absolute; top: 16px; right: 64px; background: rgba(0,0,0,0.5); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-edit-btn { position: absolute; top: 16px; right: 64px; background: rgba(0,0,0,0.75); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-edit-btn:hover { background: rgba(0,0,0,0.8); }
   dialog.lightbox .lb-edit-btn.dirty { background: var(--warn); color: #1a1107; }
   dialog.lightbox .lb-editor { position: absolute; top: 60px; right: 20px; left: 20px; bottom: 20px; background: rgba(20,24,32,0.97); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; color: var(--text); overflow-y: auto; display: none; max-width: 720px; margin: 0 auto; }
@@ -135,8 +162,8 @@ $apiKeySet = $settings['api_key'] !== '';
   .enh-tag-after { right: 8px; }
   .enh-busy { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; display: none; }
   .enh-busy.show { display: block; }
-  .enh-panel { width: 340px; flex: none; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 0 18px 18px; }
-  .enh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; background: var(--panel); padding: 14px 0 10px; z-index: 1; }
+  .enh-panel { width: 440px; flex: none; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 0 18px 14px; }
+  .enh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; background: var(--panel); padding: 12px 0 6px; z-index: 1; }
   .enh-head h2 { margin: 0; font-size: 17px; }
   .enh-name { font-size: 12px; color: #b3bbc8; word-break: break-all; margin: 0 0 10px; }
   .enh-panel button { border-color: #7c8597; }
@@ -146,18 +173,21 @@ $apiKeySet = $settings['api_key'] !== '';
   .enh-panel button.danger { background: var(--err-bg); border-color: #f87171; color: #fff; }
   .enh-panel button.danger:hover { background: #a82020; }
   .enh-close { width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; border-radius: 50%; }
-  .enh-section { border-top: 1px solid var(--line); padding: 12px 0 4px; }
-  .enh-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-  .enh-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; margin: 8px 0 12px; }
+  .enh-section { border-top: 1px solid var(--line); padding: 8px 0 2px; }
+  .enh-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .enh-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 8px; margin: 4px 0 8px; }
+  /* The six sliders in two columns, so the whole panel fits a normal window without scrolling. */
+  #enhSliders { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+  #enhSliders .enh-note { grid-column: 1 / -1; margin-top: 0; }
   .enh-row label { margin: 0; font-size: 13px; color: var(--text); }
   .enh-row output { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text); min-width: 3.2em; text-align: right; }
   .enh-row input[type=range] { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; accent-color: var(--accent); }
   .enh-row .enh-ends { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 11px; color: #b3bbc8; }
   .enh-note, .enh-hint { font-size: 12px; color: #b3bbc8; line-height: 1.45; margin: 4px 0 10px; }
   .enh-hint.warn { color: #fbbf72; }
-  .enh-save fieldset { border: none; margin: 0; padding: 0; }
-  .enh-save legend { font-size: 14px; font-weight: 600; padding: 0; margin-bottom: 6px; }
-  .enh-save label.enh-radio { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text); margin: 6px 0; cursor: pointer; }
+  .enh-save fieldset { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 18px; }
+  .enh-save legend { font-size: 14px; font-weight: 600; padding: 0; margin-bottom: 4px; }
+  .enh-save label.enh-radio { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text); margin: 4px 0; cursor: pointer; }
   .enh-save label.enh-radio input { margin-top: 3px; accent-color: var(--accent); }
   .enh-save label.enh-radio.disabled { color: #b3bbc8; cursor: not-allowed; }
   .enh-save #enhSave { width: 100%; margin-top: 6px; padding: 10px 14px; font-size: 14px; }
@@ -191,7 +221,8 @@ $apiKeySet = $settings['api_key'] !== '';
   .local-check .lc-label { color: var(--mute); min-width: 64px; }
   .local-check .lc-row button { padding: 4px 10px; }
   .local-check progress { width: 100%; margin: 6px 0; }
-  .local-check .lc-verdict { margin: 8px 0; color: var(--text); }
+  .local-check .lc-verdict { color: var(--text); flex: 1; min-width: 240px; }
+  .local-check .lc-last { margin-top: 8px; align-items: flex-start; flex-wrap: nowrap; }
   .local-check .lc-verdict.good { color: var(--ok); }
   .local-check .lc-verdict.slow { color: var(--warn); }
   .provider-note { font-size: 12px; color: var(--text); background: #1b2230; border-left: 3px solid #9dbcff; padding: 8px 10px; margin-top: 10px; border-radius: 4px; line-height: 1.45; }
@@ -448,27 +479,38 @@ $apiKeySet = $settings['api_key'] !== '';
   <div class="more-wrap" id="moreWrap" style="display:none"><button type="button" id="moreBtn" class="more-btn">Show more photos</button></div>
 </main>
 
-<dialog id="settingsDlg" class="settings">
+<dialog id="settingsDlg" class="settings" aria-labelledby="settingsTitle">
   <form id="settingsForm" method="dialog">
     <div class="dlg-head">
-      <h2>Settings</h2>
-      <button type="button" id="closeSettings">×</button>
+      <h2 id="settingsTitle">Settings</h2>
+      <button type="button" id="closeSettings" aria-label="Close without saving">×</button>
+    </div>
+    <div class="set-tabs" role="tablist" aria-label="Settings sections">
+      <button type="button" role="tab" id="setTab-folders" aria-controls="setPane-folders" aria-selected="true">Photo folders</button>
+      <button type="button" role="tab" id="setTab-describe" aria-controls="setPane-describe" aria-selected="false" tabindex="-1">How photos are described</button>
+      <button type="button" role="tab" id="setTab-embed" aria-controls="setPane-embed" aria-selected="false" tabindex="-1">Embed metadata</button>
+      <button type="button" role="tab" id="setTab-updates" aria-controls="setPane-updates" aria-selected="false" tabindex="-1">Updates</button>
+      <button type="button" role="tab" id="setTab-advanced" aria-controls="setPane-advanced" aria-selected="false" tabindex="-1">Advanced</button>
     </div>
     <div class="dlg-body">
-      <label>Photo folders (one absolute path per line)</label>
-      <textarea id="photoDirs" placeholder="C:\Users\YourName\Pictures&#10;D:\Backups\Photos"></textarea>
-      <div class="hint">Subfolders are scanned recursively. Use Windows paths with backslashes or forward slashes.</div>
-      <button type="button" id="consolFromSettings" style="margin-top:6px;">Find photos elsewhere on this PC…</button>
 
-      <label>Excluded folder names (one per line)</label>
-      <textarea id="excludedDirs" placeholder="Screenshots&#10;Thumbnails"></textarea>
-      <div class="hint">Folder NAMES (not paths) to skip during scan and search. Match is case-insensitive and matches at any depth. Default: Screenshots.</div>
-      <button type="button" id="purgeExcludedBtn" style="margin-top:6px;">Remove already-indexed photos from these folders</button>
-      <button type="button" id="purgeMissingBtn" style="margin-top:6px;">Remove broken entries (files no longer on disk)</button>
+      <div class="set-pane" role="tabpanel" id="setPane-folders" aria-labelledby="setTab-folders">
+        <label for="photoDirs" class="first">Photo folders (one per line)</label>
+        <textarea id="photoDirs" placeholder="C:\Users\YourName\Pictures&#10;D:\Backups\Photos"></textarea>
+        <div class="hint">Subfolders are included. Backslashes or forward slashes both work.</div>
+        <button type="button" id="consolFromSettings" class="set-inline-btn">Find photos elsewhere on this PC…</button>
 
-      <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);">
-        <h2 style="margin: 0 0 8px; font-size: 14px; color: var(--text);">How photos are described</h2>
-        <div class="hint">An AI model looks at each photo you index and writes its description and search tags. The free option runs that model on this PC, so your photos never leave it; the cloud options send each photo to that service. Keys you enter are stored only on this PC (<?= htmlspecialchars(str_replace('/', '\\', PF_SETTINGS_FILE)) ?>).</div>
+        <label for="excludedDirs">Folder names to skip (one per line)</label>
+        <textarea id="excludedDirs" placeholder="Screenshots&#10;Thumbnails"></textarea>
+        <div class="hint">Folder names, not paths, skipped at any depth when scanning and searching. Default: Screenshots.</div>
+        <div class="set-row">
+          <button type="button" id="purgeExcludedBtn">Remove indexed photos from these folders</button>
+          <button type="button" id="purgeMissingBtn">Remove entries for files no longer on disk</button>
+        </div>
+      </div>
+
+      <div class="set-pane" role="tabpanel" id="setPane-describe" aria-labelledby="setTab-describe" hidden>
+        <div class="hint first">An AI model writes each photo's description and search tags. The free option runs it on this PC, so your photos never leave it; the cloud options send each photo to that service.</div>
         <label for="backend">AI provider</label>
         <select id="backend">
           <option value="local">Free – on this PC (local model; your photos never leave this PC)</option>
@@ -498,15 +540,14 @@ $apiKeySet = $settings['api_key'] !== '';
           </datalist>
           <label for="openaiKey">API key</label>
           <input id="openaiKey" type="password" autocomplete="off">
-          <div class="hint">Leave blank to keep the saved key.</div>
           <label for="openaiModel">Model (must accept images)</label>
-          <div style="display:flex; gap:8px;">
+          <div class="set-row nowrap">
             <input id="openaiModel" type="text" list="openaiModels" style="flex:1">
             <button type="button" id="openaiListBtn">List models</button>
           </div>
           <datalist id="openaiModels"></datalist>
           <div class="provider-note">
-            <strong>Cost:</strong> billed by that service to your own account; it depends on the service and model. A small, low-cost model that accepts images is usually enough for photo descriptions.<br>
+            <strong>Cost:</strong> billed by that service to your own account; it depends on the service and model.<br>
             <strong>Privacy:</strong> each photo you index is sent to that service, and its privacy policy applies.
           </div>
         </div>
@@ -519,103 +560,99 @@ $apiKeySet = $settings['api_key'] !== '';
             <div class="lc-row"><span class="lc-label">Model</span><span id="lcModel">Checking…</span>
               <button type="button" id="lcPull" style="display:none"></button></div>
             <progress id="lcProg" max="100" value="0" style="display:none"></progress>
-            <div class="lc-verdict" id="lcVerdict"></div>
-            <button type="button" id="lcRecheck">Check again</button>
+            <div class="lc-row lc-last"><span class="lc-verdict" id="lcVerdict"></span>
+              <button type="button" id="lcRecheck">Check again</button></div>
           </div>
-          <div class="provider-note warn">
-            <strong>Runs entirely on this PC: your photos never leave it.</strong> What to expect:
-            <ul>
-              <li><strong>Software:</strong> install Ollama (ollama.com) or LM Studio (lmstudio.ai), both free, and download a vision model in it (a model that accepts images).</li>
-              <li><strong>Graphics card:</strong> a graphics card with 8 GB or more of video memory is recommended. Without one, the model runs on the processor and can take a minute or more per photo.</li>
-              <li><strong>Time:</strong> roughly 3–10 seconds per photo on a good graphics card, so 10,000 photos take about 8–30 hours; without one, several days.</li>
-              <li><strong>Disk and memory:</strong> a vision model is typically a 3–10 GB download and needs about that much free memory while it runs.</li>
-              <li><strong>Quality:</strong> descriptions are usually less detailed than the cloud options, and reading text in photos is noticeably weaker.</li>
-              <li><strong>Cost:</strong> nothing per photo, just your PC's electricity while it indexes.</li>
-            </ul>
-            These figures are rough; they depend on your hardware and the model you choose.
-          </div>
-          <label for="localUrl">Local server address</label>
-          <input id="localUrl" type="text" list="localUrlPresets">
-          <datalist id="localUrlPresets">
-            <option value="http://localhost:11434/v1">Ollama</option>
-            <option value="http://localhost:1234/v1">LM Studio</option>
-          </datalist>
-          <div class="hint">Only an address on this PC is accepted. Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1</div>
           <label for="localModel">Model</label>
-          <div style="display:flex; gap:8px;">
+          <div class="set-row nowrap">
             <input id="localModel" type="text" list="localModels" style="flex:1">
             <button type="button" id="localListBtn">Find models</button>
           </div>
           <datalist id="localModels"></datalist>
+          <details class="set-more">
+            <summary>What to expect from a model on this PC</summary>
+            <div class="provider-note warn">
+              <ul>
+                <li><strong>Software:</strong> Ollama (ollama.com) or LM Studio (lmstudio.ai), both free, with a vision model (one that reads pictures).</li>
+                <li><strong>Graphics card:</strong> 8 GB or more of video memory is recommended. Without one, the model runs on the processor and can take a minute or more per photo.</li>
+                <li><strong>Time:</strong> roughly 3–10 seconds per photo on a good graphics card, so 10,000 photos take about 8–30 hours; without one, several days.</li>
+                <li><strong>Disk and memory:</strong> a vision model is typically a 2–10 GB download and needs about that much free memory while it runs.</li>
+                <li><strong>Quality:</strong> descriptions are usually less detailed than the cloud options, and reading text in photos is weaker.</li>
+                <li><strong>Cost:</strong> nothing per photo, just your PC's electricity while it indexes.</li>
+              </ul>
+              These figures are rough; they depend on your hardware and the model.
+            </div>
+          </details>
+          <details class="set-more">
+            <summary>Local server address</summary>
+            <input id="localUrl" type="text" list="localUrlPresets" aria-label="Local server address">
+            <datalist id="localUrlPresets">
+              <option value="http://localhost:11434/v1">Ollama</option>
+              <option value="http://localhost:1234/v1">LM Studio</option>
+            </datalist>
+            <div class="hint">Only an address on this PC is accepted. Ollama: http://localhost:11434/v1 · LM Studio: http://localhost:1234/v1</div>
+          </details>
         </div>
 
-        <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+        <div class="set-row">
           <button type="button" id="testProviderBtn">Test with a sample picture</button>
           <span class="hint" style="margin:0">Uses the settings above, saved or not. A cloud test costs a fraction of a cent.</span>
         </div>
         <div class="test-result" id="testResult" role="status"></div>
 
-        <label for="maxDim">Max image dimension sent to the AI (px)</label>
-        <input id="maxDim" type="number" min="256" max="2000" step="64">
-        <div class="hint">Lower = cheaper and faster. 1024–1568 is plenty for content search.</div>
-
-        <div id="reindexBox" style="display:none; margin-top:14px;">
+        <div id="reindexBox" style="display:none; margin-top:12px;">
           <div class="hint" id="reindexText" style="margin:0 0 6px;"></div>
           <button type="button" id="reindexBtn">Re-describe them with the current model</button>
         </div>
       </div>
 
-      <label>Batch size per indexing tick</label>
-      <input id="batchSize" type="number" min="1" max="25">
-      <div class="hint">Photos the worker describes before it checks for new instructions (Stop, Settings changes). 5 is fine.</div>
-
-      <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);">
-        <h2 style="margin: 0 0 8px; font-size: 14px; color: var(--text);">Metadata export to image files</h2>
-        <div class="hint">Writes descriptions and tags into the image files themselves (XMP/IPTC/EXIF) so Windows Explorer, Adobe Bridge, Lightroom, Apple Photos, etc. can see them. Pixels are not modified.</div>
-
-        <label>ExifTool path</label>
-        <div style="display:flex; gap:8px;">
+      <div class="set-pane" role="tabpanel" id="setPane-embed" aria-labelledby="setTab-embed" hidden>
+        <div class="hint first">Writes descriptions and tags into the photo files themselves (XMP/IPTC/EXIF), so Windows Explorer, Adobe Bridge, Lightroom, Apple Photos and others can search them. The pictures themselves are not changed.</div>
+        <label for="exiftoolPath">ExifTool path</label>
+        <div class="set-row nowrap">
           <input id="exiftoolPath" type="text" placeholder="auto-detect or paste path to exiftool.exe" style="flex:1">
           <button type="button" id="detectExiftoolBtn">Auto-detect</button>
         </div>
-        <div class="hint" id="exiftoolPathHint">Bundled at photo-finder/bin/exiftool.exe.</div>
-
-        <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
-          <input id="expDescription" type="checkbox"> Embed description (caption)
-        </label>
-        <label style="display:flex; align-items:center; gap:8px;">
-          <input id="expTags" type="checkbox"> Embed tags (keywords)
-        </label>
-        <label style="display:flex; align-items:center; gap:8px;">
-          <input id="expOcrText" type="checkbox"> Also add OCR'd text-in-image as keywords
-        </label>
-        <label style="display:flex; align-items:center; gap:8px;">
-          <input id="expReplaceDesc" type="checkbox"> Replace existing description (tags are always appended)
-        </label>
-        <label style="display:flex; align-items:center; gap:8px;">
-          <input id="expOverwriteOrig" type="checkbox"> Modify files in place (uncheck to keep .jpg_original backups)
-        </label>
-
-        <label>Export batch size</label>
-        <input id="expBatchSize" type="number" min="1" max="100">
-        <div class="hint">How many photos per exiftool invocation. 25–50 is efficient. Higher = faster but bigger blast radius if a batch fails.</div>
+        <div class="hint" id="exiftoolPathHint">Bundled with Photo Finder.</div>
+        <div class="set-checks">
+          <label><input id="expDescription" type="checkbox"> Embed description (caption)</label>
+          <label><input id="expTags" type="checkbox"> Embed tags (keywords)</label>
+          <label><input id="expOcrText" type="checkbox"> Also add text found in the photo as keywords</label>
+          <label><input id="expReplaceDesc" type="checkbox"> Replace an existing description (tags are always added)</label>
+          <label><input id="expOverwriteOrig" type="checkbox"> Change files in place (untick to keep .jpg_original backups)</label>
+        </div>
+        <label for="expBatchSize">Photos per ExifTool run</label>
+        <input id="expBatchSize" type="number" min="1" max="100" class="narrow">
+        <div class="hint">25–50 is efficient. Higher is faster, but a failed run affects more photos.</div>
       </div>
 
-      <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);">
-        <h2 style="margin: 0 0 8px; font-size: 14px; color: var(--text);">Updates</h2>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:6px;">
-          <input id="updateAuto" type="checkbox"> Check for updates automatically when Photo Finder opens
-        </label>
+      <div class="set-pane" role="tabpanel" id="setPane-updates" aria-labelledby="setTab-updates" hidden>
+        <label class="set-check first"><input id="updateAuto" type="checkbox"> Check for updates automatically when Photo Finder opens</label>
         <div class="hint">The check asks GitHub (github.com/tadosborn/photo-finder) whether a newer version has been released; nothing about you or your photos is sent. Updates are verified before they install, and your index, settings and photos are kept.</div>
-        <div style="display:flex; gap:8px; align-items:center; margin-top:10px;">
+        <div class="set-row">
           <span id="updateStatus" class="hint" style="flex:1; margin:0;">Version <?= htmlspecialchars(PF_VERSION) ?></span>
           <button type="button" id="checkUpdatesBtn">Check now</button>
         </div>
       </div>
+
+      <div class="set-pane" role="tabpanel" id="setPane-advanced" aria-labelledby="setTab-advanced" hidden>
+        <label for="maxDim" class="first">Largest image size sent to the AI (pixels)</label>
+        <input id="maxDim" type="number" min="256" max="2000" step="64" class="narrow">
+        <div class="hint">Smaller is cheaper and faster. 1024–1568 is plenty for search.</div>
+        <label for="batchSize">Photos per indexing step</label>
+        <input id="batchSize" type="number" min="1" max="25" class="narrow">
+        <div class="hint">How many photos the indexer describes before it checks for Stop or changed settings. 5 is fine.</div>
+        <div class="set-danger">
+          <div class="hint" style="margin:0 0 8px;">Index tools. These act at once, without Save.</div>
+          <div class="set-row">
+            <button type="button" id="resetErrorsBtn">Reset errored items</button>
+            <button type="button" id="clearAllBtn">Clear index</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="dlg-foot">
-      <button type="button" id="resetErrorsBtn">Reset errored items</button>
-      <button type="button" id="clearAllBtn">Clear index</button>
+      <button type="button" id="cancelSettingsBtn">Cancel</button>
       <button type="button" class="primary" id="saveSettingsBtn">Save</button>
     </div>
   </form>
@@ -783,10 +820,10 @@ $apiKeySet = $settings['api_key'] !== '';
           <input type="range" id="enh_contrast" data-enh="contrast" min="-100" max="100" step="1" value="0"></div>
         <div class="enh-row"><label for="enh_warmth">Warmth</label><output for="enh_warmth" id="enh_warmth_out">0</output>
           <input type="range" id="enh_warmth" data-enh="warmth" min="-100" max="100" step="1" value="0" aria-describedby="enh_warmth_ends">
-          <span class="enh-ends" id="enh_warmth_ends"><span>cooler (bluer)</span><span>warmer (more orange)</span></span></div>
+          <span class="enh-ends" id="enh_warmth_ends"><span>cooler</span><span>warmer</span></span></div>
         <div class="enh-row"><label for="enh_tint">Tint</label><output for="enh_tint" id="enh_tint_out">0</output>
           <input type="range" id="enh_tint" data-enh="tint" min="-100" max="100" step="1" value="0" aria-describedby="enh_tint_ends">
-          <span class="enh-ends" id="enh_tint_ends"><span>greener</span><span>more magenta</span></span></div>
+          <span class="enh-ends" id="enh_tint_ends"><span>greener</span><span>pinker</span></span></div>
         <div class="enh-row"><label for="enh_saturation">Saturation</label><output for="enh_saturation" id="enh_saturation_out">0</output>
           <input type="range" id="enh_saturation" data-enh="saturation" min="-100" max="100" step="1" value="0"></div>
         <div class="enh-row"><label for="enh_sharpen">Sharpen</label><output for="enh_sharpen" id="enh_sharpen_out">0</output>
@@ -1721,7 +1758,7 @@ async function checkProviderSetup() {
     else showSetupBanner(ps.message);
   } catch (e) { /* page still works without it */ }
 }
-$('#setupBtn').addEventListener('click', () => $('#settingsBtn').click());
+$('#setupBtn').addEventListener('click', () => { settingsTab = 'describe'; $('#settingsBtn').click(); });
 
 async function stopIndexing() {
   try {
@@ -1876,9 +1913,9 @@ async function localCheck(refresh = false) {
     v.className = 'lc-verdict ' + (r.tier === 'gpu' ? 'good' : 'slow');
     v.textContent = r.tier === 'gpu'
       ? 'This PC has a graphics card suited to local models: expect a few seconds per photo.'
-      : 'No graphics card suited to local models: the model runs on the processor, so expect a minute or more per photo'
-        + (r.photos ? ' (for your ' + r.photos.toLocaleString() + ' photos, days of indexing)' : '')
-        + '. "Test with a sample picture" below measures this PC. A cloud option is much faster.';
+      : 'No graphics card suited to local models, so expect a minute or more per photo'
+        + (r.photos ? ' (days for your ' + r.photos.toLocaleString() + ' photos)' : '')
+        + '. The Test button measures it; a cloud option is much faster.';
     if (r.pull && !r.pull.done) watchPull();
   } catch (e) { $('#lcVerdict').textContent = e.message; }
   finally { $('#lcRecheck').disabled = false; }
@@ -1989,7 +2026,7 @@ $('#settingsBtn').addEventListener('click', async () => {
   $('#exiftoolPath').value = s.exiftool_path || s.exiftool_path_suggested || '';
   $('#exiftoolPathHint').textContent = s.exiftool_path_suggested && !s.exiftool_path
     ? '✓ Auto-detected at ' + s.exiftool_path_suggested + ' — click Save to confirm.'
-    : 'Bundled at photo-finder/bin/exiftool.exe.';
+    : 'Bundled with Photo Finder.';
   $('#expDescription').checked = s.export_description;
   $('#expTags').checked = s.export_tags;
   $('#expOcrText').checked = s.export_ocr_text;
@@ -1998,9 +2035,37 @@ $('#settingsBtn').addEventListener('click', async () => {
   $('#updateAuto').checked = s.update_check !== false;
   $('#expBatchSize').value = s.export_batch_size;
   updateBackendVisibility();
+  showSettingsTab(settingsTab);
+  settingsTab = 'folders';
   $('#settingsDlg').showModal();
 });
+// Cancel, × and Esc close without saving; the next open reloads the saved settings.
 $('#closeSettings').addEventListener('click', () => $('#settingsDlg').close());
+$('#cancelSettingsBtn').addEventListener('click', () => $('#settingsDlg').close());
+
+// Settings tabs (arrow keys move between them, as for any tab list).
+let settingsTab = 'folders';
+function showSettingsTab(name) {
+  $$('#settingsDlg [role="tab"]').forEach(t => {
+    const on = t.id === 'setTab-' + name;
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    t.tabIndex = on ? 0 : -1;
+    $('#' + t.getAttribute('aria-controls')).hidden = !on;
+  });
+  $('#settingsDlg .dlg-body').scrollTop = 0;
+}
+$$('#settingsDlg [role="tab"]').forEach(t => {
+  t.addEventListener('click', () => showSettingsTab(t.id.replace('setTab-', '')));
+  t.addEventListener('keydown', e => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const tabs = [...$$('#settingsDlg [role="tab"]')];
+    let i = tabs.indexOf(t);
+    i = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    showSettingsTab(tabs[i].id.replace('setTab-', ''));
+    tabs[i].focus();
+    e.preventDefault();
+  });
+});
 
 $('#saveSettingsBtn').addEventListener('click', async () => {
   const dirs = $('#photoDirs').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
