@@ -387,6 +387,59 @@ try {
             Db::resetManualDescription($id);
             pf_json(['ok' => true, 'image' => Db::getById($id)]);
         }
+
+        // ---- Clean up (lib/Cleanup.php): blurry, badly exposed and duplicate photos ----
+        // Analysis is local (thumbnails only, no AI). Deleting goes through delete_files above.
+        case 'cleanup_status':
+        case 'cleanup_list':
+        case 'cleanup_analyze':
+        case 'cleanup_keep':
+        case 'cleanup_unkeep_all': {
+            require_once __DIR__ . '/lib/Cleanup.php';
+            $isPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
+            if (!in_array($action, ['cleanup_status', 'cleanup_list'], true) && !$isPost) {
+                pf_json(['error' => 'POST required'], 405);
+            }
+            switch ($action) {
+                case 'cleanup_status':
+                    pf_json(['status' => Cleanup::status(), 'config' => Cleanup::config()]);
+                case 'cleanup_analyze': {
+                    $in = pf_input_json();
+                    pf_json(Cleanup::analyzeBatch((int)($in['limit'] ?? Cleanup::BATCH_DEFAULT)));
+                }
+                case 'cleanup_list': {
+                    // Only what the review cards and the lightbox show.
+                    $slim = function (array $r): array {
+                        unset($r['dhash'], $r['dhash_v'], $r['mtime'], $r['dark_frac'], $r['lum_std']);
+                        return $r;
+                    };
+                    $kind = (string)($_GET['kind'] ?? '');
+                    if ($kind === 'blurry') {
+                        pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::blurry()), 'status' => Cleanup::status()]);
+                    }
+                    if ($kind === 'exposure') {
+                        pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::exposure()), 'status' => Cleanup::status()]);
+                    }
+                    if ($kind === 'duplicates') {
+                        $d = Cleanup::duplicates((int)($_GET['dist'] ?? Cleanup::DUP_DEFAULT));
+                        foreach ($d['groups'] as &$g) $g['members'] = array_map($slim, $g['members']);
+                        unset($g);
+                        pf_json(['kind' => $kind] + $d + ['status' => Cleanup::status()]);
+                    }
+                    pf_json(['error' => 'kind must be blurry, exposure or duplicates'], 400);
+                }
+                case 'cleanup_keep': {
+                    $in = pf_input_json();
+                    $ids = is_array($in['ids'] ?? null) ? $in['ids'] : [];
+                    $n = Cleanup::setKeep($ids, ($in['keep'] ?? true) !== false);
+                    pf_json(['ok' => true, 'changed' => $n, 'status' => Cleanup::status()]);
+                }
+                case 'cleanup_unkeep_all':
+                    pf_json(['ok' => true, 'changed' => Cleanup::clearAllKeep(), 'status' => Cleanup::status()]);
+            }
+        }
+        // ---- end Clean up ----
+
         default:
             pf_json(['error' => 'unknown action', 'action' => $action], 400);
     }
