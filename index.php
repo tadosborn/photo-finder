@@ -168,6 +168,68 @@ $apiKeySet = $settings['api_key'] !== '';
   .log-panel pre .ok { color: var(--ok); }
   .log-panel pre .err { color: var(--err-text); }
   .log-panel pre .mute { color: var(--mute); }
+
+  /* ---- Find photos on this PC (consolidate). WCAG AA: --text on --panel/--panel2 > 11:1,
+     --mute > 6:1, --cs-amber #f5b54a on #21262f 8.5:1 and on #181c24 9.3:1, --ok on #181c24 9.8:1.
+     Disabled buttons in this dialog keep full opacity (--mute on --panel2, 6:1). ---- */
+  :root { --cs-amber: #f5b54a; }
+  dialog.consol { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 0; width: 96%; max-width: 1100px; max-height: 92vh; }
+  dialog.consol[open] { display: flex; flex-direction: column; }
+  dialog.consol [hidden] { display: none !important; }   /* .dlg-foot's display:flex would beat [hidden] */
+  dialog.consol::backdrop { background: rgba(0,0,0,0.6); }
+  dialog.consol .dlg-body { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+  dialog.consol button:disabled { opacity: 1; color: var(--mute); background: var(--panel2); border-color: var(--line); }
+  dialog.consol h3 { font-size: 14px; margin: 0 0 8px; }
+  .cs-lead { margin: 0 0 10px; }
+  .cs-facts { margin: 0 0 14px 18px; padding: 0; color: var(--mute); font-size: 13px; }
+  .cs-facts li { margin: 3px 0; }
+  .cs-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); margin: 12px 0; }
+  .cs-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .cs-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .cs-info { color: var(--mute); font-size: 13px; margin-top: 10px; }
+  .cs-runs { margin-top: 22px; }
+  .cs-runs:not(:empty) { border-top: 1px solid var(--line); padding-top: 14px; }
+  .cs-run { display: flex; gap: 8px; align-items: center; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .cs-run-text { flex: 1; min-width: 0; word-break: break-word; }
+  .cs-run button { padding: 4px 10px; font-size: 12px; }
+  .cs-bar { height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; margin: 10px 0; }
+  .cs-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  .cs-sub { color: var(--mute); font-size: 12px; word-break: break-all; margin-bottom: 12px; }
+  .cs-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 12px; font-size: 13px; }
+  .cs-toolbar label { margin: 0; font-size: 13px; color: var(--text); }
+  .cs-toolbar select { width: auto; }
+  .cg { border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); padding: 8px 10px; margin-bottom: 8px; }
+  .cg-row { display: flex; gap: 10px; align-items: center; }
+  .cg-row input { width: 18px; height: 18px; accent-color: var(--accent); flex: none; margin: 0; }
+  .cg-name { flex: 1; min-width: 0; margin: 0; font-size: 13px; color: var(--text); word-break: break-word; cursor: pointer; }
+  .cg-root { font-weight: 600; }
+  .cg-count { color: var(--mute); font-size: 12px; white-space: nowrap; }
+  .cg-row button { padding: 4px 10px; font-size: 12px; flex: none; }
+  .cg-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 6px 0 0 28px; font-size: 12px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--text); background: var(--panel); }
+  .cg-reason { color: var(--cs-amber); }
+  .cg-note { color: var(--mute); }
+  .cg-thumbs { display: flex; gap: 6px; margin: 8px 0 0 28px; }
+  .cg-thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; background: #0a0c10; }
+  .cg-files { margin: 8px 0 0 28px; border-top: 1px solid var(--line); padding-top: 6px; max-height: 320px; overflow-y: auto; }
+  .cf { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin: 0; padding: 3px 0; font-size: 12px; color: var(--text); cursor: pointer; }
+  .cf input { width: 16px; height: 16px; accent-color: var(--accent); flex: none; margin: 0; }
+  .cf-name { min-width: 0; word-break: break-all; }
+  .cf-info { color: var(--mute); }
+  .badge { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 11px; color: var(--mute); white-space: nowrap; }
+  .badge.warn { color: var(--cs-amber); border-color: #6b5320; }
+  .cs-skipped { margin-top: 14px; font-size: 13px; }
+  .cs-skipped summary { cursor: pointer; color: var(--text); padding: 4px 0; }
+  .cs-skip-reason { margin: 10px 0 2px; font-weight: 600; }
+  .cs-skip-path { color: var(--mute); font-size: 12px; word-break: break-all; margin-left: 12px; }
+  .cs-foot { flex-wrap: wrap; align-items: center; }
+  .cs-foot label { margin: 0; font-size: 13px; color: var(--text); }
+  .cs-foot input[type=text] { flex: 1 1 320px; width: auto; }
+  .cs-foot .hint { flex-basis: 100%; margin: 0; }
+  .cs-list { margin: 6px 0 12px 18px; padding: 0; font-size: 12px; }
+  .cs-list li { margin: 3px 0; word-break: break-all; }
+  .cs-ok { color: var(--ok); }
+  .cs-err { color: var(--err-text); }
 </style>
 </head>
 <body>
@@ -200,6 +262,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <button id="scanBtn">Scan folders</button>
   <button id="indexBtn" class="primary">Start indexing</button>
   <button id="exportBtn" title="Write descriptions and tags into the photo files themselves (XMP/IPTC) so Windows, Bridge, Lightroom etc. can see them">Embed metadata</button>
+  <button id="consolidateBtn" type="button" title="Search this PC for photos that are not in your library yet, and gather them into it">Find photos on this PC</button>
   <button id="stopBtn" style="display:none">Stop</button>
   <button id="logBtn" title="Show live worker log">Log</button>
   <button id="settingsBtn">Settings</button>
@@ -228,6 +291,7 @@ $apiKeySet = $settings['api_key'] !== '';
       <label>Photo folders (one absolute path per line)</label>
       <textarea id="photoDirs" placeholder="C:\Users\YourName\Pictures&#10;D:\Backups\Photos"></textarea>
       <div class="hint">Subfolders are scanned recursively. Use Windows paths with backslashes or forward slashes.</div>
+      <button type="button" id="consolFromSettings" style="margin-top:6px;">Find photos elsewhere on this PC…</button>
 
       <label>Excluded folder names (one per line)</label>
       <textarea id="excludedDirs" placeholder="Screenshots&#10;Thumbnails"></textarea>
@@ -452,6 +516,74 @@ $apiKeySet = $settings['api_key'] !== '';
   </div>
   <pre id="logOutput">(loading…)</pre>
 </div>
+
+<!-- ---- Find photos on this PC and consolidate (lib/Consolidate.php) ---- -->
+<dialog id="consolDlg" class="consol" aria-labelledby="consolTitle">
+  <div class="dlg-head">
+    <h2 id="consolTitle">Find photos on this PC</h2>
+    <button type="button" id="consolClose" aria-label="Close">×</button>
+  </div>
+  <div class="dlg-body">
+    <section data-step="start">
+      <p class="cs-lead">Photo Finder looks for pictures that are not in your photo library yet: on your Desktop and in Downloads, Documents, Pictures, Videos, the rest of your user folder and OneDrive. You choose what to gather into the library; nothing moves until you confirm.</p>
+      <ul class="cs-facts">
+        <li>Program, game, code-project and website folders, app data, other cloud services' folders and folders other photo apps manage are left alone.</li>
+        <li>OneDrive files that are only in the cloud are not downloaded while searching.</li>
+        <li>Each file keeps its folder names, nothing is overwritten, copies already in the library are skipped, and every move can be undone.</li>
+      </ul>
+      <label class="cs-check"><input type="checkbox" id="consolDrives"> Also search this PC's other drives <span id="consolDrivesList"></span></label>
+      <div class="cs-actions">
+        <button type="button" class="primary" id="consolSearchBtn">Search</button>
+        <button type="button" id="consolResumeBtn" hidden>Review the last search</button>
+      </div>
+      <div class="cs-info" id="consolStartInfo" role="status"></div>
+      <div class="cs-runs" id="consolRuns"></div>
+    </section>
+    <section data-step="searching" hidden>
+      <h3>Searching…</h3>
+      <div class="cs-bar" role="progressbar" aria-label="Search progress" aria-valuemin="0" aria-valuemax="100" id="consolSearchBarWrap"><span id="consolSearchBar"></span></div>
+      <div id="consolSearchText" role="status" aria-live="polite"></div>
+      <div class="cs-sub" id="consolSearchSub"></div>
+      <button type="button" id="consolSearchCancel">Stop searching</button>
+    </section>
+    <section data-step="review" hidden>
+      <div id="consolSummary"></div>
+      <div class="cs-toolbar">
+        <label for="consolFilter">Show</label>
+        <select id="consolFilter">
+          <option value="all">All folders</option>
+          <option value="sel">Ticked</option>
+          <option value="unsel">Not ticked</option>
+        </select>
+        <button type="button" id="consolAll" title="Ticks every picture in the folders shown, except small program or web images and folders marked with a caution">Tick all</button>
+        <button type="button" id="consolNone">Untick all</button>
+      </div>
+      <div id="consolGroups"></div>
+      <details class="cs-skipped" id="consolSkipped">
+        <summary>Folders that were not searched (<span id="consolSkippedN">0</span>)</summary>
+        <div id="consolSkippedList"></div>
+      </details>
+    </section>
+    <section data-step="moving" hidden>
+      <h3 id="consolMoveTitle">Moving…</h3>
+      <div class="cs-bar" role="progressbar" aria-label="Progress" aria-valuemin="0" aria-valuemax="100" id="consolMoveBarWrap"><span id="consolMoveBar"></span></div>
+      <div id="consolMoveText" role="status" aria-live="polite"></div>
+      <div class="cs-sub" id="consolMoveSub"></div>
+      <button type="button" id="consolMoveCancel">Stop after this file</button>
+    </section>
+    <section data-step="done" hidden>
+      <div id="consolDone"></div>
+    </section>
+  </div>
+  <div class="dlg-foot cs-foot" id="consolFoot" hidden>
+    <label for="consolTarget">Move into</label>
+    <input id="consolTarget" type="text" spellcheck="false">
+    <button type="button" id="consolNewSearch">New search</button>
+    <button type="button" class="primary" id="consolMoveBtn">Move selected</button>
+    <div class="hint" id="consolTargetHint">Each picture goes into a "From Desktop", "From Downloads", … folder there that keeps its original folder names.</div>
+  </div>
+</dialog>
+<!-- ---- end of Find photos on this PC ---- -->
 
 <div id="toast" class="toast"></div>
 
@@ -1428,6 +1560,477 @@ $('#checkUpdatesBtn').addEventListener('click', async () => {
   sessionStorage.removeItem('pf-update-dismissed');
   await checkUpdates(true);
 });
+
+// ---- Find photos on this PC and consolidate (lib/Consolidate.php) ----
+// The search and the moves run as short batches this page drives, so a big profile never
+// hangs a request and Stop works between batches (search) or between files (moves).
+const cs = { status: null, search: null, results: null, groups: [], files: new Map(), sel: new Set(), stop: false, busy: false };
+const CS_KINDS = { photo: ['camera photo', 'camera photos'], image: ['other picture', 'other pictures'],
+                   screenshot: ['screenshot', 'screenshots'], asset: ['program or web image', 'program or web images'] };
+
+function csBytes(n) {
+  if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return Math.round(n / 1024) + ' KB';
+  return n + ' bytes';
+}
+function csN(n, one, many) { return n.toLocaleString() + ' ' + (n === 1 ? one : (many || one + 's')); }
+function csEl(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function csWhen(ts) { return ts ? new Date(ts * 1000).toLocaleString() : ''; }
+function csButton(text, onClick, cls) {
+  const b = csEl('button', cls || null, text);
+  b.type = 'button';
+  b.addEventListener('click', onClick);
+  return b;
+}
+function csStep(step) {
+  $$('#consolDlg section[data-step]').forEach(s => { s.hidden = s.dataset.step !== step; });
+  $('#consolFoot').hidden = step !== 'review';
+  $('#consolDlg').dataset.step = step;
+}
+function csBar(wrap, bar, pct) {
+  pct = Math.max(0, Math.min(100, Math.round(pct)));
+  $(bar).style.width = pct + '%';
+  $(wrap).setAttribute('aria-valuenow', String(pct));
+}
+
+async function openConsol() {
+  if (!$('#consolDlg').open) $('#consolDlg').showModal();
+  if (cs.busy) return;              // a search or a move is still running: just show it
+  csStep('start');
+  $('#consolStartInfo').textContent = 'Checking where your folders are…';
+  $('#consolSearchBtn').disabled = true;
+  try {
+    const s = await api('consolidate_status');
+    cs.status = s;
+    cs.search = s.search;
+    if (s.target) $('#consolTarget').value = s.target;
+    $('#consolDrivesList').textContent = s.drives.length ? '(' + s.drives.join(', ') + ', outside the folders above)' : '(outside the folders above)';
+    $('#consolStartInfo').textContent = 'Photos you choose are gathered into ' + (s.target || 'your first photo folder')
+      + '. You can pick another folder before anything moves.' + (s.test_mode ? ' (Test mode: searching a test profile.)' : '');
+    const last = s.search;
+    $('#consolResumeBtn').hidden = !last;
+    if (last) $('#consolResumeBtn').textContent = last.status === 'running' ? 'Continue the last search' : 'Review the last search';
+    csRenderRuns(s.runs || []);
+  } catch (e) {
+    $('#consolStartInfo').textContent = e.message;
+  } finally {
+    $('#consolSearchBtn').disabled = false;
+  }
+}
+
+function csRenderRuns(runs) {
+  const box = $('#consolRuns');
+  box.textContent = '';
+  if (!runs.length) return;
+  box.appendChild(csEl('h3', null, 'Earlier consolidations'));
+  runs.forEach(r => {
+    const c = r.counts;
+    const row = csEl('div', 'cs-run');
+    let text = csWhen(r.started_at) + ': ' + csN(c.moved + c.undone + c.undo_failed, 'picture') + ' moved into ' + r.target;
+    if (r.state === 'undone') text += '. Undone' + (c.undo_failed ? ` (${c.undo_failed} could not be put back)` : '') + '.';
+    else if (r.state === 'running') text += ' (not finished)';
+    else if (r.state === 'undoing') text += ' (undo not finished)';
+    row.appendChild(csEl('span', 'cs-run-text', text));
+    row.appendChild(csButton('Details', () => csShowRun(r.run_id)));
+    if (r.state === 'running') row.appendChild(csButton('Continue', () => csRunMoves(r.run_id)));
+    if ((r.state === 'done' && c.moved > 0) || r.state === 'undoing') row.appendChild(csButton(r.state === 'undoing' ? 'Continue undo' : 'Undo', () => csUndo(r.run_id, r.state === 'undoing')));
+    box.appendChild(row);
+  });
+}
+
+async function csShowRun(runId) {
+  try { csRenderDone(await api('consolidate_run', { qs: 'run_id=' + encodeURIComponent(runId) })); }
+  catch (e) { toast(e.message, 'err'); }
+}
+
+async function csSearch(resumeId) {
+  cs.stop = false;
+  cs.busy = true;
+  csStep('searching');
+  $('#consolSearchCancel').disabled = false;
+  $('#consolSearchText').textContent = 'Starting…';
+  $('#consolSearchSub').textContent = '';
+  csBar('#consolSearchBarWrap', '#consolSearchBar', 0);
+  try {
+    let p = resumeId
+      ? await api('consolidate_search_tick', { body: { id: resumeId } })
+      : await api('consolidate_search_start', { body: { drives: $('#consolDrives').checked } });
+    while (p.status === 'running') {
+      csShowSearch(p);
+      if (cs.stop) { p = await api('consolidate_search_cancel', { body: { id: p.id } }); break; }
+      p = await api('consolidate_search_tick', { body: { id: p.id } });
+    }
+    cs.search = p;
+    await csLoadResults(p.id);
+  } catch (e) {
+    toast(e.message, 'err', 6000);
+    csStep('start');
+  } finally {
+    cs.busy = false;
+  }
+}
+
+function csShowSearch(p) {
+  const total = p.dirs_done + p.dirs_queued;
+  csBar('#consolSearchBarWrap', '#consolSearchBar', total ? 100 * p.dirs_done / total : 0);
+  $('#consolSearchText').textContent = cs.stop ? 'Stopping…'
+    : `Searched ${csN(p.dirs_done, 'folder')}, ${p.dirs_queued.toLocaleString()} to go. Found ${csN(p.images, 'picture')} so far (${p.elapsed} s).`;
+  $('#consolSearchSub').textContent = p.current ? 'Now in ' + p.current : '';
+}
+
+async function csLoadResults(id) {
+  const r = await api('consolidate_results', { qs: 'id=' + encodeURIComponent(id) });
+  cs.results = r;
+  cs.groups = r.groups;
+  cs.files = new Map();
+  cs.sel = new Set();
+  r.groups.forEach((g, gi) => g.files.forEach(f => {
+    f.g = gi;
+    cs.files.set(f.i, f);
+    if (f.d) cs.sel.add(f.i);
+  }));
+  if (!$('#consolTarget').value && r.target) $('#consolTarget').value = r.target;
+  $('#consolFilter').value = 'all';
+  csStep('review');
+  csRenderReview();
+}
+
+function csRenderReview() {
+  const r = cs.results, t = r.totals, s = r.search;
+  const sum = $('#consolSummary');
+  sum.textContent = '';
+  if (!t.files) {
+    sum.appendChild(csEl('p', 'cs-lead', `No pictures were found outside your photo library. Searched ${csN(s.dirs_done, 'folder')} in ${s.elapsed} s.`));
+  } else {
+    const kinds = Object.entries(CS_KINDS).filter(([k]) => t.mix[k]).map(([k, [one, many]]) => csN(t.mix[k], one, many));
+    sum.appendChild(csEl('p', 'cs-lead', `Found ${csN(t.files, 'picture')} (${csBytes(t.size)}) in ${csN(t.groups, 'group')}: ${kinds.join(', ')}. Searched ${csN(s.dirs_done, 'folder')} in ${s.elapsed} s.`));
+    sum.appendChild(csEl('p', 'cs-lead', t.preselected_files
+      ? `Ticked to start with: ${csN(t.preselected_files, 'picture')} (${csBytes(t.preselected_size)}) in ${csN(t.preselected_groups, 'folder')}. Only folders on your Desktop, in Downloads, Documents, Pictures or OneDrive that hold mostly camera photos start ticked; the others say why not.`
+      : 'Nothing is ticked to start with: no folder in your usual photo places holds mostly camera photos. Each folder says why; tick what you want to move.'));
+  }
+  if (s.status === 'cancelled') sum.appendChild(csEl('p', 'cg-reason', `The search was stopped before it finished: ${csN(s.unsearched, 'folder')} not searched.`));
+  csRenderGroups();
+  $('#consolSkippedN').textContent = r.skipped_count.toLocaleString();
+  const list = $('#consolSkippedList');
+  list.textContent = '';
+  r.skipped.forEach(k => {
+    list.appendChild(csEl('div', 'cs-skip-reason', `${k.reason} (${k.count})`));
+    k.paths.forEach(p => list.appendChild(csEl('div', 'cs-skip-path', p)));
+    if (k.count > k.paths.length) list.appendChild(csEl('div', 'cs-skip-path', `…and ${k.count - k.paths.length} more`));
+  });
+  if (r.hidden) list.appendChild(csEl('div', 'cs-skip-reason', `${csN(r.hidden, 'hidden or system picture')} left alone`));
+  csUpdateMoveBtn();
+}
+
+/** What a group's checkbox ticks: everything movable except small program or web images. */
+function csGroupPick(f) { return !f.x && f.k !== 'asset'; }
+
+function csGroupState(g) {
+  const pick = g.files.filter(csGroupPick);
+  const picked = pick.filter(f => cs.sel.has(f.i)).length;
+  const ticked = g.files.filter(f => cs.sel.has(f.i)).length;
+  return { all: pick.length > 0 && picked === pick.length, some: ticked > 0, ticked, pick: pick.length };
+}
+
+function csRenderGroups() {
+  const box = $('#consolGroups');
+  box.textContent = '';
+  const filter = $('#consolFilter').value;
+  const frag = document.createDocumentFragment();
+  let shown = 0;
+  cs.groups.forEach((g, gi) => {
+    const st = csGroupState(g);
+    if ((filter === 'sel' && !st.some) || (filter === 'unsel' && st.some)) return;
+    shown++;
+    frag.appendChild(csGroupEl(g, gi, st));
+  });
+  if (!shown && cs.groups.length) frag.appendChild(csEl('div', 'err-empty', 'No folders match this filter.'));
+  box.appendChild(frag);
+}
+
+function csCountText(g, st) {
+  return `${csN(g.count, 'file')} · ${csBytes(g.size)}` + (st.ticked ? ` · ${st.ticked.toLocaleString()} ticked` : '');
+}
+
+function csGroupEl(g, gi, st) {
+  const el = csEl('div', 'cg');
+  el.dataset.g = gi;
+  const row = csEl('div', 'cg-row');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.id = 'cg' + gi;
+  cb.checked = st.all;
+  cb.indeterminate = !st.all && st.some;
+  cb.disabled = st.pick === 0;
+  cb.setAttribute('aria-describedby', 'cgm' + gi);
+  cb.addEventListener('change', () => csToggleGroup(gi, cb.checked));
+  const lab = csEl('label', 'cg-name');
+  lab.htmlFor = cb.id;
+  lab.title = g.dir;
+  lab.appendChild(csEl('span', 'cg-root', g.root));
+  if (g.rel) lab.append(' › ' + g.rel.split('/').join(' › '));
+  if (g.bucket === 'screenshots') lab.append(' (screenshots)');
+  const exp = csButton('Show files', () => csToggleFiles(gi, exp));
+  exp.setAttribute('aria-expanded', 'false');
+  exp.setAttribute('aria-controls', 'cgf' + gi);
+  row.append(cb, lab, csEl('span', 'cg-count', csCountText(g, st)), exp);
+  el.appendChild(row);
+  const meta = csEl('div', 'cg-meta');
+  meta.id = 'cgm' + gi;
+  Object.entries(CS_KINDS).forEach(([k, [one, many]]) => { if (g.mix[k]) meta.appendChild(csEl('span', 'chip', csN(g.mix[k], one, many))); });
+  if (g.excluded) meta.appendChild(csEl('span', 'chip', g.excluded + ' cannot be moved'));
+  if (g.reason) meta.appendChild(csEl('span', 'cg-reason', (g.caution ? 'Caution: ' : 'Not ticked: ') + g.reason));
+  g.notes.forEach(n => meta.appendChild(csEl('span', 'cg-note', n)));
+  el.appendChild(meta);
+  if (g.samples.length) {
+    const th = csEl('div', 'cg-thumbs');
+    g.samples.forEach(id => {
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = '';
+      img.src = 'api.php?action=consolidate_thumb&id=' + id;
+      img.addEventListener('error', () => img.remove());
+      th.appendChild(img);
+    });
+    el.appendChild(th);
+  }
+  const files = csEl('div', 'cg-files');
+  files.id = 'cgf' + gi;
+  files.hidden = true;
+  el.appendChild(files);
+  return el;
+}
+
+function csSyncGroup(gi) {
+  const el = document.querySelector(`#consolGroups .cg[data-g="${gi}"]`);
+  if (!el) return;
+  const g = cs.groups[gi], st = csGroupState(g);
+  const cb = el.querySelector('.cg-row input');
+  cb.checked = st.all;
+  cb.indeterminate = !st.all && st.some;
+  el.querySelector('.cg-count').textContent = csCountText(g, st);
+  el.querySelectorAll('.cf input').forEach(i => { i.checked = cs.sel.has(+i.dataset.f); });
+}
+
+function csToggleGroup(gi, on) {
+  cs.groups[gi].files.forEach(f => {
+    if (!on) cs.sel.delete(f.i);
+    else if (csGroupPick(f)) cs.sel.add(f.i);
+  });
+  csSyncGroup(gi);
+  csUpdateMoveBtn();
+}
+
+function csToggleFiles(gi, btn) {
+  const box = $('#cgf' + gi);
+  const open = box.hidden;
+  if (open && !box.childElementCount) csRenderFiles(gi, box);
+  box.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+  btn.textContent = open ? 'Hide files' : 'Show files';
+}
+
+function csRenderFiles(gi, box) {
+  const frag = document.createDocumentFragment();
+  cs.groups[gi].files.forEach(f => {
+    const lab = csEl('label', 'cf');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.dataset.f = f.i;
+    cb.checked = cs.sel.has(f.i);
+    cb.disabled = !!f.x;
+    cb.addEventListener('change', () => {
+      if (cb.checked) cs.sel.add(f.i); else cs.sel.delete(f.i);
+      csSyncGroup(gi);
+      csUpdateMoveBtn();
+    });
+    lab.append(cb, csEl('span', 'cf-name', f.n));
+    lab.appendChild(csEl('span', 'cf-info', `${csBytes(f.s)} · ${(CS_KINDS[f.k] || [f.k])[0]} (${f.b})` + (f.w ? ` · ${f.w}×${f.h}` : '')));
+    if (f.c) lab.appendChild(csEl('span', 'badge', 'only in the cloud'));
+    if (f.x) lab.appendChild(csEl('span', 'badge warn', f.x));
+    frag.appendChild(lab);
+  });
+  box.appendChild(frag);
+}
+
+function csUpdateMoveBtn() {
+  let n = 0, b = 0;
+  cs.sel.forEach(i => { const f = cs.files.get(i); if (f) { n++; b += f.s; } });
+  const btn = $('#consolMoveBtn');
+  btn.textContent = n ? `Move ${csN(n, 'picture')} (${csBytes(b)})` : 'Move selected';
+  btn.disabled = n === 0;
+}
+
+function csTickAll(on) {
+  const filter = $('#consolFilter').value;
+  cs.groups.forEach(g => {
+    const st = csGroupState(g);
+    if ((filter === 'sel' && !st.some) || (filter === 'unsel' && st.some)) return;
+    g.files.forEach(f => {
+      if (!on) cs.sel.delete(f.i);
+      else if (csGroupPick(f) && !g.caution) cs.sel.add(f.i);   // caution groups only by hand
+    });
+  });
+  csRenderGroups();
+  csUpdateMoveBtn();
+}
+
+async function csMove() {
+  const ids = [...cs.sel];
+  if (!ids.length) return;
+  const target = $('#consolTarget').value.trim();
+  if (!target) { toast('Choose the folder to move them into.', 'err'); $('#consolTarget').focus(); return; }
+  if (!confirm(`Move ${csN(ids.length, 'picture')} into\n${target}?\n\nEach one goes into a "From Desktop", "From Downloads", ... folder there that keeps its original folder names. Nothing is overwritten, copies already in the library are skipped, and you can undo this afterwards.`)) return;
+  try {
+    const p = await api('consolidate_start', { body: { search_id: cs.results.search.id, target, ids } });
+    await csRunMoves(p.run_id);
+  } catch (e) {
+    toast(e.message, 'err', 6000);
+  }
+}
+
+async function csRunMoves(runId) {
+  cs.busy = true;
+  cs.stop = false;
+  csStep('moving');
+  $('#consolMoveTitle').textContent = 'Moving…';
+  $('#consolMoveCancel').hidden = false;
+  $('#consolMoveCancel').disabled = false;
+  $('#consolMoveText').textContent = 'Checking what is already in your library…';
+  $('#consolMoveSub').textContent = '';
+  csBar('#consolMoveBarWrap', '#consolMoveBar', 0);
+  try {
+    let p = await api('consolidate_tick', { body: { run_id: runId } });
+    while (!p.finished) {
+      csShowMoves(p);
+      if (cs.stop) { await api('consolidate_cancel', { body: { run_id: runId } }); break; }
+      p = await api('consolidate_tick', { body: { run_id: runId } });
+    }
+    $('#consolMoveCancel').disabled = true;
+    $('#consolMoveText').textContent = 'Adding the moved pictures to your library…';
+    const sum = await api('consolidate_finish', { body: { run_id: runId } });
+    csRenderDone(sum);
+    if (sum.scan) refreshStats();
+  } catch (e) {
+    toast(e.message, 'err', 8000);
+    $('#consolMoveText').textContent = 'Stopped by an error: ' + e.message + ' Open this dialog again to continue or undo.';
+  } finally {
+    cs.busy = false;
+  }
+}
+
+function csShowMoves(p) {
+  const c = p.counts, done = c.total - c.queued;
+  csBar('#consolMoveBarWrap', '#consolMoveBar', c.total ? 100 * done / c.total : 0);
+  if (!p.prepared) return;
+  $('#consolMoveText').textContent = cs.stop ? 'Stopping after this file…'
+    : `${done.toLocaleString()} of ${c.total.toLocaleString()} done: ${c.moved.toLocaleString()} moved, ${c.duplicate.toLocaleString()} already in the library, ${c.failed.toLocaleString()} could not be moved.`;
+}
+
+async function csUndo(runId, resume) {
+  if (!resume && !confirm('Put every picture from this consolidation back where it came from?')) return;
+  cs.busy = true;
+  csStep('moving');
+  $('#consolMoveTitle').textContent = 'Putting pictures back…';
+  $('#consolMoveCancel').hidden = true;
+  $('#consolMoveText').textContent = 'Starting…';
+  $('#consolMoveSub').textContent = '';
+  csBar('#consolMoveBarWrap', '#consolMoveBar', 0);
+  try {
+    let p;
+    do {
+      p = await api('consolidate_undo_tick', { body: { run_id: runId } });
+      const c = p.counts, all = c.moved + c.undone + c.undo_failed;
+      csBar('#consolMoveBarWrap', '#consolMoveBar', all ? 100 * (c.undone + c.undo_failed) / all : 100);
+      $('#consolMoveText').textContent = `${c.undone.toLocaleString()} of ${all.toLocaleString()} put back` + (c.undo_failed ? `, ${c.undo_failed} could not be` : '') + '.';
+    } while (!p.undo_finished);
+    csRenderDone(p);
+    refreshStats();
+  } catch (e) {
+    toast(e.message, 'err', 8000);
+    $('#consolMoveText').textContent = 'Stopped by an error: ' + e.message + ' Open this dialog again to continue.';
+  } finally {
+    cs.busy = false;
+  }
+}
+
+function csList(title, items, line, cls) {
+  const box = csEl('div');
+  box.appendChild(csEl('h3', cls || null, title));
+  const ul = csEl('ul', 'cs-list');
+  items.slice(0, 300).forEach(it => ul.appendChild(csEl('li', null, line(it))));
+  if (items.length > 300) ul.appendChild(csEl('li', null, `…and ${items.length - 300} more`));
+  box.appendChild(ul);
+  return box;
+}
+
+function csRenderDone(s) {
+  csStep('done');
+  const box = $('#consolDone');
+  box.textContent = '';
+  const c = s.counts;
+  const undone = s.state === 'undone' || s.state === 'undoing';
+  if (undone) {
+    box.appendChild(csEl('h3', null, s.state === 'undone' ? 'Undone' : 'Undo not finished'));
+    box.appendChild(csEl('p', 'cs-lead', `${csN(c.undone, 'picture')} put back where ${c.undone === 1 ? 'it' : 'they'} came from.`
+      + (s.undone_at ? ' (' + csWhen(s.undone_at) + ')' : '')));
+    if (s.undo_failed_list.length) box.appendChild(csList(`${csN(s.undo_failed_list.length, 'picture')} could not be put back`, s.undo_failed_list,
+      it => `${it.path}: ${it.reason} (it is at ${it.now_at})`, 'cs-err'));
+  } else {
+    box.appendChild(csEl('h3', null, c.cancelled ? 'Stopped' : (s.state === 'running' ? 'Not finished' : 'Done')));
+    box.appendChild(csEl('p', 'cs-lead', `Moved ${csN(c.moved, 'picture')} (${csBytes(c.bytes_moved)}) into ${s.target}.` + (s.started_at ? ' (' + csWhen(s.started_at) + ')' : '')));
+    if (s.added_photo_dir) box.appendChild(csEl('p', null, `${s.target} was added to your photo folders.`));
+    if (s.scan) {
+      const p = csEl('p', null, `${csN(s.scan.new_files, 'new photo')} added to the index, waiting to be described. `);
+      p.appendChild(csButton('Start indexing', () => { $('#consolDlg').close(); startIndexing(); }));
+      box.appendChild(p);
+    }
+    if (c.cancelled) box.appendChild(csEl('p', 'cg-reason', `${csN(c.cancelled, 'picture')} not moved because you stopped.`));
+    if (s.failed_list.length) box.appendChild(csList(`${csN(s.failed_list.length, 'picture')} could not be moved`, s.failed_list, it => `${it.path}: ${it.reason}`, 'cs-err'));
+    if (s.duplicates.length) box.appendChild(csList(`${csN(s.duplicates.length, 'picture')} skipped: an exact copy is already in the library (left where ${s.duplicates.length === 1 ? 'it is' : 'they are'})`,
+      s.duplicates, it => `${it.path} = ${it.same_as}`));
+  }
+  const acts = csEl('div', 'cs-actions');
+  if (s.state === 'done' && c.moved > 0) acts.appendChild(csButton('Undo this consolidation', () => csUndo(s.run_id)));
+  if (s.state === 'undoing') acts.appendChild(csButton('Continue undo', () => csUndo(s.run_id, true)));
+  if (s.state === 'running') acts.appendChild(csButton('Continue moving', () => csRunMoves(s.run_id)));
+  acts.appendChild(csButton('Back', () => openConsol()));
+  acts.appendChild(csButton('Close', () => $('#consolDlg').close(), 'primary'));
+  box.appendChild(acts);
+}
+
+$('#consolidateBtn').addEventListener('click', openConsol);
+$('#consolFromSettings').addEventListener('click', () => { $('#settingsDlg').close(); openConsol(); });
+$('#consolClose').addEventListener('click', () => $('#consolDlg').close());
+$('#consolSearchBtn').addEventListener('click', () => csSearch());
+$('#consolResumeBtn').addEventListener('click', () => {
+  const s = cs.search;
+  if (!s) return;
+  if (s.status === 'running') csSearch(s.id);
+  else csLoadResults(s.id).catch(e => toast(e.message, 'err'));
+});
+$('#consolSearchCancel').addEventListener('click', () => {
+  cs.stop = true;
+  $('#consolSearchCancel').disabled = true;
+  $('#consolSearchText').textContent = 'Stopping…';
+});
+$('#consolMoveCancel').addEventListener('click', () => {
+  cs.stop = true;
+  $('#consolMoveCancel').disabled = true;
+  $('#consolMoveText').textContent = 'Stopping after this file…';
+});
+$('#consolFilter').addEventListener('change', csRenderGroups);
+$('#consolAll').addEventListener('click', () => csTickAll(true));
+$('#consolNone').addEventListener('click', () => csTickAll(false));
+$('#consolMoveBtn').addEventListener('click', csMove);
+$('#consolNewSearch').addEventListener('click', () => openConsol());
+// ---- end of Find photos on this PC ----
 
 refreshStats().then(() => doSearch());
 checkUpdates(false);
