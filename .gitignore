@@ -1,0 +1,19 @@
+# The index and its thumbnails rebuild from the source photos - never commit them.
+# Kept as whole-directory rules so that if the working install is ever consolidated
+# into this directory, its 749 MB index and 35 MB of vendored binaries cannot be
+# staged by accident.
+data/
+bin/
+
+# Belt and braces for the individual artefacts.
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+thumbs/
+
+# Local configuration: holds photo library paths, tool paths and an API key field.
+settings.json
+
+# Build output (build.ps1)
+dist/
