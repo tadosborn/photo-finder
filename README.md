@@ -19,8 +19,8 @@ you can search instantly.
   IPTC / EXIF) so Windows Explorer, Lightroom, Bridge and others can search them too.
 - **Self-contained.** One installer with its own PHP, SQLite and ExifTool; nothing else to
   install. Runs in the background and opens in your browser at `http://127.0.0.1:8765`.
-- **Signed updates.** Photo Finder checks for new versions when it opens (you can turn this
-  off) and installs them only after verifying their signature.
+- **Signed updates.** Photo Finder checks this repository's GitHub releases when it opens (you
+  can turn this off) and installs an update only after verifying the maintainer's signature.
 
 ## Download and install
 
@@ -46,7 +46,7 @@ the index.
 ## Privacy
 
 Photos you index are sent to the AI provider you choose (or stay on your PC with the local
-option), and the app can check infinetinc.com for updates. Nothing else leaves your PC.
+option), and the app can check GitHub for updates. Nothing else leaves your PC.
 Details and how to turn things off: [PRIVACY.md](PRIVACY.md). Bundled components and their
 licenses: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 

@@ -29,14 +29,15 @@ never reads keys from anywhere else.
 
 To stop sending photos, stop indexing, remove the folders, or switch to the local option.
 
-## Update checks (infinetinc.com)
+## Update checks (GitHub)
 
-When it opens, Photo Finder can ask `https://infinetinc.com/updates/photofinder_update.xml`
-whether a newer version exists. The request carries no information about you or your photos;
-like any web request it reveals your IP address and the app version (in the `User-Agent`
-header) to the server and to Cloudflare, which hosts it. If you click **Install update**, the
-installer is downloaded from the same server and verified (Ed25519 signature and SHA-256)
-before it runs.
+When it opens, Photo Finder can ask GitHub
+(`https://api.github.com/repos/tadosborn/photo-finder/releases/latest`) whether a newer version
+has been released. The request carries no information about you or your photos; like any web
+request it reveals your IP address and the app version (in the `User-Agent` header) to GitHub.
+If you click **Install update**, the installer is downloaded from that GitHub release and
+verified (the maintainer's Ed25519 signature and SHA-256) before it runs. GitHub's privacy
+statement applies to those requests.
 
 Turn automatic checks off in the installer, or later in **Settings > Updates**. "Check now"
 still works when you ask for it.

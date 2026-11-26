@@ -366,7 +366,7 @@ $apiKeySet = $settings['api_key'] !== '';
         <label style="display:flex; align-items:center; gap:8px; margin-top:6px;">
           <input id="updateAuto" type="checkbox"> Check for updates automatically when Photo Finder opens
         </label>
-        <div class="hint">The check asks infinetinc.com whether a newer version exists; nothing about you or your photos is sent. Updates are verified before they install, and your index, settings and photos are kept.</div>
+        <div class="hint">The check asks GitHub (github.com/tadosborn/photo-finder) whether a newer version has been released; nothing about you or your photos is sent. Updates are verified before they install, and your index, settings and photos are kept.</div>
         <div style="display:flex; gap:8px; align-items:center; margin-top:10px;">
           <span id="updateStatus" class="hint" style="flex:1; margin:0;">Version <?= htmlspecialchars(PF_VERSION) ?></span>
           <button type="button" id="checkUpdatesBtn">Check now</button>

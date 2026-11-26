@@ -55,7 +55,7 @@ function pf_load_settings(): array {
         'export_ocr_text' => true,
         'export_replace_description' => true,
         'export_overwrite_original' => true,
-        // Check https://infinetinc.com for a newer version when the app opens (Settings > Updates).
+        // Check GitHub for a newer release when the app opens (Settings > Updates).
         'update_check' => true,
     ];
     if (!is_file(PF_SETTINGS_FILE)) return $defaults;

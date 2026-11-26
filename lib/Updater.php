@@ -7,12 +7,18 @@ require_once __DIR__ . '/version.php';
 /**
  * Update check and self-install for copies installed with PhotoFinderSetup.exe.
  *
- * The feed is the same XML shape as the Joomla update feeds on the InfiNet update
- * server: <updates><update><version/><sha256/><downloads><downloadurl/>...</update>.
- * A copy running from a source checkout (e.g. under XAMPP) can still check, but it
- * is told to update from source instead of being offered the installer.
+ * Source: the latest GitHub release of this repository (PF_UPDATE_SOURCE). A release counts
+ * only if it carries `photofinder-release.json`, a manifest signed with the maintainer's offline
+ * Ed25519 key:  {"version", "file", "sha256", "signature", "notes"}. The app checks that
+ * signature against PF_UPDATE_KEYS, downloads the named installer from the same release and
+ * checks its sha256, so GitHub (or anyone who could alter the release) cannot slip in an
+ * installer the maintainer did not sign.
+ *
+ * A copy running from a source checkout can still check, but it is told to update from source
+ * instead of being offered the installer.
  */
 final class Updater {
+    public const MANIFEST = 'photofinder-release.json';
     private const CACHE_FILE = PF_DATA . '/update-check.json';
     private const CACHE_TTL = 3600;          // seconds between automatic checks
     private const DOWNLOAD_DIR = PF_DATA . '/updates';
@@ -22,10 +28,11 @@ final class Updater {
         return is_file(PF_ROOT . '/php/php.exe') && is_file(PF_ROOT . '/unins000.exe');
     }
 
-    public static function feedUrl(): string {
+    /** The GitHub "latest release" API address (Settings key update_feed_url overrides it for tests). */
+    public static function sourceUrl(): string {
         $s = pf_load_settings();
         $u = trim((string)($s['update_feed_url'] ?? ''));
-        return $u !== '' ? $u : PF_UPDATE_FEED;
+        return $u !== '' ? $u : PF_UPDATE_SOURCE;
     }
 
     /** Returns the check result; uses a cached copy younger than an hour unless $force. */
@@ -47,17 +54,10 @@ final class Updater {
             'error' => null,
         ];
         try {
-            $feed = self::fetchFeed();
-            $result['latest'] = $feed['version'];
-            $newer = version_compare($feed['version'], PF_VERSION, '>');
-            $file = basename((string)(parse_url($feed['url'], PHP_URL_PATH) ?? ''));
-            if ($newer && !self::signatureValid($feed['version'], $feed['sha256'], $file, $feed['signature'])) {
-                // Never advertise what install() would refuse.
-                $result['error'] = 'Version ' . $feed['version'] . ' on the update server is not signed by InfiNet; ignoring it.';
-            } else {
-                $result['available'] = $newer;
-                $result['notes'] = $feed['notes'];
-            }
+            $rel = self::latestRelease();
+            $result['latest'] = $rel['version'];
+            $result['available'] = version_compare($rel['version'], PF_VERSION, '>');
+            $result['notes'] = $rel['notes'];
         } catch (Throwable $e) {
             $result['error'] = $e->getMessage();
         }
@@ -67,51 +67,42 @@ final class Updater {
     }
 
     /**
-     * Downloads the advertised installer, verifies its sha256 against the feed, and
-     * starts it detached in silent mode. The installer stops this server and the
-     * worker, replaces the program files (data/ is never touched), and starts both
-     * again. The caller should poll `version` until it reports the new number.
+     * Downloads the latest signed release's installer and verifies it. Returns its local path.
+     * Nothing is run here (install() does that), so this is also what the tests exercise.
+     */
+    public static function prepareDownload(): array {
+        $rel = self::latestRelease();
+        if (!version_compare($rel['version'], PF_VERSION, '>')) {
+            throw new RuntimeException('Already up to date (' . PF_VERSION . ').');
+        }
+        if (!is_dir(self::DOWNLOAD_DIR)) mkdir(self::DOWNLOAD_DIR, 0777, true);
+        foreach (glob(self::DOWNLOAD_DIR . '/*.exe') ?: [] as $old) @unlink($old);
+        $dest = self::DOWNLOAD_DIR . '/' . $rel['file'];
+
+        [$status, $body] = self::httpGet($rel['installer_url'], 300, true, ['Accept: application/octet-stream']);
+        if ($status !== 200 || $body === '') {
+            throw new RuntimeException("Download failed (HTTP {$status}).");
+        }
+        if (!hash_equals($rel['sha256'], hash('sha256', $body))) {
+            throw new RuntimeException('The downloaded installer does not match the signed checksum; not running it.');
+        }
+        if (file_put_contents($dest, $body) === false) {
+            throw new RuntimeException('Could not save the installer to ' . $dest);
+        }
+        return ['path' => $dest, 'version' => $rel['version']];
+    }
+
+    /**
+     * Downloads and verifies the update, then starts it detached in silent mode. The installer
+     * stops this server and the worker, replaces the program files (the data folder is never
+     * touched), and starts both again. The caller should poll `version` until it changes.
      */
     public static function install(): array {
         if (!self::isInstalled()) {
             throw new RuntimeException('This copy runs from source, not from the installer. Update it from the source repository.');
         }
-        $feed = self::fetchFeed();
-        if (!version_compare($feed['version'], PF_VERSION, '>')) {
-            throw new RuntimeException('Already up to date (' . PF_VERSION . ').');
-        }
-        $url = $feed['url'];
-        $feedParts = parse_url(self::feedUrl());
-        $dlParts = parse_url($url);
-        // The installer must come from the same server as the feed that vouches for it.
-        if (!$dlParts || strtolower($dlParts['host'] ?? '') !== strtolower($feedParts['host'] ?? '')
-            || ($dlParts['scheme'] ?? '') !== ($feedParts['scheme'] ?? '')) {
-            throw new RuntimeException('Update download is not on the feed server: ' . $url);
-        }
-        if (!preg_match('/^[a-f0-9]{64}$/', $feed['sha256'])) {
-            throw new RuntimeException('Update feed has no sha256 for the installer; refusing to run it.');
-        }
-        // The feed is only trusted as far as its signature: the server that hosts it
-        // could be the thing that was compromised.
-        if (!self::signatureValid($feed['version'], $feed['sha256'], basename((string)($dlParts['path'] ?? '')), $feed['signature'])) {
-            throw new RuntimeException('Update ' . $feed['version'] . ' is not signed by InfiNet; refusing to install it.');
-        }
-
-        if (!is_dir(self::DOWNLOAD_DIR)) mkdir(self::DOWNLOAD_DIR, 0777, true);
-        foreach (glob(self::DOWNLOAD_DIR . '/*.exe') ?: [] as $old) @unlink($old);
-        $dest = self::DOWNLOAD_DIR . '/PhotoFinderSetup-' . preg_replace('/[^0-9A-Za-z.\-]/', '', $feed['version']) . '.exe';
-
-        [$status, $body] = self::httpGet($url, 300);
-        if ($status !== 200 || $body === '') {
-            throw new RuntimeException("Download failed (HTTP {$status}).");
-        }
-        $got = hash('sha256', $body);
-        if (!hash_equals($feed['sha256'], $got)) {
-            throw new RuntimeException('Downloaded installer does not match the feed checksum; not running it.');
-        }
-        if (file_put_contents($dest, $body) === false) {
-            throw new RuntimeException('Could not save the installer to ' . $dest);
-        }
+        $dl = self::prepareDownload();
+        $dest = $dl['path'];
 
         // Launched through ShellExecute (PowerShell's Start-Process), never as a child of
         // this server. A child inherits the server's handles, including its listening socket
@@ -139,9 +130,9 @@ final class Updater {
             if (stripos($err, 'cancel') !== false) throw new RuntimeException('Update cancelled: Windows permission was not given.');
             throw new RuntimeException("Could not start the installer (exit {$exit})" . ($err !== '' ? ': ' . $err : '.'));
         }
-        pf_log('Update to ' . $feed['version'] . ' started (installer ' . basename($dest) . ').');
+        pf_log('Update to ' . $dl['version'] . ' started (installer ' . basename($dest) . ').');
         @unlink(self::CACHE_FILE);
-        return ['ok' => true, 'version' => $feed['version']];
+        return ['ok' => true, 'version' => $dl['version']];
     }
 
     /** The exact bytes a release signature covers. installer/sign-release.php signs the same. */
@@ -164,64 +155,88 @@ final class Updater {
         return false;
     }
 
-    /** @return array{version:string,url:string,sha256:string,signature:string,notes:string} */
-    private static function fetchFeed(): array {
-        $feedUrl = self::feedUrl();
-        $parts = parse_url($feedUrl);
-        $scheme = strtolower($parts['scheme'] ?? '');
-        $host = strtolower($parts['host'] ?? '');
-        if ($scheme !== 'https' && !in_array($host, ['127.0.0.1', 'localhost'], true)) {
-            throw new RuntimeException('Update feed must be https.');
+    /**
+     * The latest release, accepted only with a valid signed manifest.
+     * @return array{version:string,file:string,sha256:string,notes:string,installer_url:string}
+     */
+    private static function latestRelease(): array {
+        $src = self::sourceUrl();
+        $p = parse_url($src);
+        $host = strtolower((string)($p['host'] ?? ''));
+        if (strtolower((string)($p['scheme'] ?? '')) !== 'https' && !in_array($host, ['127.0.0.1', 'localhost'], true)) {
+            throw new RuntimeException('The update source must be https.');
         }
-        // Cache-buster: the feed sits behind Cloudflare, which would otherwise serve a
-        // stale copy for a while after a release. (Safe here; it is only the Joomla
-        // updater that names downloads after the URL.)
-        $sep = str_contains($feedUrl, '?') ? '&' : '?';
-        [$status, $body] = self::httpGet($feedUrl . $sep . 't=' . time(), 20);
-        if ($status !== 200) throw new RuntimeException("Update feed returned HTTP {$status}.");
+        [$status, $body] = self::httpGet($src, 20, false, ['Accept: application/vnd.github+json', 'X-GitHub-Api-Version: 2022-11-28']);
+        if ($status === 404) throw new RuntimeException('No published release found on GitHub yet.');
+        if ($status === 403 || $status === 429) throw new RuntimeException('GitHub is limiting update checks from this network right now; try again later.');
+        if ($status !== 200) throw new RuntimeException("GitHub returned HTTP {$status} for the update check.");
+        $rel = json_decode($body, true);
+        if (!is_array($rel)) throw new RuntimeException('GitHub returned an unreadable release.');
 
-        $prev = libxml_use_internal_errors(true);
-        $xml = simplexml_load_string($body, 'SimpleXMLElement', LIBXML_NONET);
-        libxml_use_internal_errors($prev);
-        if (!$xml || !isset($xml->update)) throw new RuntimeException('Update feed is not valid XML.');
-
-        $best = null;
-        foreach ($xml->update as $u) {
-            $v = trim((string)$u->version);
-            if ($v === '') continue;
-            if ($best === null || version_compare($v, $best['version'], '>')) {
-                $best = [
-                    'version' => $v,
-                    'url' => trim((string)($u->downloads->downloadurl ?? '')),
-                    'sha256' => strtolower(trim((string)$u->sha256)),
-                    'signature' => trim((string)($u->signature ?? '')),
-                    'notes' => trim((string)($u->description ?? '')),
-                ];
-            }
+        $tagVersion = ltrim((string)($rel['tag_name'] ?? ''), 'vV');
+        $assets = [];
+        foreach ((array)($rel['assets'] ?? []) as $a) {
+            if (isset($a['name'], $a['browser_download_url'])) $assets[(string)$a['name']] = (string)$a['browser_download_url'];
         }
-        if ($best === null || $best['url'] === '') throw new RuntimeException('Update feed lists no version.');
-        return $best;
+        if (!isset($assets[self::MANIFEST])) {
+            throw new RuntimeException("Release {$tagVersion} has no signed manifest yet; it will be offered once it is signed.");
+        }
+        [$ms, $mbody] = self::httpGet($assets[self::MANIFEST], 20, true, ['Accept: application/octet-stream']);
+        if ($ms !== 200) throw new RuntimeException("Could not read the release manifest (HTTP {$ms}).");
+        $m = json_decode($mbody, true);
+        $version = trim((string)($m['version'] ?? ''));
+        $file = trim((string)($m['file'] ?? ''));
+        $sha = strtolower(trim((string)($m['sha256'] ?? '')));
+        $sig = trim((string)($m['signature'] ?? ''));
+        if ($version === '' || !preg_match('/^[A-Za-z0-9._-]+\.exe$/', $file) || !preg_match('/^[a-f0-9]{64}$/', $sha)) {
+            throw new RuntimeException('The release manifest is incomplete.');
+        }
+        // The manifest is trusted only as far as its signature: GitHub, or whoever could alter
+        // the release, is exactly what this protects against.
+        if (!self::signatureValid($version, $sha, $file, $sig)) {
+            throw new RuntimeException("Release {$version} is not signed by the Photo Finder maintainer; ignoring it.");
+        }
+        if ($tagVersion !== '' && $tagVersion !== $version) {
+            throw new RuntimeException("Release tag {$tagVersion} does not match its signed manifest ({$version}); ignoring it.");
+        }
+        if (!isset($assets[$file])) throw new RuntimeException("Release {$version} is missing its installer ({$file}).");
+        return [
+            'version' => $version,
+            'file' => $file,
+            'sha256' => $sha,
+            'notes' => trim((string)($m['notes'] ?? '')),
+            'installer_url' => $assets[$file],
+        ];
     }
 
-    /** @return array{0:int,1:string} */
-    private static function httpGet(string $url, int $timeout): array {
+    /**
+     * GET with optional redirects (GitHub serves release files from a separate host). Only
+     * https redirects are followed, except for a local test server.
+     * @return array{0:int,1:string}
+     */
+    private static function httpGet(string $url, int $timeout, bool $follow = false, array $headers = []): array {
+        $local = in_array(strtolower((string)(parse_url($url, PHP_URL_HOST) ?? '')), ['127.0.0.1', 'localhost'], true);
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_FOLLOWLOCATION => $follow,
+            CURLOPT_MAXREDIRS => 5,
             CURLOPT_TIMEOUT => $timeout,
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_USERAGENT => 'PhotoFinder/' . PF_VERSION,
+            CURLOPT_HTTPHEADER => $headers,
         ]);
+        if (defined('CURLOPT_REDIR_PROTOCOLS_STR')) {
+            curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS_STR, $local ? 'http,https' : 'https');
+        } elseif (defined('CURLOPT_REDIR_PROTOCOLS')) {
+            curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, $local ? (CURLPROTO_HTTP | CURLPROTO_HTTPS) : CURLPROTO_HTTPS);
+        }
         pf_curl_tls($ch);
         $body = curl_exec($ch);
         if ($body === false) {
             $err = curl_error($ch);
-            curl_close($ch);
-            throw new RuntimeException('Could not reach the update server: ' . $err);
+            throw new RuntimeException('Could not reach the update source: ' . $err);
         }
-        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return [$status, (string)$body];
+        return [(int)curl_getinfo($ch, CURLINFO_HTTP_CODE), (string)$body];
     }
 }

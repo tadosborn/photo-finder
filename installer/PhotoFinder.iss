@@ -22,7 +22,8 @@ AppVersion={#AppVersion}
 AppVerName=Photo Finder {#AppVersion}
 AppPublisher=InfiNet Computer Solutions, Inc.
 AppPublisherURL=https://infinetinc.com
-AppSupportURL=https://infinetinc.com
+AppSupportURL=https://github.com/tadosborn/photo-finder
+AppUpdatesURL=https://github.com/tadosborn/photo-finder/releases
 ; Version metadata (SignPath requires product name and version on every signed binary).
 VersionInfoVersion={#AppVersion}
 VersionInfoProductName=Photo Finder
@@ -249,7 +250,7 @@ begin
     'API key (each photo is then sent to that service, and its privacy policy applies), or a local model ' +
     'running on this PC (photos never leave it). Nothing is sent until you choose and start indexing, and ' +
     'you choose which folders are indexed.' + #13#10#13#10 +
-    'Update checks: when it opens, Photo Finder can ask infinetinc.com whether a newer version exists. ' +
+    'Update checks: when it opens, Photo Finder can ask GitHub (github.com) whether a newer version has been released. ' +
     'Only the version number is involved; nothing about you or your photos is sent. You can turn this ' +
     'off below or later in Settings.' + #13#10#13#10 +
     'Everything else (the search index, thumbnails and settings) stays on this PC. ' +
