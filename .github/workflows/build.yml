@@ -64,5 +64,7 @@ jobs:
             (Get-FileHash $f -Algorithm SHA256).Hash.ToLower() + '  ' + (Split-Path -Leaf $f) | Set-Content "$f.sha256" -NoNewline
             $assets += $f, "$f.sha256"
           }
-          $notes = if ($signed) { 'Signed by SignPath Foundation.' } else { 'Unsigned build: code signing through SignPath Foundation is pending.' }
+          $sig = if ($signed) { 'Signed by SignPath Foundation.' } else { 'Unsigned build: code signing through SignPath Foundation is pending.' }
+          $base = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/blob/main/README.md"
+          $notes = "Photo Finder searches your Windows photo library by what is in the photos. See the [README]($base) for features and requirements.`n`n$sig`n`n[Code signing policy]($base#code-signing-policy) | [Privacy]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/blob/main/PRIVACY.md)"
           gh release create $env:GITHUB_REF_NAME --draft --title "Photo Finder $($env:GITHUB_REF_NAME.TrimStart('v'))" --notes $notes $assets
