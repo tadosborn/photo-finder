@@ -159,7 +159,9 @@ function pf_profile_sids(): array {
 }
 
 /** Resolve the interactive-user SID whose profile directory contains $absPath
- *  (longest prefix match), restricted to real user SIDs (S-1-5-21-…). */
+ *  (longest prefix match), restricted to real user SIDs (S-1-5-21-…). A path in no
+ *  profile (D:\Photos, C:\Data...) belongs to the account the server runs as, when
+ *  that is a real user (an installed Photo Finder runs as the signed-in user). */
 function pf_owner_sid_for_path(string $absPath): ?string {
     $abs = pf_norm_path($absPath);
     $bestSid = null; $bestLen = -1;
@@ -169,7 +171,19 @@ function pf_owner_sid_for_path(string $absPath): ?string {
             $bestSid = $sid; $bestLen = strlen($dir);
         }
     }
-    return $bestSid;
+    return $bestSid ?? pf_current_user_sid();
+}
+
+/** SID of the account this process runs as, if it is a real user (S-1-5-21-…);
+ *  null for SYSTEM and service accounts. */
+function pf_current_user_sid(): ?string {
+    static $sid = false;
+    if ($sid !== false) return $sid;
+    $sid = null;
+    $whoami = (getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32\\whoami.exe';
+    [$exit, $out] = pf_run_cmd([$whoami, '/user', '/fo', 'csv', '/nh']);
+    if ($exit === 0 && preg_match('/"(S-1-5-21-[0-9-]+)"/', $out, $m)) $sid = $m[1];
+    return $sid;
 }
 
 function pf_recycle_token(): string {
@@ -182,7 +196,7 @@ function pf_recycle_token(): string {
 /** Move a single file into the owning user's Windows Recycle Bin by writing the
  *  $I metadata + $R data pair directly (the documented Win10 recycle format),
  *  so it shows up in that user's Recycle Bin and can be restored normally.
- *  Returns ['ok' => bool, 'error' => string]. */
+ *  Returns ['ok' => bool, 'error' => string], plus 'recycled_as' (the $R file) on success. */
 function pf_recycle_one(string $path): array {
     if (!is_file($path)) return ['ok' => false, 'error' => 'file not found on disk'];
     $win = str_replace('/', '\\', $path);
@@ -227,7 +241,7 @@ function pf_recycle_one(string $path): array {
         @unlink($iFile);
         return ['ok' => false, 'error' => 'could not move file into recycle bin'];
     }
-    return ['ok' => true, 'error' => ''];
+    return ['ok' => true, 'error' => '', 'recycled_as' => $rFile];
 }
 
 /** Move one or more files to the owning user's Windows Recycle Bin (recoverable).
