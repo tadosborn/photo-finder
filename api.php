@@ -406,6 +406,32 @@ try {
             Db::resetManualDescription($id);
             pf_json(['ok' => true, 'image' => Db::getById($id)]);
         }
+
+        // ---- Enhance (lib/Enhance.php): preview + Auto settings, then save as a copy or in place ----
+        case 'enhance_open':
+        case 'enhance_save': {
+            require_once __DIR__ . '/lib/Enhance.php';
+            ini_set('memory_limit', '1536M');   // a 50 MP photo is 200 MB per GD image
+            $isSave = $action === 'enhance_save';
+            if ($isSave && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = $isSave ? pf_input_json() : $_GET;
+            $id = preg_replace('/[^a-f0-9]/i', '', (string)($in['id'] ?? ''));
+            $row = $id !== '' ? Db::getById($id) : null;
+            if (!$row) pf_json(['error' => 'not found in index'], 404);
+            // Same guard as delete_files and file.php: only photos inside the configured folders.
+            if (!pf_path_inside_roots((string)$row['path'], pf_load_settings()['photo_dirs'] ?? [])) {
+                pf_json(['error' => 'outside configured photo folders'], 403);
+            }
+            if (!is_file((string)$row['path'])) pf_json(['error' => 'The photo is no longer on disk.'], 404);
+            if (!$isSave) pf_json(Enhance::open($row));
+            $mode = ($in['mode'] ?? 'copy') === 'replace' ? 'replace' : 'copy';
+            $params = Enhance::sanitize(is_array($in['params'] ?? null) ? $in['params'] : []);
+            if (Enhance::isNeutral($params)) pf_json(['error' => 'Nothing to save: no changes are set.'], 400);
+            if ($mode === 'replace' && !Enhance::canReplace((string)$row['path'])) {
+                pf_json(['error' => 'Replacing works for JPEG photos only. Save as a copy instead.'], 400);
+            }
+            pf_json(Enhance::save($row, $params, $mode));
+        }
         default:
             pf_json(['error' => 'unknown action', 'action' => $action], 400);
     }
