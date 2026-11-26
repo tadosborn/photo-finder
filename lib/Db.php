@@ -111,6 +111,17 @@ final class Db {
             foreach ($todo as $r) $upd->execute([':y' => self::folderYear($r['path']), ':id' => $r['id']]);
             $pdo->commit();
         }
+        // ---- Clean up (lib/Cleanup.php): measurements from each photo's thumbnail ----
+        foreach ([
+            'sharpness' => 'REAL', 'sharpness_coarse' => 'REAL', 'lum_mean' => 'REAL', 'lum_std' => 'REAL',
+            'lum_high' => 'REAL', 'dark_frac' => 'REAL', 'bright_frac' => 'REAL', 'dhash' => 'TEXT',
+            'dhash_v' => 'TEXT', 'analyzed_at' => 'INTEGER', 'cleanup_keep' => 'INTEGER NOT NULL DEFAULT 0',
+        ] as $col => $type) {
+            if (!in_array($col, $colNames, true)) {
+                $pdo->exec("ALTER TABLE images ADD COLUMN {$col} {$type}");
+            }
+        }
+        // ---- end Clean up ----
         // taken_at already exists in initial schema (top of file) — just make sure
         // there's an index so future map/timeline views are fast.
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_images_taken_at ON images(taken_at)');
