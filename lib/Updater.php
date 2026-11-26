@@ -114,17 +114,19 @@ final class Updater {
         $log = PF_DATA . '/update-install.log';
         $launchErr = PF_DATA . '/update-launch.txt';
         $win = fn(string $p): string => str_replace('/', '\\', $p);           // paths only, never the switches
-        $q = fn(string $s): string => "'" . str_replace("'", "''", $s) . "'";  // PowerShell single-quoted literal
-        $ps = '$ErrorActionPreference = "Stop"; $ProgressPreference = "SilentlyContinue";'
-            . ' try { Start-Process -FilePath ' . $q($win($dest))
-            . ' -ArgumentList @("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", ' . $q('/LOG="' . $win($log) . '"') . ')'
-            . ' } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }';
-        $cmd = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand '
-             . base64_encode(mb_convert_encoding($ps, 'UTF-16LE', 'UTF-8'));
+        // pf-helper.ps1 "launch" = Start-Process (ShellExecute). Its input goes in a file, so the
+        // command line holds no PowerShell code (antivirus behaviour shields block that).
+        $job = PF_DATA . '/update-launch.json';
+        file_put_contents($job, json_encode(['file' => $win($dest),
+            'args' => ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG="' . $win($log) . '"']]));
+        $cmd = '"' . (getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"'
+             . ' -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' . $win(PF_ROOT . '/pf-helper.ps1') . '"'
+             . ' -Action launch -In "' . $win($job) . '"';
         $p = proc_open($cmd, [0 => ['file', 'NUL', 'r'], 1 => ['file', $launchErr, 'w'], 2 => ['file', $launchErr, 'a']],
                        $pipes, null, null, ['bypass_shell' => true]);
         if (!is_resource($p)) throw new RuntimeException('Could not start the installer.');
         $exit = proc_close($p);   // returns once Windows has started it (after the UAC answer)
+        @unlink($job);
         $err = trim((string)@file_get_contents($launchErr));
         if ($exit !== 0) {
             if (stripos($err, 'cancel') !== false) throw new RuntimeException('Update cancelled: Windows permission was not given.');

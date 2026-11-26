@@ -2,10 +2,12 @@
 declare(strict_types=1);
 
 // Downloads an Ollama model in the background and records progress for the Settings page.
-// Started (hidden) by LocalAI::startPull():  php pull-model.php <model> <ollama base URL>
+// Started (hidden) by LocalAI::startPull():
+//   php pull-model.php <model> <ollama base URL> [<data folder>]
 // Command line only; the web server never serves this file.
 
-if (PHP_SAPI !== 'cli' || $argc !== 3) { fwrite(STDERR, "usage: php pull-model.php <model> <base>\n"); exit(2); }
+if (PHP_SAPI !== 'cli' || $argc < 3 || $argc > 4) { fwrite(STDERR, "usage: php pull-model.php <model> <base> [<data folder>]\n"); exit(2); }
+if ($argc === 4 && is_dir($argv[3])) putenv('PHOTOFINDER_DATA=' . $argv[3]);   // before util.php fixes PF_DATA
 require_once __DIR__ . '/lib/util.php';
 require_once __DIR__ . '/lib/OpenAICompat.php';
 require_once __DIR__ . '/lib/LocalAI.php';

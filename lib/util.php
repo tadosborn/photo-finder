@@ -132,23 +132,48 @@ function pf_run_cmd(array $cmd): array {
     return [(int)$exit, (string)$stdout, (string)$stderr];
 }
 
+/**
+ * Runs one action of pf-helper.ps1 (the app's only PowerShell, a file shipped with it).
+ * $in is written to a file the helper reads (-In); the helper writes its answer to a file
+ * (-Out), which is returned. Nothing but file paths and fixed words goes on the command line:
+ * PowerShell code on a command line is what antivirus behaviour shields block.
+ * @return array{0:int,1:string,2:string} [exit code, output file contents, stderr]
+ */
+function pf_helper(string $action, ?string $in = null, array $opts = []): array {
+    $dir = PF_DATA . '/helper';
+    if (!is_dir($dir)) @mkdir($dir, 0777, true);
+    $base = $dir . '/' . $action . '-' . bin2hex(random_bytes(6));
+    $win = fn(string $p): string => str_replace('/', '\\', $p);
+    $ps = (getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+    $cmd = [$ps, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+            '-File', $win(PF_ROOT . '/pf-helper.ps1'), '-Action', $action, '-Out', $win($base . '.out')];
+    if ($in !== null) {
+        file_put_contents($base . '.in', $in);
+        array_push($cmd, '-In', $win($base . '.in'));
+    }
+    foreach ($opts as $k => $v) array_push($cmd, '-' . $k, (string)$v);
+    try {
+        [$exit, , $err] = pf_run_cmd($cmd);
+        $out = is_file($base . '.out') ? (string)file_get_contents($base . '.out') : '';
+    } finally {
+        @unlink($base . '.in');
+        @unlink($base . '.out');
+    }
+    return [$exit, $out, $err];
+}
+
 /** Map of profile-SID => profile directory (forward-slash, no trailing slash),
  *  read once from the Windows ProfileList registry key. Used to figure out
  *  which user's Recycle Bin a given file should go to.
  *
- *  We can't use the normal "send to Recycle Bin" shell API here: Apache/PHP
- *  runs as NT AUTHORITY\SYSTEM, whose Recycle Bin is not the interactive
- *  user's. So we resolve the owning user's SID from the file's profile path
- *  and place the file into <drive>\$Recycle.Bin\<SID> ourselves. */
+ *  Files are moved into <drive>\$Recycle.Bin\<SID> by this code rather than the
+ *  shell's "send to Recycle Bin" API, which needs the user's own session; the
+ *  owning user is found from the file's profile path. */
 function pf_profile_sids(): array {
     static $profiles = null;
     if ($profiles !== null) return $profiles;
     $profiles = [];
-    $ps = 'Get-ChildItem "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList" | '
-        . 'ForEach-Object { $p=(Get-ItemProperty $_.PSPath -Name ProfileImagePath -EA SilentlyContinue).ProfileImagePath; '
-        . 'if($p){ "$($_.PSChildName)`t$p" } }';
-    $pwsh = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-    [, $out] = pf_run_cmd([$pwsh, '-NoProfile', '-NonInteractive', '-Command', $ps]);
+    [, $out] = pf_helper('profiles');
     foreach (preg_split('/\r?\n/', trim((string)$out)) ?: [] as $line) {
         $t = explode("\t", $line, 2);
         if (count($t) === 2 && trim($t[0]) !== '' && trim($t[1]) !== '') {

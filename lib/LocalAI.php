@@ -26,16 +26,7 @@ final class LocalAI {
             $c = json_decode((string)file_get_contents(self::PC_CACHE), true);
             if (is_array($c)) return $c;
         }
-        // Dedicated video memory: Win32_VideoController.AdapterRAM stops at 4 GB, so read the
-        // driver's 64-bit qwMemorySize where it exists.
-        $ps = '$ErrorActionPreference="SilentlyContinue";'
-            . '$cls="HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";'
-            . '$reg=@(Get-ChildItem $cls | ForEach-Object { $p=Get-ItemProperty $_.PSPath; [pscustomobject]@{d=[string]$p.DriverDesc;m=$p."HardwareInformation.qwMemorySize"} });'
-            . '$g=@(Get-CimInstance Win32_VideoController | ForEach-Object { $n=$_.Name; $r=$reg | Where-Object { $_.d -eq $n -and $_.m } | Select-Object -First 1;'
-            . ' [pscustomobject]@{name=$n; vram=[int64]$(if($r){$r.m}else{$_.AdapterRAM})} });'
-            . '[pscustomobject]@{gpus=$g; ram=[int64](Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory} | ConvertTo-Json -Compress -Depth 3';
-        [$exit, $out] = pf_run_cmd(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand',
-                                    base64_encode(mb_convert_encoding($ps, 'UTF-16LE', 'UTF-8'))]);
+        [$exit, $out] = pf_helper('pcinfo');   // pf-helper.ps1: graphics cards and memory
         $j = json_decode(trim((string)$out), true);
         $gpus = [];
         foreach ((array)($j['gpus'] ?? []) as $g) {
@@ -107,16 +98,14 @@ final class LocalAI {
         if ($php === '') throw new RuntimeException('php.exe not found.');
         @file_put_contents(self::PULL_FILE, json_encode(['model' => $model, 'status' => 'starting', 'updated' => time()]));
         $win = fn(string $p): string => str_replace('/', '\\', $p);
-        $q = fn(string $s): string => "'" . str_replace("'", "''", $s) . "'";
-        // Launched through ShellExecute (Start-Process) so the download does not inherit the web
-        // server's handles (see Updater::install for why that matters).
-        $ps = '$ErrorActionPreference = "Stop"; Start-Process -WindowStyle Hidden -FilePath ' . $q($win($php))
-            . ' -ArgumentList @(' . $q('"' . $win(PF_ROOT . '/pull-model.php') . '"') . ', ' . $q($model) . ', ' . $q(self::nativeBase($openAiBase)) . ')';
-        if (getenv('PHOTOFINDER_DATA')) {
-            $ps = '$env:PHOTOFINDER_DATA = ' . $q((string)getenv('PHOTOFINDER_DATA')) . '; ' . $ps;
-        }
-        [$exit, , $err] = pf_run_cmd(['powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand',
-                                      base64_encode(mb_convert_encoding($ps, 'UTF-16LE', 'UTF-8'))]);
+        // Started through ShellExecute (pf-helper.ps1 "launch") so the download does not inherit
+        // the web server's handles (see Updater::install for why that matters). The data folder
+        // goes along as an argument: a test or portable copy may not use the default one.
+        [$exit, , $err] = pf_helper('launch', json_encode([
+            'file' => $win($php),
+            'args' => [$win(PF_ROOT . '/pull-model.php'), $model, self::nativeBase($openAiBase), $win(PF_DATA)],
+            'hidden' => true,
+        ]));
         if ($exit !== 0) throw new RuntimeException('Could not start the download: ' . trim((string)$err));
     }
 

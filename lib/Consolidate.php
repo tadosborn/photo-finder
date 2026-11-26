@@ -576,60 +576,8 @@ final class Consolidate {
     /** This user's folders, OneDrive roots, cloud sync roots, shared libraries, protected
      *  pictures (wallpaper, lock screen, account picture) and fixed drives, read from Windows. */
     public static function environment(): array {
-        $out = self::dir() . '/env-' . bin2hex(random_bytes(4)) . '.json';
-        $script = str_replace('__OUT__', self::psq($out), <<<'PS'
-$ErrorActionPreference = 'SilentlyContinue'
-$ProgressPreference = 'SilentlyContinue'
-$o = [ordered]@{}
-$o.sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$o.profile = [Environment]::GetFolderPath('UserProfile')
-$o.desktop = [Environment]::GetFolderPath('Desktop')
-$o.documents = [Environment]::GetFolderPath('MyDocuments')
-$o.pictures = [Environment]::GetFolderPath('MyPictures')
-$o.videos = [Environment]::GetFolderPath('MyVideos')
-$o.music = [Environment]::GetFolderPath('MyMusic')
-$sf = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
-$o.downloads = [string]$sf.'{374DE290-123F-4565-9164-39C4925E467B}'
-$od = New-Object System.Collections.ArrayList
-foreach ($v in @($env:OneDrive, $env:OneDriveCommercial, $env:OneDriveConsumer)) { if ($v) { [void]$od.Add([string]$v) } }
-$acc = @(Get-ChildItem 'HKCU:\Software\Microsoft\OneDrive\Accounts')
-foreach ($k in $acc) { $f = (Get-ItemProperty $k.PSPath).UserFolder; if ($f) { [void]$od.Add([string]$f) } }
-foreach ($d in @(Get-ChildItem -LiteralPath $o.profile -Directory -Filter 'OneDrive*' -Force)) { [void]$od.Add($d.FullName) }
-$o.onedrive = @($od)
-$mp = New-Object System.Collections.ArrayList
-foreach ($k in $acc) {
-  foreach ($t in @(Get-ChildItem (Join-Path $k.PSPath 'Tenants'))) { foreach ($p in (Get-ItemProperty $t.PSPath).PSObject.Properties) { if ($p.Name -match '^[A-Za-z]:\\') { [void]$mp.Add([string]$p.Name) } } }
-  $c = Get-ItemProperty (Join-Path $k.PSPath 'ScopeIdToMountPointPathCache')
-  if ($c) { foreach ($p in $c.PSObject.Properties) { if ([string]$p.Value -match '^[A-Za-z]:\\') { [void]$mp.Add([string]$p.Value) } } }
-}
-$o.onedrive_mounts = @($mp)
-$sr = New-Object System.Collections.ArrayList
-foreach ($k in @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager')) {
-  $u = Get-ItemProperty (Join-Path $k.PSPath 'UserSyncRoots')
-  if ($u) { $p = $u.PSObject.Properties[$o.sid]; if ($p) { [void]$sr.Add([string]$p.Value) } }
-}
-$o.sync_roots = @($sr)
-$pr = New-Object System.Collections.ArrayList
-[void]$pr.Add([string](Get-ItemProperty 'HKCU:\Control Panel\Desktop').Wallpaper)
-$w = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers'
-if ($w) { foreach ($p in $w.PSObject.Properties) { if ($p.Name -like 'BackgroundHistoryPath*') { [void]$pr.Add([string]$p.Value) } } }
-foreach ($td in @((Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Themes'), (Join-Path $env:APPDATA 'Microsoft\Windows\Themes'))) {
-  foreach ($t in @(Get-ChildItem -LiteralPath $td -Filter '*.theme')) {
-    foreach ($l in @(Get-Content -LiteralPath $t.FullName)) { if ($l -match '^\s*Wallpaper\s*=\s*(.+?)\s*$') { [void]$pr.Add([Environment]::ExpandEnvironmentVariables($Matches[1])) } }
-  }
-}
-$csp = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP'
-if ($csp) { foreach ($n in @('LockScreenImagePath', 'DesktopImagePath')) { if ($csp.$n) { [void]$pr.Add([string]$csp.$n) } } }
-$ap = Get-ItemProperty ('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\' + $o.sid)
-if ($ap) { foreach ($p in $ap.PSObject.Properties) { if ($p.Name -like 'Image*') { [void]$pr.Add([string]$p.Value) } } }
-$o.protected = @($pr | Where-Object { $_ })
-$o.fixed_drives = @([IO.DriveInfo]::GetDrives() | Where-Object { $_.DriveType -eq 'Fixed' -and $_.IsReady } | ForEach-Object { $_.Name })
-$o.system_drive = [string]$env:SystemDrive
-[IO.File]::WriteAllText(__OUT__, (ConvertTo-Json $o -Depth 4 -Compress), (New-Object Text.UTF8Encoding $false))
-PS);
-        self::powershell($script);
-        $raw = is_file($out) ? (string)file_get_contents($out) : '';
-        @unlink($out);
+        [$exit, $raw, $err] = pf_helper('environment');
+        if ($exit !== 0 && $raw === '') throw new RuntimeException('The Windows helper failed: ' . mb_substr(trim($err), 0, 300));
         $e = json_decode($raw, true);
         if (!is_array($e)) throw new RuntimeException('Could not read your folder locations from Windows.');
         $list = fn($v) => array_values(array_filter(array_map(fn($x) => self::norm((string)$x), is_array($v) ? $v : ($v === null ? [] : [$v])), fn($x) => $x !== ''));
@@ -1780,19 +1728,13 @@ PS);
     }
 
     // =============================================================================================
-    // Windows PowerShell helpers (the bundled PHP has no FFI/COM to read file attributes)
+    // Windows helpers: pf-helper.ps1 (attributes, cloud-only state, in-use checks, file times)
     // =============================================================================================
 
-    private static function psq(string $s): string {
-        // PowerShell treats the typographic quotes as quotes too: double every one of them.
-        return "'" . preg_replace("/(['\x{2018}\x{2019}\x{201A}\x{201B}])/u", '$1$1', $s) . "'";
-    }
-
-    private static function powershell(string $script): string {
-        $exe = (getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-        $b64 = base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'));
-        [$exit, $out, $err] = pf_run_cmd([$exe, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $b64]);
-        if ($exit !== 0) throw new RuntimeException('The Windows helper failed: ' . mb_substr(trim($err !== '' ? $err : $out), 0, 300));
+    /** Runs a pf-helper.ps1 action; a failed helper is an error, not an empty answer. */
+    private static function helper(string $action, ?string $in = null, array $opts = []): string {
+        [$exit, $out, $err] = pf_helper($action, $in, $opts);
+        if ($exit !== 0) throw new RuntimeException('The Windows helper failed: ' . mb_substr(trim($err), 0, 300));
         return $out;
     }
 
@@ -1801,57 +1743,8 @@ PS);
      *  mtime, ctime, lock]]]]]. lock: '0' free, '1' in use, '2' no permission, '-' not checked
      *  (cloud-only files are never opened). */
     private static function listDirs(array $dirs, int $budgetMs): array {
-        $base = self::dir() . '/list-' . bin2hex(random_bytes(4));
-        file_put_contents($base . '.in', implode("\n", array_map([self::class, 'win'], $dirs)));
-        $exts = implode(',', array_merge(self::IMAGE_EXTS, self::RAW_EXTS));
-        $script = strtr(<<<'PS'
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-$enc = New-Object System.Text.UTF8Encoding $false
-$dirs = [System.IO.File]::ReadAllLines(__IN__, $enc)
-$w = New-Object System.IO.StreamWriter(__OUT__, $false, $enc)
-$exts = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-foreach ($x in __EXTS__.Split(',')) { [void]$exts.Add($x) }
-$epoch = New-Object DateTime 1970, 1, 1, 0, 0, 0, ([DateTimeKind]::Utc)
-$cloud = 0x400000 -bor 0x1000 -bor 0x40000
-$sw = [Diagnostics.Stopwatch]::StartNew()
-$n = 0
-foreach ($d in $dirs) {
-  if ($n -gt 0 -and $sw.ElapsedMilliseconds -gt __BUDGET__) { break }
-  $w.WriteLine("D`t$n")
-  $st = 'ok'
-  try {
-    foreach ($e in (New-Object System.IO.DirectoryInfo $d).EnumerateFileSystemInfos()) {
-      $a = [int]$e.Attributes
-      if ($a -band 16) { $w.WriteLine("d`t$a`t" + $e.Name); continue }
-      $lock = '-'
-      $x = $e.Extension
-      if ($x.Length -gt 1 -and $exts.Contains($x.Substring(1)) -and -not ($a -band $cloud)) {
-        # Exclusive open, read access, nothing read: fails while another program has it open.
-        try { $fs = [System.IO.File]::Open($e.FullName, 'Open', 'Read', 'None'); $fs.Dispose(); $lock = '0' }
-        catch { $ex = $_.Exception; if ($ex.InnerException) { $ex = $ex.InnerException }; if (($ex.HResult -band 0xFFFF) -eq 5) { $lock = '2' } else { $lock = '1' } }
-      }
-      $mt = [long][Math]::Floor(($e.LastWriteTimeUtc - $epoch).TotalSeconds)
-      $ct = [long][Math]::Floor(($e.CreationTimeUtc - $epoch).TotalSeconds)
-      $w.WriteLine("f`t$a`t" + $e.Length + "`t$mt`t$ct`t$lock`t" + $e.Name)
-    }
-  } catch [System.UnauthorizedAccessException] { $st = 'denied' }
-    catch [System.IO.DirectoryNotFoundException] { $st = 'missing' }
-    catch { $st = ($_.Exception.Message -replace '[\r\n\t]+', ' ') }
-  $w.WriteLine("E`t$st")
-  $n++
-}
-$w.WriteLine("X`t$n")
-$w.Close()
-PS, ['__IN__' => self::psq($base . '.in'), '__OUT__' => self::psq($base . '.out'),
-     '__EXTS__' => self::psq($exts), '__BUDGET__' => (string)$budgetMs]);
-        try {
-            self::powershell($script);
-            $raw = is_file($base . '.out') ? (string)file_get_contents($base . '.out') : '';
-        } finally {
-            @unlink($base . '.in');
-            @unlink($base . '.out');
-        }
+        $raw = self::helper('list', implode("\n", array_map([self::class, 'win'], $dirs)),
+                            ['Budget' => $budgetMs, 'Exts' => implode(',', array_merge(self::IMAGE_EXTS, self::RAW_EXTS))]);
         $listings = [];
         $cur = -1;
         $done = 0;
@@ -1890,44 +1783,7 @@ PS, ['__IN__' => self::psq($base . '.in'), '__OUT__' => self::psq($base . '.out'
 
     /** Attributes, size, times and in-use state of files, right before they are moved. */
     private static function statFiles(array $paths): array {
-        $base = self::dir() . '/stat-' . bin2hex(random_bytes(4));
-        file_put_contents($base . '.in', implode("\n", array_map([self::class, 'win'], $paths)));
-        $script = strtr(<<<'PS'
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-$enc = New-Object System.Text.UTF8Encoding $false
-$lines = [System.IO.File]::ReadAllLines(__IN__, $enc)
-$w = New-Object System.IO.StreamWriter(__OUT__, $false, $enc)
-$epoch = New-Object DateTime 1970, 1, 1, 0, 0, 0, ([DateTimeKind]::Utc)
-$cloud = 0x400000 -bor 0x1000 -bor 0x40000
-$i = 0
-foreach ($l in $lines) {
-  try {
-    $f = New-Object System.IO.FileInfo $l
-    if (-not $f.Exists) { $w.WriteLine("$i`t0") }
-    else {
-      $a = [int]$f.Attributes
-      $lock = '-'
-      if (-not ($a -band $cloud)) {
-        try { $fs = [System.IO.File]::Open($f.FullName, 'Open', 'Read', 'None'); $fs.Dispose(); $lock = '0' }
-        catch { $ex = $_.Exception; if ($ex.InnerException) { $ex = $ex.InnerException }; if (($ex.HResult -band 0xFFFF) -eq 5) { $lock = '2' } else { $lock = '1' } }
-      }
-      $mt = [long][Math]::Floor(($f.LastWriteTimeUtc - $epoch).TotalSeconds)
-      $ct = [long][Math]::Floor(($f.CreationTimeUtc - $epoch).TotalSeconds)
-      $w.WriteLine("$i`t1`t$a`t" + $f.Length + "`t$mt`t$ct`t$lock")
-    }
-  } catch { $w.WriteLine("$i`t0") }
-  $i++
-}
-$w.Close()
-PS, ['__IN__' => self::psq($base . '.in'), '__OUT__' => self::psq($base . '.out')]);
-        try {
-            self::powershell($script);
-            $raw = is_file($base . '.out') ? (string)file_get_contents($base . '.out') : '';
-        } finally {
-            @unlink($base . '.in');
-            @unlink($base . '.out');
-        }
+        $raw = self::helper('stat', implode("\n", array_map([self::class, 'win'], $paths)));
         $out = [];
         foreach (explode("\n", $raw) as $line) {
             $p = explode("\t", rtrim($line, "\r"));
@@ -1942,25 +1798,6 @@ PS, ['__IN__' => self::psq($base . '.in'), '__OUT__' => self::psq($base . '.out'
 
     /** Give copies the original's creation and modified times (PHP can only set the latter). */
     private static function setTimes(array $items): void {
-        $base = self::dir() . '/times-' . bin2hex(random_bytes(4));
-        file_put_contents($base . '.in', implode("\n", array_map(fn($t) => self::win($t[0]) . "\t" . $t[1] . "\t" . $t[2], $items)));
-        $script = strtr(<<<'PS'
-$ErrorActionPreference = 'Stop'
-$enc = New-Object System.Text.UTF8Encoding $false
-$epoch = New-Object DateTime 1970, 1, 1, 0, 0, 0, ([DateTimeKind]::Utc)
-foreach ($l in [System.IO.File]::ReadAllLines(__IN__, $enc)) {
-  $p = $l.Split("`t")
-  try {
-    $f = New-Object System.IO.FileInfo $p[0]
-    if ([long]$p[1] -gt 0) { $f.CreationTimeUtc = $epoch.AddSeconds([double]$p[1]) }
-    if ([long]$p[2] -gt 0) { $f.LastWriteTimeUtc = $epoch.AddSeconds([double]$p[2]) }
-  } catch { }
-}
-PS, ['__IN__' => self::psq($base . '.in')]);
-        try {
-            self::powershell($script);
-        } finally {
-            @unlink($base . '.in');
-        }
+        self::helper('settimes', implode("\n", array_map(fn($t) => self::win($t[0]) . "\t" . $t[1] . "\t" . $t[2], $items)));
     }
 }
