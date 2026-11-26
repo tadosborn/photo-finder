@@ -7,6 +7,7 @@ require_once __DIR__ . '/Describer.php';
 require_once __DIR__ . '/Thumb.php';
 require_once __DIR__ . '/Faces.php';
 require_once __DIR__ . '/Exif.php';
+require_once __DIR__ . '/Cleanup.php';
 
 final class Indexer {
     public static function scan(array $dirs, array $excludedDirs = []): array {
@@ -205,6 +206,13 @@ final class Indexer {
                 $e = Exif::extractBatch([$path])[$path] ?? null;
                 if ($e) Db::updateExif($id, $e['lat'], $e['lon'], $e['alt'], $e['taken_at']);
                 Thumb::ensureThumb($id, $path);
+                // Clean up: measure sharpness, exposure and the duplicate hashes from the new
+                // thumbnail (local, no AI). It must never fail the photo.
+                try {
+                    Cleanup::analyzeAndStore($id);
+                } catch (Throwable $ce) {
+                    pf_log('  (clean-up analysis skipped for ' . $base . ': ' . $ce->getMessage() . ')');
+                }
                 $desc = (string)($analysis['description'] ?? '');
                 if (mb_strlen($desc) > 100) $desc = mb_substr($desc, 0, 100) . '…';
                 pf_log('  ✓ ' . $base . ' (' . round(microtime(true) - $t0, 1) . 's): ' . $desc);
