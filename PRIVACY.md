@@ -7,17 +7,19 @@ how to control each part. The same summary is shown in the installer.
 
 To make your photos searchable, an AI model describes each photo you index (what is in it, any
 visible text, and some search tags). You choose the provider in **Settings > How photos are
-described**. Nothing is sent anywhere until you have chosen one and start indexing, and only
-photos in the folders you chose are indexed.
+described**. The default is the free option on your own PC, so no photo is sent anywhere unless
+you choose a cloud option; only photos in the folders you chose are indexed.
 
+- **Free, on this PC** (the default; a local model server such as Ollama or LM Studio): photos
+  are sent only to that server on your own PC and never leave it. Photo Finder accepts only an
+  address on this PC (`localhost` / `127.0.0.1`) for this option. Its **Download** button asks
+  Ollama to download a model from Ollama's library; Settings also reads this PC's graphics card
+  and memory to say how fast local models will be. That information stays on the PC.
 - **Anthropic Claude**, with your own Anthropic API key: each photo you index is sent to
   Anthropic. Anthropic's privacy policy applies: <https://www.anthropic.com/legal/privacy>.
 - **Another AI service** (any OpenAI-compatible service, such as OpenAI, Google Gemini or
   OpenRouter), with your own key: each photo you index is sent to that service, and its
   privacy policy applies.
-- **On this PC only** (a local model server such as Ollama or LM Studio): photos are sent only
-  to that server on your own PC and never leave it. Photo Finder accepts only an address on
-  this PC (`localhost` / `127.0.0.1`) for this option.
 
 Before a photo is sent, it is reduced to at most 1568 pixels on the long side (Settings >
 "Max image dimension sent to the AI"). The **Test with a sample picture** button in Settings

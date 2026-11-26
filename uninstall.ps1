@@ -1,4 +1,4 @@
-# Removes Photo Finder's scheduled tasks and stops THIS copy's server and worker.
+# Removes Photo Finder's scheduled tasks and stops THIS copy's web server and worker.
 # No admin required (tasks are user-scoped). Run by the uninstaller with -Quiet, and before
 # an upgrade with -StopOnly (the upgrade's install.ps1 re-registers everything).
 # Leaves data\ (index, thumbnails, settings) alone: the uninstaller asks about that.
@@ -42,7 +42,9 @@ if (-not $StopOnly) {
 }
 
 Write-Host 'Stopping Photo Finder processes from this folder...'
-Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+# The web server (Apache: a parent and a child httpd.exe) and the worker (php.exe). Before
+# 1.0.5 the web server was php.exe too, so an upgrade from those still finds it here.
+Get-CimInstance Win32_Process -Filter "Name='httpd.exe' OR Name='php.exe'" -ErrorAction SilentlyContinue |
     Where-Object { ($_.ExecutablePath -and $_.ExecutablePath.ToLower().StartsWith($needle)) -or
                    ($_.CommandLine -and $_.CommandLine.ToLower().Contains($needle)) } |
     ForEach-Object { Write-Host ("  Stopping PID " + $_.ProcessId); Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

@@ -52,7 +52,8 @@ final class Describer {
     public static function backendOf(array $settings): string {
         $b = (string)($settings['backend'] ?? '');
         if ($b === 'api') return 'anthropic';          // 1.0.0 - 1.0.2 name
-        return in_array($b, ['anthropic', 'openai', 'local'], true) ? $b : '';
+        // Not chosen yet: the free option on this PC is the default.
+        return in_array($b, ['anthropic', 'openai', 'local'], true) ? $b : 'local';
     }
 
     /**
@@ -75,14 +76,15 @@ final class Describer {
             case 'local':
                 $url = trim((string)($s['local_base_url'] ?? ''));
                 $model = trim((string)($s['local_model'] ?? ''));
-                if ($url === '' || $model === '') return [null, 'Choose the local model in Settings.'];
+                if ($url === '' || $model === '') {
+                    return [null, 'Photo Finder uses a free AI model on this PC by default. Open Settings to set it up (Ollama and a model, both free), or choose a cloud option.'];
+                }
                 if (!OpenAICompat::isLoopbackUrl($url)) {
                     return [null, 'The local option only accepts an address on this PC (localhost / 127.0.0.1).'];
                 }
                 return [new OpenAICompat($url, '', $model, true), ''];
-            default:
-                return [null, 'Open Settings and pick Anthropic Claude, another AI service, or a local model on this PC.'];
         }
+        return [null, 'Open Settings and choose how photos are described.'];
     }
 
     /**

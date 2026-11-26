@@ -49,6 +49,19 @@ function Get-OwnPhp([string]$script) {
     @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains(($projectDir + '\').ToLower()) -and $_.CommandLine.ToLower().Contains($script) })
 }
+function Get-OwnServer {
+    # This copy's Apache (parent and child process), never another install's or XAMPP's.
+    @(Get-CimInstance Win32_Process -Filter "Name='httpd.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower().StartsWith(($projectDir + '\').ToLower()) })
+}
+$httpd = Join-Path $projectDir 'apache\bin\httpd.exe'
+function Set-ServerEnv {
+    # The variables apache\conf\httpd.conf reads (silent-server.vbs sets the same).
+    $env:PF_APP = $projectDir.Replace('\', '/')
+    $env:PF_DATA = $dataDir.Replace('\', '/')
+    $env:PF_PORT = '8765'
+    $env:PATH = (Join-Path $projectDir 'php') + ';' + $env:PATH
+}
 
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 Write-Step "Photo Finder setup: program $projectDir, data $dataDir (account $account)"
@@ -61,6 +74,19 @@ if (-not (Test-Path $php) -or $LASTEXITCODE -ne 0 -or "$check" -match 'missing:|
     Exit-Setup 1
 }
 Write-Step 'PHP runtime OK.'
+
+# ---- Web server sanity: Apache parses its config and loads PHP as a module ----
+if ($installed) {
+    if (-not (Test-Path $httpd)) { Write-Step "Web server missing: $httpd" 'Red'; Exit-Setup 1 }
+    Set-ServerEnv
+    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $t = @(& $httpd -d "$($env:PF_APP)/apache" -f conf/httpd.conf -t 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $old }
+    if ($LASTEXITCODE -ne 0 -or "$t" -notmatch 'Syntax OK') {
+        Write-Step "Web server check FAILED: $t" 'Red'
+        Exit-Setup 1
+    }
+    Write-Step 'Web server (Apache + PHP) OK.'
+}
 
 # ---- Timezone for log timestamps (stored in settings; Program Files is read-only) ----
 $tz = ''
@@ -149,7 +175,7 @@ if (Test-Path $oldLnk) {
 }
 
 # ---- Start ----
-if ($installed -and -not (Get-OwnPhp '-s 127.0.0.1:8765')) {
+if ($installed -and -not (Get-OwnServer)) {
     Start-ScheduledTask -TaskName 'PhotoFinderServer'
 }
 if (-not (Get-OwnPhp 'worker.php')) {

@@ -60,6 +60,17 @@ $apiKeySet = $settings['api_key'] !== '';
   .card .path { font-size: 11px; color: var(--mute); margin-top: 6px; word-break: break-all; opacity: 0.7; }
   .card mark { background: rgba(91, 141, 239, 0.35); color: #fff; padding: 0 2px; border-radius: 3px; }
   .empty { text-align:center; color: var(--mute); padding: 60px 20px; }
+  /* View bar (order + grouping) and the group headings inside the grid */
+  .viewbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin: 0 0 14px; color: var(--mute); font-size: 13px; }
+  .viewbar label { display: inline; margin: 0; font-size: 13px; color: var(--mute); }
+  .viewbar select { width: auto; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  .viewbar select:focus-visible, .more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .viewbar .viewbar-gap { width: 10px; }
+  .viewbar .viewbar-count { margin-left: auto; }
+  .group-head { grid-column: 1 / -1; margin: 14px 0 0; font-size: 16px; font-weight: 600; color: var(--text); display:flex; align-items:baseline; gap:10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .group-head:first-child { margin-top: 0; }
+  .group-head .group-count { font-size: 12px; font-weight: 400; color: var(--mute); }
+  .more-wrap { text-align: center; padding: 22px 0 8px; }
   dialog.settings { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 0; max-width: 600px; width: 92%; }
   dialog.settings::backdrop { background: rgba(0,0,0,0.6); }
   .dlg-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
@@ -120,6 +131,14 @@ $apiKeySet = $settings['api_key'] !== '';
   /* Provider settings. Text colours on these panels: --text on #21262f / #1b2230 > 11:1. */
   .provider-panel { display: none; border: 1px solid var(--line); border-radius: 8px; padding: 2px 12px 12px; margin-top: 10px; background: var(--panel2); }
   .provider-panel.show { display: block; }
+  .local-check { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .local-check .lc-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin: 4px 0; color: var(--text); }
+  .local-check .lc-label { color: var(--mute); min-width: 64px; }
+  .local-check .lc-row button { padding: 4px 10px; }
+  .local-check progress { width: 100%; margin: 6px 0; }
+  .local-check .lc-verdict { margin: 8px 0; color: var(--text); }
+  .local-check .lc-verdict.good { color: var(--ok); }
+  .local-check .lc-verdict.slow { color: var(--warn); }
   .provider-note { font-size: 12px; color: var(--text); background: #1b2230; border-left: 3px solid #9dbcff; padding: 8px 10px; margin-top: 10px; border-radius: 4px; line-height: 1.45; }
   .provider-note.warn { border-left-color: var(--warn); }
   .provider-note ul { margin: 6px 0 6px 18px; padding: 0; }
@@ -214,8 +233,28 @@ $apiKeySet = $settings['api_key'] !== '';
 </div>
 
 <main>
+  <div class="viewbar" id="viewbar">
+    <label for="sortSel">Order</label>
+    <select id="sortSel">
+      <option value="new">Newest first</option>
+      <option value="old">Oldest first</option>
+      <option value="relevance">Best match (when searching)</option>
+    </select>
+    <span class="viewbar-gap"></span>
+    <label for="groupSel">Group by</label>
+    <select id="groupSel">
+      <option value="month">Month</option>
+      <option value="day">Day</option>
+      <option value="event">Event (photos taken close together)</option>
+      <option value="year">Year</option>
+      <option value="folder">Folder</option>
+      <option value="none">No grouping</option>
+    </select>
+    <span class="viewbar-count" id="viewCount" aria-live="polite"></span>
+  </div>
   <div id="results" class="grid"></div>
   <div id="empty" class="empty" style="display:none"></div>
+  <div class="more-wrap" id="moreWrap" style="display:none"><button type="button" id="moreBtn" class="more-btn">Show more photos</button></div>
 </main>
 
 <dialog id="settingsDlg" class="settings">
@@ -237,13 +276,12 @@ $apiKeySet = $settings['api_key'] !== '';
 
       <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);">
         <h2 style="margin: 0 0 8px; font-size: 14px; color: var(--text);">How photos are described</h2>
-        <div class="hint">Photo Finder sends each photo you index to an AI model, which writes its description and search tags. Nothing is sent until you choose an option here and start indexing. Keys you enter are stored only on this PC (<?= htmlspecialchars(str_replace('/', '\\', PF_SETTINGS_FILE)) ?>).</div>
+        <div class="hint">An AI model looks at each photo you index and writes its description and search tags. The free option runs that model on this PC, so your photos never leave it; the cloud options send each photo to that service. Keys you enter are stored only on this PC (<?= htmlspecialchars(str_replace('/', '\\', PF_SETTINGS_FILE)) ?>).</div>
         <label for="backend">AI provider</label>
         <select id="backend">
-          <option value="">Choose…</option>
-          <option value="anthropic">Anthropic Claude (cloud, your API key)</option>
-          <option value="openai">Another AI service (OpenAI-compatible, your API key)</option>
-          <option value="local">On this PC only (local model, nothing leaves this PC)</option>
+          <option value="local">Free – on this PC (local model; your photos never leave this PC)</option>
+          <option value="anthropic">Anthropic Claude (cloud, paid per photo, your API key)</option>
+          <option value="openai">Another AI service (cloud, OpenAI-compatible, your API key)</option>
         </select>
 
         <div class="provider-panel" data-provider="anthropic">
@@ -282,8 +320,18 @@ $apiKeySet = $settings['api_key'] !== '';
         </div>
 
         <div class="provider-panel" data-provider="local">
+          <div class="local-check" id="localCheck" aria-live="polite">
+            <div class="lc-row"><span class="lc-label">This PC</span><span id="lcPc">Checking…</span></div>
+            <div class="lc-row"><span class="lc-label">Ollama</span><span id="lcOllama">Checking…</span>
+              <button type="button" id="lcGetOllama" style="display:none">Get Ollama (free)</button></div>
+            <div class="lc-row"><span class="lc-label">Model</span><span id="lcModel">Checking…</span>
+              <button type="button" id="lcPull" style="display:none"></button></div>
+            <progress id="lcProg" max="100" value="0" style="display:none"></progress>
+            <div class="lc-verdict" id="lcVerdict"></div>
+            <button type="button" id="lcRecheck">Check again</button>
+          </div>
           <div class="provider-note warn">
-            <strong>Runs entirely on this PC: your photos never leave it.</strong> Before choosing this, check:
+            <strong>Runs entirely on this PC: your photos never leave it.</strong> What to expect:
             <ul>
               <li><strong>Software:</strong> install Ollama (ollama.com) or LM Studio (lmstudio.ai), both free, and download a vision model in it (a model that accepts images).</li>
               <li><strong>Graphics card:</strong> a graphics card with 8 GB or more of video memory is recommended. Without one, the model runs on the processor and can take a minute or more per photo.</li>
@@ -520,7 +568,19 @@ function renderResults(rows) {
   const present = new Set(rows.map(r => r.id));
   selectedIds.forEach(id => { if (!present.has(id)) selectedIds.delete(id); });
   const frag = document.createDocumentFragment();
+  const heads = groupHeadings(rows);
   rows.forEach((row, idx) => {
+    if (heads.has(idx)) {
+      const g = heads.get(idx);
+      const h = document.createElement('h2');
+      h.className = 'group-head';
+      h.textContent = g.label;
+      const c = document.createElement('span');
+      c.className = 'group-count';
+      c.textContent = g.count + (g.count === 1 ? ' photo' : ' photos') + (g.more ? '+' : '');
+      h.appendChild(c);
+      frag.appendChild(h);
+    }
     const card = document.createElement('div');
     card.className = 'card' + (selectedIds.has(row.id) ? ' selected' : '');
     card.dataset.id = row.id;
@@ -556,6 +616,69 @@ function renderResults(rows) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- Order and grouping of the photo grid ----
+// sort_date (from the server) is the camera date "YYYY-MM-DDTHH:MM:SS", or just "YYYY" when only
+// the photo's folder gives a year, or null when nothing does.
+const view = {
+  sort: localStorage.getItem('pf.sort') || 'new',
+  group: localStorage.getItem('pf.group') || 'month',
+  more: false,
+  loading: false,
+};
+const dateOf = d => d && d.length >= 10 ? new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), +(d.slice(11, 13) || 0), +(d.slice(14, 16) || 0)) : null;
+const fmt = (d, opts) => d.toLocaleDateString(undefined, opts);
+function groupOf(row) {
+  const d = row.sort_date || '';
+  const exact = d.length >= 10;
+  switch (view.group) {
+    case 'folder': {
+      const dir = row.path.replace(/\\/g, '/').replace(/\/[^/]*$/, '');
+      return { key: dir, label: dir.split('/').slice(-2).join(' › ') };
+    }
+    case 'year':
+      return d ? { key: d.slice(0, 4), label: d.slice(0, 4) } : { key: 'none', label: 'No date' };
+    case 'day':
+      if (exact) return { key: d.slice(0, 10), label: fmt(dateOf(d), { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) };
+      return d ? { key: d, label: d + ' (no exact date)' } : { key: 'none', label: 'No date' };
+    default:   // month; also the fallback for photos without an exact date in 'event'
+      if (exact) return { key: d.slice(0, 7), label: fmt(dateOf(d), { month: 'long', year: 'numeric' }) };
+      return d ? { key: d, label: d + ' (no exact date)' } : { key: 'none', label: 'No date' };
+  }
+}
+/** Map of row index => {label, count, more} for each row that starts a group. */
+function groupHeadings(rows) {
+  const out = new Map();
+  if (view.group === 'none' || (view.sort === 'relevance' && $('#q').value.trim())) return out;
+  let start = -1, key = null, label = '', prev = null, first = null;
+  const close = end => {
+    if (start < 0) return;
+    let l = label;
+    if (view.group === 'event' && first && prev) {   // event: show its date range
+      const a = fmt(first, { day: 'numeric', month: 'short', year: 'numeric' }), b = fmt(prev, { day: 'numeric', month: 'short', year: 'numeric' });
+      l = a === b ? fmt(first, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }) : (view.sort === 'old' ? a + ' – ' + b : b + ' – ' + a);
+    }
+    out.set(start, { label: l, count: end - start, more: false });
+  };
+  rows.forEach((row, i) => {
+    let k, lab;
+    const d = dateOf(row.sort_date);
+    if (view.group === 'event' && d) {
+      // A new event starts after a gap of more than 12 hours between photos.
+      const gap = prev ? Math.abs(d - prev) / 36e5 : Infinity;
+      k = gap > 12 || key === null || String(key).startsWith('x') ? 'e' + i : key;
+      lab = '';
+    } else {
+      const g = groupOf(row); k = 'x' + g.key; lab = g.label;
+    }
+    if (k !== key) { close(i); start = i; key = k; label = lab; first = d; }
+    prev = d || prev;
+  });
+  close(rows.length);
+  // The last group may continue on the next page.
+  if (view.more && out.size) { const last = [...out.keys()].pop(); out.get(last).more = true; }
+  return out;
 }
 
 // ---- Selection + deletion ----
@@ -749,16 +872,36 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Delete') { e.preventDefault(); deleteCurrentInLightbox(); }
 });
 
-async function doSearch() {
+const PAGE = 200;
+/** Loads the first page (append = false) or the next one, in the chosen order. */
+async function doSearch(append = false) {
+  if (view.loading) return;
+  view.loading = true;
   const q = $('#q').value.trim();
+  const sort = view.group === 'folder' ? 'folder' : view.sort;
+  const offset = append ? lastResults.length : 0;
   try {
-    const data = await api('search', { qs: 'q=' + encodeURIComponent(q) });
-    renderResults(data.results);
+    const data = await api('search', { qs: 'q=' + encodeURIComponent(q) + '&sort=' + sort + '&limit=' + PAGE + '&offset=' + offset });
+    view.more = !!data.more;
+    renderResults(append ? lastResults.concat(data.results) : data.results);
+    if (!append) window.scrollTo(0, 0);
+    $('#moreWrap').style.display = view.more ? '' : 'none';
+    $('#viewCount').textContent = lastResults.length ? lastResults.length + (view.more ? '+' : '') + (q ? ' matches' : ' photos') : '';
   } catch (e) {
     toast(e.message, 'err');
+  } finally {
+    view.loading = false;
   }
 }
-$('#searchBtn').addEventListener('click', doSearch);
+$('#moreBtn').addEventListener('click', () => doSearch(true));
+// Load the next page by itself when "Show more" scrolls into view.
+new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && view.more) doSearch(true); }, { rootMargin: '600px' })
+  .observe($('#moreWrap'));
+$('#sortSel').value = view.sort;
+$('#groupSel').value = view.group;
+$('#sortSel').addEventListener('change', () => { view.sort = $('#sortSel').value; localStorage.setItem('pf.sort', view.sort); doSearch(); });
+$('#groupSel').addEventListener('change', () => { view.group = $('#groupSel').value; localStorage.setItem('pf.group', view.group); doSearch(); });
+$('#searchBtn').addEventListener('click', () => doSearch());
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 
 $('#scanBtn').addEventListener('click', async () => {
@@ -964,6 +1107,7 @@ function updateBackendVisibility() {
   const b = $('#backend').value;
   $$('.provider-panel').forEach(p => p.classList.toggle('show', p.dataset.provider === b));
   $('#testResult').textContent = '';
+  if (b === 'local') localCheck();
 }
 $('#backend').addEventListener('change', updateBackendVisibility);
 
@@ -998,14 +1142,97 @@ async function listModels(backend, urlSel, keySel, listSel, btnSel) {
 $('#openaiListBtn').addEventListener('click', () => listModels('openai', '#openaiUrl', '#openaiKey', '#openaiModels', '#openaiListBtn'));
 $('#localListBtn').addEventListener('click', () => listModels('local', '#localUrl', null, '#localModels', '#localListBtn'));
 
+// ---- The free option: check this PC, get Ollama, download a model ----
+const gb = b => (b / 1024 ** 3).toFixed(b >= 10 * 1024 ** 3 ? 0 : 1) + ' GB';
+let pullTimer = null;
+async function localCheck(refresh = false) {
+  $('#lcRecheck').disabled = true;
+  try {
+    const r = await api('local_check', { qs: 'base_url=' + encodeURIComponent($('#localUrl').value.trim()) + (refresh ? '&refresh=1' : '') });
+    if (!r.ok) { $('#lcVerdict').textContent = r.error; return; }
+    const gpus = r.pc.gpus || [];
+    const best = gpus.slice().sort((a, b) => b.vram - a.vram)[0];
+    $('#lcPc').textContent = (best ? best.name + (best.vram ? ', ' + gb(best.vram) + ' video memory' : '') : 'No graphics card found')
+      + (r.pc.ram ? ' · ' + gb(r.pc.ram) + ' memory' : '');
+    const o = r.ollama;
+    $('#lcGetOllama').style.display = o.running || o.installed ? 'none' : '';
+    $('#lcOllama').textContent = o.running ? 'Running' + (o.version ? ' (version ' + o.version + ')' : '')
+      : o.installed ? 'Installed but not running: start Ollama from the Start menu, then Check again.'
+      : 'Not installed. Ollama is free; install it, then Check again.';
+    const pull = $('#lcPull');
+    pull.style.display = 'none';
+    const vision = (o.models || []).filter(m => m.vision !== false);
+    const current = $('#localModel').value.trim();
+    if (!o.running) {
+      $('#lcModel').textContent = 'Needs Ollama first.';
+    } else if (current && vision.some(m => m.name === current)) {
+      $('#lcModel').textContent = 'Using ' + current + '.';
+    } else if (vision.length) {
+      $('#localModel').value = vision[0].name;
+      $('#lcModel').textContent = 'Using ' + vision[0].name + ' (found in Ollama). Save to keep it.';
+    } else {
+      $('#lcModel').textContent = 'No model that reads pictures yet.';
+      pull.textContent = 'Download ' + r.recommended.model + ' (' + r.recommended.size + ')';
+      pull.dataset.model = r.recommended.model;
+      pull.style.display = '';
+    }
+    const v = $('#lcVerdict');
+    v.className = 'lc-verdict ' + (r.tier === 'gpu' ? 'good' : 'slow');
+    v.textContent = r.tier === 'gpu'
+      ? 'This PC has a graphics card suited to local models: expect a few seconds per photo.'
+      : 'No graphics card suited to local models: the model runs on the processor, so expect a minute or more per photo'
+        + (r.photos ? ' (for your ' + r.photos.toLocaleString() + ' photos, days of indexing)' : '')
+        + '. "Test with a sample picture" below measures this PC. A cloud option is much faster.';
+    if (r.pull && !r.pull.done) watchPull();
+  } catch (e) { $('#lcVerdict').textContent = e.message; }
+  finally { $('#lcRecheck').disabled = false; }
+}
+function watchPull() {
+  if (pullTimer) return;
+  const prog = $('#lcProg');
+  prog.style.display = '';
+  $('#lcPull').disabled = true;
+  pullTimer = setInterval(async () => {
+    try {
+      const p = (await api('local_pull_status')).pull;
+      if (!p) return;
+      const pct = p.total ? Math.floor(100 * p.completed / p.total) : 0;
+      prog.value = pct;
+      $('#lcModel').textContent = p.done
+        ? (p.error ? 'Download failed: ' + p.error : 'Downloaded ' + p.model + '.')
+        : 'Downloading ' + p.model + ': ' + (p.total ? pct + '% (' + gb(p.completed) + ' of ' + gb(p.total) + ')' : p.status || 'starting') + '. You can keep using Photo Finder.';
+      if (p.done) {
+        clearInterval(pullTimer); pullTimer = null;
+        prog.style.display = 'none';
+        $('#lcPull').disabled = false;
+        if (!p.error) { $('#localModel').value = p.model; localCheck(); }
+      }
+    } catch (e) { /* keep polling */ }
+  }, 1000);
+}
+$('#lcRecheck').addEventListener('click', () => localCheck(true));
+$('#lcGetOllama').addEventListener('click', () => window.open('https://ollama.com/download/windows', '_blank', 'noopener'));
+$('#lcPull').addEventListener('click', async () => {
+  const r = await api('local_pull', { body: { model: $('#lcPull').dataset.model, base_url: $('#localUrl').value.trim() } });
+  if (!r.ok) { toast(r.error, 'err', 6000); return; }
+  watchPull();
+});
+
 $('#testProviderBtn').addEventListener('click', async () => {
   const btn = $('#testProviderBtn');
   btn.disabled = true;
   $('#testResult').textContent = 'Testing… (a local model can take a minute the first time)';
   try {
     const r = await api('provider_test', { body: providerFields() });
+    let est = '';
+    const total = parseInt(($('#pill-total .num').textContent || '').replace(/\D/g, ''), 10);
+    if (r.ok && total > 0) {   // a real photo is bigger than the test picture: a lower bound
+      const h = r.seconds * total / 3600;
+      est = ' At this speed your ' + total.toLocaleString() + ' photos take at least '
+        + (h < 1 ? Math.max(1, Math.round(h * 60)) + ' minutes.' : h < 48 ? Math.round(h) + ' hours.' : Math.round(h / 24) + ' days.');
+    }
     $('#testResult').textContent = r.ok
-      ? '✓ ' + r.label + ' answered in ' + r.seconds + ' s: "' + r.description + '"'
+      ? '✓ ' + r.label + ' answered in ' + r.seconds + ' s: "' + r.description + '".' + est
       : '✗ ' + r.error;
   } catch (e) { $('#testResult').textContent = '✗ ' + e.message; }
   finally { btn.disabled = false; }
@@ -1045,7 +1272,7 @@ $('#settingsBtn').addEventListener('click', async () => {
   const s = await api('settings_get');
   $('#photoDirs').value = (s.photo_dirs || []).join('\n');
   $('#excludedDirs').value = (s.excluded_dirs || []).join('\n');
-  $('#backend').value = s.backend || '';
+  $('#backend').value = s.backend || 'local';
   const modelSel = $('#model');
   modelSel.textContent = '';
   Object.entries(s.anthropic_models || {}).forEach(([id, label]) => {

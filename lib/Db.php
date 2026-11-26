@@ -99,6 +99,18 @@ final class Db {
         if (!in_array('redescribe', $colNames, true)) {
             $pdo->exec('ALTER TABLE images ADD COLUMN redescribe INTEGER NOT NULL DEFAULT 0');
         }
+        // A year taken from the photo's folder ("...\2005\DSC02954.jpg"), used to place photos
+        // without a camera date in date order. '' = none; NULL = not worked out yet.
+        if (!in_array('folder_year', $colNames, true)) {
+            $pdo->exec('ALTER TABLE images ADD COLUMN folder_year TEXT');
+        }
+        $todo = $pdo->query('SELECT id, path FROM images WHERE folder_year IS NULL')->fetchAll(PDO::FETCH_ASSOC);
+        if ($todo) {
+            $pdo->beginTransaction();
+            $upd = $pdo->prepare('UPDATE images SET folder_year = :y WHERE id = :id');
+            foreach ($todo as $r) $upd->execute([':y' => self::folderYear($r['path']), ':id' => $r['id']]);
+            $pdo->commit();
+        }
         // taken_at already exists in initial schema (top of file) — just make sure
         // there's an index so future map/timeline views are fast.
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_images_taken_at ON images(taken_at)');
@@ -190,10 +202,19 @@ final class Db {
             return false;
         }
         $pdo->prepare(
-            "INSERT INTO images (id, path, size, mtime, status)
-             VALUES (:id, :path, :size, :mtime, 'pending')"
-        )->execute([':id' => $id, ':path' => $path, ':size' => $size, ':mtime' => $mtime]);
+            "INSERT INTO images (id, path, size, mtime, status, folder_year)
+             VALUES (:id, :path, :size, :mtime, 'pending', :fy)"
+        )->execute([':id' => $id, ':path' => $path, ':size' => $size, ':mtime' => $mtime, ':fy' => self::folderYear($path)]);
         return true;
+    }
+
+    /** The year of the nearest folder named like one ("2005", "2012 Vacation", "1998-trip"), or ''. */
+    public static function folderYear(string $path): string {
+        $dirs = explode('/', str_replace('\\', '/', dirname($path)));
+        for ($i = count($dirs) - 1; $i >= 0; $i--) {
+            if (preg_match('/^(19[5-9]\d|20[0-9]\d)(?:$|[ _\-.])/', $dirs[$i], $m)) return $m[1];
+        }
+        return '';
     }
 
     public static function markIndexed(string $id, array $analysis, int $width, int $height, ?string $describedBy = null): void {
@@ -500,41 +521,50 @@ final class Db {
         return $row ?: null;
     }
 
-    public static function search(string $query, int $limit = 100): array {
+    /**
+     * Photos matching $query (all photos when empty), one page at a time.
+     *  $sort: 'new' (date taken, newest first; the default), 'old', 'folder' (by folder, then
+     *         file name) or 'relevance' (best match first; only meaningful with a query).
+     * Each row carries `sort_date`: the camera date, else the year of its folder ("2005"),
+     * else null. Photos without either come last.
+     */
+    public static function search(string $query, int $limit = 100, int $offset = 0, string $sort = 'new'): array {
         $query = trim($query);
-        if ($query === '') {
-            $stmt = self::get()->prepare(
-                "SELECT id, path, description, tags, faces, width, height, lat, lon, taken_at FROM images
-                 WHERE status = 'ok' ORDER BY indexed_at DESC LIMIT :n"
-            );
+        $date = "COALESCE(NULLIF(i.taken_at, ''), NULLIF(i.folder_year, ''))";
+        $cols = "i.id, i.path, i.description, i.tags, i.faces, i.width, i.height, i.lat, i.lon, i.taken_at, {$date} AS sort_date";
+        $order = match ($sort) {
+            'old'       => "({$date} IS NULL), {$date} ASC, i.path",
+            'folder'    => 'i.path',
+            'relevance' => $query !== '' ? 'bm25(images_fts)' : "({$date} IS NULL), {$date} DESC, i.path",
+            default     => "({$date} IS NULL), {$date} DESC, i.path",
+        };
+        $page = function (PDOStatement $stmt) use ($limit, $offset): array {
             $stmt->bindValue(':n', $limit, PDO::PARAM_INT);
+            $stmt->bindValue(':o', $offset, PDO::PARAM_INT);
             $stmt->execute();
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        };
+        if ($query === '') {
+            return $page(self::get()->prepare("SELECT {$cols} FROM images i WHERE i.status = 'ok' ORDER BY {$order} LIMIT :n OFFSET :o"));
         }
-        $fts = self::buildFtsQuery($query);
         try {
             $stmt = self::get()->prepare(
-                "SELECT i.id, i.path, i.description, i.tags, i.faces, i.width, i.height,
-                        i.lat, i.lon, i.taken_at,
-                        snippet(images_fts, 1, '<mark>', '</mark>', '...', 12) AS snip
-                 FROM images_fts f JOIN images i ON i.id = f.id
+                "SELECT {$cols}, snippet(images_fts, 1, '<mark>', '</mark>', '...', 12) AS snip
+                 FROM images_fts JOIN images i ON i.id = images_fts.id
                  WHERE images_fts MATCH :q AND i.status = 'ok'
-                 ORDER BY bm25(images_fts) LIMIT :n"
+                 ORDER BY {$order} LIMIT :n OFFSET :o"
             );
-            $stmt->bindValue(':q', $fts);
-            $stmt->bindValue(':n', $limit, PDO::PARAM_INT);
-            $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt->bindValue(':q', self::buildFtsQuery($query));
+            return $page($stmt);
         } catch (PDOException) {
+            $order = str_replace('bm25(images_fts)', "({$date} IS NULL), {$date} DESC, i.path", $order);
             $stmt = self::get()->prepare(
-                "SELECT id, path, description, tags, faces, width, height, lat, lon, taken_at FROM images
-                 WHERE status = 'ok' AND (description LIKE :q OR tags LIKE :q OR text_in_image LIKE :q OR faces LIKE :q)
-                 LIMIT :n"
+                "SELECT {$cols} FROM images i
+                 WHERE i.status = 'ok' AND (i.description LIKE :q OR i.tags LIKE :q OR i.text_in_image LIKE :q OR i.faces LIKE :q)
+                 ORDER BY {$order} LIMIT :n OFFSET :o"
             );
             $stmt->bindValue(':q', '%' . $query . '%');
-            $stmt->bindValue(':n', $limit, PDO::PARAM_INT);
-            $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            return $page($stmt);
         }
     }
 

@@ -17,26 +17,28 @@ you can search instantly.
   described each photo and can re-describe the rest.
 - **Embed metadata.** Optionally write the descriptions and tags into the photo files (XMP /
   IPTC / EXIF) so Windows Explorer, Lightroom, Bridge and others can search them too.
-- **Self-contained.** One installer with its own PHP, SQLite and ExifTool; nothing else to
-  install. Runs in the background and opens in your browser at `http://127.0.0.1:8765`.
+- **Self-contained.** One installer with its own web server (Apache), PHP, SQLite and ExifTool;
+  nothing else to install. Runs in the background and opens in your browser at
+  `http://127.0.0.1:8765`, reachable from this PC only.
 - **Signed updates.** Photo Finder checks this repository's GitHub releases when it opens (you
   can turn this off) and installs an update only after verifying the maintainer's signature.
 
 ## Download and install
 
 Download `PhotoFinderSetup-<version>.exe` from the [Releases](../../releases) page and run it.
-Requirements: Windows 10 or 11 (64-bit), and one of:
+Requirements: Windows 10 or 11 (64-bit). Photos are described by an AI model, one of:
 
+- **Free, on your PC (the default):** [Ollama](https://ollama.com) (free) with a vision model.
+  Settings checks your PC, links to Ollama and downloads a recommended model with one click.
+  Nothing leaves your PC. A graphics card with 8 GB or more of video memory is recommended;
+  without one, expect a minute or more per photo. Descriptions are less detailed than the cloud
+  options. [LM Studio](https://lmstudio.ai) works too.
 - an [Anthropic API key](https://console.anthropic.com/) (Claude Haiku 5.5 costs roughly
   $3-5 per 10,000 photos at the default image size; an estimate, billed to your account);
 - a key for another OpenAI-compatible service with a model that accepts images (cost depends
-  on the service);
-- a local model server on the PC: [Ollama](https://ollama.com) or
-  [LM Studio](https://lmstudio.ai) with a vision model. Free per photo, but a graphics card
-  with 8 GB or more of video memory is recommended; without one, expect a minute or more per
-  photo. Descriptions are less detailed than the cloud options.
+  on the service).
 
-Choose and enter it in **Settings > How photos are described** after installing.
+Set it up in **Settings > How photos are described** after installing.
 
 Program files go to `C:\Program Files\Photo Finder`; your index, thumbnails and settings to
 `%LOCALAPPDATA%\Photo Finder`. Open it from the Start menu entry **Photo Finder**.
@@ -71,15 +73,17 @@ Requires Windows, PowerShell 7 and [Inno Setup 6](https://jrsoftware.org/isinfo.
 pwsh ./build.ps1
 ```
 
-The build downloads PHP, ExifTool and the Mozilla CA bundle, verifies each one against its
-publisher's checksum, and writes
-`dist\PhotoFinderSetup-<version>.exe`. The version comes from `lib/version.php`.
+The build downloads PHP, Apache (Apache Lounge build), ExifTool and the Mozilla CA bundle,
+verifies each one against its publisher's checksum, starts the staged web server once to test
+it, and writes `dist\PhotoFinderSetup-<version>.exe`. The version comes from `lib/version.php`.
 
-For development without installing, `start.bat` serves the app with a local PHP (bundled
-`php\` or XAMPP's) and `worker.bat` runs the indexer in a console window.
+For development, serve the source folder with any Apache + PHP 8.3 (for example XAMPP) and
+run the indexer with `worker.bat`. In an installed copy, `start.bat` runs the bundled web server
+in a console window for debugging.
 
 ## License
 
-[MIT](LICENSE). Bundled components keep their own licenses: PHP (PHP License), ExifTool
-(Artistic/GPL), Mozilla CA bundle (MPL 2.0); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+[MIT](LICENSE). Bundled components keep their own licenses: PHP (PHP License), Apache HTTP
+Server (Apache License 2.0), ExifTool (Artistic/GPL), Mozilla CA bundle (MPL 2.0); see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 The Microsoft VC++ runtime is not bundled: Setup downloads it from Microsoft when a PC needs it.

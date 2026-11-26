@@ -20,6 +20,19 @@ jobs:
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
+      # The build starts the bundled Apache once to test it. It is built with Visual Studio
+      # 2026 and needs the VC++ runtime 14.50 or later, which the runner image may not have yet.
+      - name: Update the Microsoft VC++ runtime
+        shell: pwsh
+        run: |
+          $f = Join-Path $env:RUNNER_TEMP 'vc_redist.x64.exe'
+          Invoke-WebRequest https://aka.ms/vc14/vc_redist.x64.exe -OutFile $f
+          $s = Get-AuthenticodeSignature $f
+          if ($s.Status -ne 'Valid' -or $s.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw "vc_redist signature: $($s.Status)" }
+          $p = Start-Process $f -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+          if ($p.ExitCode -notin 0, 1638, 3010) { throw "vc_redist exit $($p.ExitCode)" }
+          (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64').Version
+
       - name: Build installer
         shell: pwsh
         run: ./build.ps1

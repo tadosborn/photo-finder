@@ -7,6 +7,7 @@ require_once __DIR__ . '/lib/Indexer.php';
 require_once __DIR__ . '/lib/Describer.php';
 require_once __DIR__ . '/lib/Claude.php';
 require_once __DIR__ . '/lib/OpenAICompat.php';
+require_once __DIR__ . '/lib/LocalAI.php';
 require_once __DIR__ . '/lib/Exporter.php';
 require_once __DIR__ . '/lib/Updater.php';
 
@@ -84,6 +85,33 @@ try {
                 pf_json(['ok' => false, 'error' => $e->getMessage()]);
             }
         }
+        // ---- The free option: can this PC run a local model, and getting one ----
+        case 'local_check': {
+            $s = pf_load_settings();
+            $url = trim((string)($_GET['base_url'] ?? '')) ?: (string)($s['local_base_url'] ?? '');
+            if (!OpenAICompat::isLoopbackUrl($url)) pf_json(['ok' => false, 'error' => 'The local option only accepts an address on this PC.']);
+            $pc = LocalAI::pcInfo(!empty($_GET['refresh']));
+            $tier = LocalAI::tier($pc);
+            pf_json(['ok' => true, 'pc' => $pc, 'tier' => $tier, 'recommended' => LocalAI::RECOMMENDED[$tier],
+                     'ollama' => LocalAI::ollama($url), 'pull' => LocalAI::pullStatus(),
+                     'photos' => (int)(Db::stats()['total'] ?? 0)]);
+        }
+        case 'local_pull': {
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            $url = trim((string)($in['base_url'] ?? '')) ?: (string)(pf_load_settings()['local_base_url'] ?? '');
+            if (!OpenAICompat::isLoopbackUrl($url)) pf_json(['ok' => false, 'error' => 'The local option only accepts an address on this PC.']);
+            try {
+                LocalAI::startPull(trim((string)($in['model'] ?? '')), $url);
+            } catch (Throwable $e) {
+                pf_json(['ok' => false, 'error' => $e->getMessage()]);
+            }
+            pf_json(['ok' => true]);
+        }
+        case 'local_pull_status': {
+            pf_json(['ok' => true, 'pull' => LocalAI::pullStatus()]);
+        }
+
         case 'model_stats': {
             [$client] = Describer::fromSettings(pf_load_settings());
             $label = $client ? $client->label() : '';
@@ -205,19 +233,6 @@ try {
             $result['stats'] = Db::stats();
             pf_json($result);
         }
-        case 'index_tick': {
-            // Legacy endpoint: still used by start.bat (user-context) but disabled under Apache.
-            if (php_sapi_name() !== 'cli-server') {
-                pf_json(['processed' => 0, 'errors' => 0,
-                    'message' => 'Direct indexing is disabled under Apache for security. Use the worker (worker.bat) instead.',
-                    'stats' => Db::stats()]);
-            }
-            $s = pf_load_settings();
-            $limit = (int)($_GET['n'] ?? $s['batch_size']);
-            $result = Indexer::processBatch($s, max(1, min(25, $limit)));
-            $result['stats'] = Db::stats();
-            pf_json($result);
-        }
         case 'worker_log': {
             $lines = max(20, min(500, (int)($_GET['lines'] ?? 200)));
             pf_json(['lines' => pf_log_tail($lines)]);
@@ -255,8 +270,12 @@ try {
         case 'search': {
             $q = (string)($_GET['q'] ?? '');
             $limit = max(1, min(500, (int)($_GET['limit'] ?? 120)));
-            $rows = Db::search($q, $limit);
-            pf_json(['query' => $q, 'count' => count($rows), 'results' => $rows]);
+            $offset = max(0, (int)($_GET['offset'] ?? 0));
+            $sort = in_array($_GET['sort'] ?? '', ['new', 'old', 'folder', 'relevance'], true) ? $_GET['sort'] : 'new';
+            $rows = Db::search($q, $limit + 1, $offset, $sort);   // one extra row says whether there is more
+            $more = count($rows) > $limit;
+            if ($more) array_pop($rows);
+            pf_json(['query' => $q, 'count' => count($rows), 'offset' => $offset, 'more' => $more, 'results' => $rows]);
         }
         case 'reset_errors': {
             $n = Db::resetErrors();

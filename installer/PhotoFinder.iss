@@ -1,5 +1,6 @@
-; Photo Finder installer (Inno Setup 6). Built by build.ps1, which stages
-; the app, PHP, ExifTool and the VC++ runtime into StageDir and passes the defines below.
+; Photo Finder installer (Inno Setup 6). Built by build.ps1, which stages the app, PHP,
+; Apache and ExifTool into StageDir and passes the defines below. The VC++ runtime is
+; downloaded from Microsoft at install time, only where it is missing or too old.
 ; Installs to C:\Program Files\Photo Finder (admin, one UAC prompt). Each user's index, thumbnails
 ; and settings live in %LOCALAPPDATA%\Photo Finder, so updates and uninstalls never touch them.
 ; Per-user setup (scheduled tasks, settings) runs as the signed-in user, not the elevated installer.
@@ -47,7 +48,7 @@ OutputDir={#OutDir}
 OutputBaseFilename=PhotoFinderSetup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
-; The app's own php.exe holds files open; [Code] stops it explicitly instead.
+; The app's own httpd.exe and php.exe hold files open; [Code] stops them explicitly instead.
 CloseApplications=no
 RestartApplications=no
 SetupLogging=yes
@@ -67,7 +68,14 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; Flags: unchecked
 Type: filesandordirs; Name: "{app}\lib"
 Type: filesandordirs; Name: "{app}\php"
 Type: filesandordirs; Name: "{app}\bin"
+Type: filesandordirs; Name: "{app}\apache"
 Type: filesandordirs; Name: "{app}\installer"
+; Same for the program's top-level files (scripts, pages, notices), which are all reinstalled.
+Type: files; Name: "{app}\*.php"
+Type: files; Name: "{app}\*.ps1"
+Type: files; Name: "{app}\*.vbs"
+Type: files; Name: "{app}\*.bat"
+Type: files; Name: "{app}\*.md"
 
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -246,10 +254,10 @@ begin
   PrivacyText.Height := ScaleY(150);
   PrivacyText.Lines.Text :=
     'Photo descriptions: to make your photos searchable, an AI model describes each photo you index. ' +
-    'You choose which one in Settings after Setup: Anthropic''s Claude or another AI service with your own ' +
-    'API key (each photo is then sent to that service, and its privacy policy applies), or a local model ' +
-    'running on this PC (photos never leave it). Nothing is sent until you choose and start indexing, and ' +
-    'you choose which folders are indexed.' + #13#10#13#10 +
+    'The default is a free model running on this PC (photos never leave it); Settings helps you set it up. ' +
+    'You can instead choose Anthropic''s Claude or another AI service with your own API key (each photo is ' +
+    'then sent to that service, and its privacy policy applies). Nothing is sent to a cloud service unless ' +
+    'you choose one, and you choose which folders are indexed.' + #13#10#13#10 +
     'Update checks: when it opens, Photo Finder can ask GitHub (github.com) whether a newer version has been released. ' +
     'Only the version number is involved; nothing about you or your photos is sent. You can turn this ' +
     'off below or later in Settings.' + #13#10#13#10 +
@@ -311,7 +319,9 @@ begin
   if MemoTasksInfo <> '' then Result := Result + NewLine + MemoTasksInfo;
 end;
 
-{ ---------- VC++ runtime (PHP needs it; most PCs already have it) ---------- }
+{ ---------- VC++ runtime (PHP and Apache need it; most PCs already have it) ----------
+  The bundled Apache is built with Visual Studio 2026 (MSVC 14.50), so the runtime must be at
+  least 14.50; an older 14.x runtime is updated in place. }
 
 function VCRedistNeeded: Boolean;
 var
@@ -321,7 +331,7 @@ begin
   if RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', Installed) and
      RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Major', Major) and
      RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Minor', Minor) then
-    Result := not ((Installed = 1) and (Major = 14) and (Minor >= 29));
+    Result := not ((Installed = 1) and (Major = 14) and (Minor >= 50));
 end;
 
 { Valid Authenticode signature by Microsoft Corporation (checked with Windows PowerShell). The module is
@@ -362,7 +372,8 @@ begin
   begin
     WizardForm.PreparingLabel.Caption := 'Downloading the Microsoft Visual C++ Runtime from Microsoft...';
     try
-      DownloadTemporaryFile('https://aka.ms/vs/17/release/vc_redist.x64.exe', 'vc_redist.x64.exe', '', nil);
+      { Microsoft's link for the current Visual C++ 2017-2026 runtime. }
+      DownloadTemporaryFile('https://aka.ms/vc14/vc_redist.x64.exe', 'vc_redist.x64.exe', '', nil);
     except
       Result := 'Photo Finder needs the Microsoft Visual C++ Runtime, and it could not be downloaded from Microsoft (' +
                 GetExceptionMessage + '). Check the internet connection, or install "Visual C++ Redistributable x64" ' +

@@ -38,7 +38,7 @@ function pf_load_settings(): array {
         // How photos are described: '' until the user chooses in Settings, then
         // 'anthropic' | 'openai' | 'local' (see lib/Describer.php). No key is ever taken
         // from the environment: only what the user types into Settings is used.
-        'backend' => '',
+        'backend' => 'local',   // the free option on this PC; Settings offers the cloud ones
         'api_key' => '',                                  // Anthropic
         'model' => 'claude-haiku-5-5',
         'openai_base_url' => '',                          // cloud, OpenAI-compatible
