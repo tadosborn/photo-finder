@@ -113,6 +113,61 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox .lb-editor .manual-badge { color: var(--warn); font-size: 11px; margin-left: 8px; }
   dialog.lightbox .lb-editor .reset-btn { background: transparent; color: var(--mute); border: 1px solid var(--line); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; margin-right: auto; }
   dialog.lightbox .lb-editor .reset-btn:hover { color: var(--err-text); border-color: var(--err-text); }
+  /* ==== Enhance (lightbox button + enhance view) ====
+     Contrast (WCAG AA): text #e6e8ee on #181c24 13.9:1, #b3bbc8 on #181c24 9.0:1, on #21262f 8.1:1;
+     control borders #7c8597 on #181c24 4.6:1 (disabled #6b7487 3.6:1; the red button has a #f87171 edge,
+     6.0:1); white on the over-photo labels and the lightbox button (black 75%+) >= 10:1. */
+  dialog.lightbox .lb-enh-btn { position: absolute; top: 16px; right: 268px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-enh-btn:hover { background: rgba(0,0,0,0.92); }
+  dialog.lightbox .lb-enh-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.enhance { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #0b0d11; color: var(--text); }
+  dialog.enhance[open] { display: flex; }
+  dialog.enhance::backdrop { background: rgba(0,0,0,0.9); }
+  .enh-wrap { display: flex; width: 100%; height: 100%; min-height: 0; }
+  .enh-stage { flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .enh-frame { position: relative; --split: 50%; touch-action: none; cursor: ew-resize; user-select: none; }
+  .enh-frame img, .enh-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .enh-frame canvas { clip-path: inset(0 0 0 var(--split)); }
+  .enh-frame.show-before canvas, .enh-frame.show-before .enh-divider, .enh-frame.show-before .enh-tag-after { visibility: hidden; }
+  .enh-divider { position: absolute; top: 0; bottom: 0; left: var(--split); width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.85); pointer-events: none; }
+  .enh-tag { position: absolute; top: 8px; padding: 3px 8px; border-radius: 4px; background: rgba(0,0,0,0.78); color: #fff; font-size: 12px; pointer-events: none; }
+  .enh-tag-before { left: 8px; }
+  .enh-tag-after { right: 8px; }
+  .enh-busy { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; display: none; }
+  .enh-busy.show { display: block; }
+  .enh-panel { width: 340px; flex: none; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 0 18px 18px; }
+  .enh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; background: var(--panel); padding: 14px 0 10px; z-index: 1; }
+  .enh-head h2 { margin: 0; font-size: 17px; }
+  .enh-name { font-size: 12px; color: #b3bbc8; word-break: break-all; margin: 0 0 10px; }
+  .enh-panel button { border-color: #7c8597; }
+  .enh-panel button:focus-visible, .enh-panel input:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  .enh-panel button:disabled { opacity: 1; color: #b3bbc8; background: #21262f; border-color: #6b7487; }
+  .enh-panel button.primary:disabled { background: #21262f; border-color: #6b7487; color: #b3bbc8; }
+  .enh-panel button.danger { background: var(--err-bg); border-color: #f87171; color: #fff; }
+  .enh-panel button.danger:hover { background: #a82020; }
+  .enh-close { width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; border-radius: 50%; }
+  .enh-section { border-top: 1px solid var(--line); padding: 12px 0 4px; }
+  .enh-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .enh-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; margin: 8px 0 12px; }
+  .enh-row label { margin: 0; font-size: 13px; color: var(--text); }
+  .enh-row output { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text); min-width: 3.2em; text-align: right; }
+  .enh-row input[type=range] { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; accent-color: var(--accent); }
+  .enh-row .enh-ends { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 11px; color: #b3bbc8; }
+  .enh-note, .enh-hint { font-size: 12px; color: #b3bbc8; line-height: 1.45; margin: 4px 0 10px; }
+  .enh-hint.warn { color: #fbbf72; }
+  .enh-save fieldset { border: none; margin: 0; padding: 0; }
+  .enh-save legend { font-size: 14px; font-weight: 600; padding: 0; margin-bottom: 6px; }
+  .enh-save label.enh-radio { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text); margin: 6px 0; cursor: pointer; }
+  .enh-save label.enh-radio input { margin-top: 3px; accent-color: var(--accent); }
+  .enh-save label.enh-radio.disabled { color: #b3bbc8; cursor: not-allowed; }
+  .enh-save #enhSave { width: 100%; margin-top: 6px; padding: 10px 14px; font-size: 14px; }
+  .enh-status { font-size: 13px; margin: 10px 0 0; color: var(--text); min-height: 1.4em; }
+  .enh-status.err { color: var(--err-text); }
+  @media (max-width: 820px) {
+    .enh-wrap { flex-direction: column; }
+    .enh-stage { flex: 1 1 55%; }
+    .enh-panel { width: auto; flex: 1 1 45%; border-left: none; border-top: 1px solid var(--line); }
+  }
   .indexbar { font-size:12px; color: var(--mute); }
   .indexbar progress { width: 140px; height: 6px; }
   .mode-banner { background: linear-gradient(135deg, #2a3140, #1e2530); border-bottom: 1px solid var(--line); padding: 10px 18px; color: var(--mute); font-size: 13px; display:flex; align-items:center; gap:10px; }
@@ -599,6 +654,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <div class="lb-counter" id="lbCounter"></div>
   <button class="lb-edit-btn" id="lbEditBtn" title="Edit metadata (E)">✎ Edit</button>
   <button class="lb-del-btn" id="lbDelBtn" title="Delete photo — moves file to Recycle Bin (Del)">🗑 Delete</button>
+  <button class="lb-enh-btn" id="lbEnhBtn" type="button" title="Fix colour, brightness and contrast; sharpen slightly soft photos">✨ Enhance</button>
   <button class="lb-close" id="lbClose" title="Close (Esc)">×</button>
   <div class="lb-meta">
     <div class="desc" id="lbDesc"></div>
@@ -688,6 +744,69 @@ $apiKeySet = $settings['api_key'] !== '';
   </div>
 </dialog>
 <!-- ---- end Clean up ---- -->
+<!-- ==== Enhance view (opened from the lightbox; lib/Enhance.php saves the full-size photo) ==== -->
+<dialog id="enhanceDlg" class="enhance" aria-labelledby="enhTitle">
+  <div class="enh-wrap">
+    <div class="enh-stage" id="enhStage">
+      <div class="enh-frame" id="enhFrame">
+        <img id="enhBefore" alt="The original photo">
+        <canvas id="enhAfter" role="img" aria-label="Preview of the enhanced photo"></canvas>
+        <div class="enh-divider" aria-hidden="true"></div>
+        <span class="enh-tag enh-tag-before" aria-hidden="true">Original</span>
+        <span class="enh-tag enh-tag-after" aria-hidden="true">Enhanced</span>
+      </div>
+      <div class="enh-busy" id="enhBusy" role="status" aria-live="polite"></div>
+    </div>
+    <div class="enh-panel">
+      <div class="enh-head">
+        <h2 id="enhTitle">Enhance</h2>
+        <button type="button" class="enh-close" id="enhClose" aria-label="Close Enhance (Esc)" title="Close (Esc)">×</button>
+      </div>
+      <p class="enh-name" id="enhName"></p>
+      <div class="enh-section">
+        <div class="enh-row">
+          <label for="enhSplit">Compare</label>
+          <output for="enhSplit" id="enhSplitOut">50%</output>
+          <input type="range" id="enhSplit" min="0" max="100" step="1" value="50" aria-describedby="enhSplitHint">
+          <span class="enh-ends" id="enhSplitHint" aria-hidden="true"><span>← more enhanced</span><span>more original →</span></span>
+        </div>
+        <div class="enh-buttons">
+          <button type="button" id="enhToggle" aria-pressed="false">Show original</button>
+          <button type="button" id="enhAuto" title="Settings worked out from this photo">Auto</button>
+          <button type="button" id="enhReset" title="No changes">Reset</button>
+        </div>
+      </div>
+      <div class="enh-section" id="enhSliders">
+        <div class="enh-row"><label for="enh_brightness">Brightness</label><output for="enh_brightness" id="enh_brightness_out">0</output>
+          <input type="range" id="enh_brightness" data-enh="brightness" min="-100" max="100" step="1" value="0"></div>
+        <div class="enh-row"><label for="enh_contrast">Contrast</label><output for="enh_contrast" id="enh_contrast_out">0</output>
+          <input type="range" id="enh_contrast" data-enh="contrast" min="-100" max="100" step="1" value="0"></div>
+        <div class="enh-row"><label for="enh_warmth">Warmth</label><output for="enh_warmth" id="enh_warmth_out">0</output>
+          <input type="range" id="enh_warmth" data-enh="warmth" min="-100" max="100" step="1" value="0" aria-describedby="enh_warmth_ends">
+          <span class="enh-ends" id="enh_warmth_ends"><span>cooler (bluer)</span><span>warmer (more orange)</span></span></div>
+        <div class="enh-row"><label for="enh_tint">Tint</label><output for="enh_tint" id="enh_tint_out">0</output>
+          <input type="range" id="enh_tint" data-enh="tint" min="-100" max="100" step="1" value="0" aria-describedby="enh_tint_ends">
+          <span class="enh-ends" id="enh_tint_ends"><span>greener</span><span>more magenta</span></span></div>
+        <div class="enh-row"><label for="enh_saturation">Saturation</label><output for="enh_saturation" id="enh_saturation_out">0</output>
+          <input type="range" id="enh_saturation" data-enh="saturation" min="-100" max="100" step="1" value="0"></div>
+        <div class="enh-row"><label for="enh_sharpen">Sharpen</label><output for="enh_sharpen" id="enh_sharpen_out">0</output>
+          <input type="range" id="enh_sharpen" data-enh="sharpen" min="0" max="100" step="1" value="0" aria-describedby="enhSharpenNote"></div>
+        <p class="enh-note" id="enhSharpenNote">Sharpen makes slightly soft photos look crisper. It cannot fix a photo that is badly out of focus or blurred by camera shake.</p>
+      </div>
+      <div class="enh-section enh-save">
+        <fieldset>
+          <legend>Save</legend>
+          <label class="enh-radio"><input type="radio" name="enhMode" value="copy" checked> <span>Save as a copy</span></label>
+          <label class="enh-radio" id="enhReplaceLabel"><input type="radio" name="enhMode" value="replace" id="enhReplaceRadio"> <span>Replace the original</span></label>
+        </fieldset>
+        <p class="enh-hint" id="enhSaveHint" aria-live="polite"></p>
+        <button type="button" class="primary" id="enhSave">Save as a copy</button>
+        <p class="enh-status" id="enhStatus" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</dialog>
+<!-- ==== end Enhance view ==== -->
 
 <div id="logPanel" class="log-panel">
   <div class="log-head">
@@ -859,7 +978,7 @@ function renderResults(rows) {
         <button type="button" class="del" title="Delete — moves file to Recycle Bin">🗑</button>
       </div>
       <div class="imgwrap" data-idx="${idx}">
-        <img loading="lazy" src="thumb.php?id=${row.id}" alt="">
+        <img loading="lazy" src="thumb.php?id=${row.id}${row.v ? '&v=' + row.v : ''}" alt="">
       </div>
       <div class="meta">
         <div class="desc">${snip}</div>
@@ -1015,7 +1134,7 @@ function openLightbox(idx) {
   if (idx < 0 || idx >= lastResults.length) return;
   lbIndex = idx;
   const r = lastResults[idx];
-  $('#lbImg').src = 'file.php?id=' + r.id;
+  $('#lbImg').src = 'file.php?id=' + r.id + (r.v ? '&v=' + r.v : '');
   $('#lbDesc').textContent = r.description || '';
   $('#lbFaces').textContent = r.faces ? '👤 people: ' + r.faces : '';
   $('#lbTags').textContent = r.tags ? 'tags: ' + r.tags : '';
@@ -1139,6 +1258,315 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); openEditor(); }
   else if (e.key === 'Delete') { e.preventDefault(); deleteCurrentInLightbox(); }
 });
+
+// ==== Enhance: the preview is drawn here, the full-size photo is saved by lib/Enhance.php ====
+const ENH_KEYS = ['brightness', 'contrast', 'warmth', 'tint', 'saturation', 'sharpen'];
+const ENH_W = [0.299, 0.587, 0.114];
+const enh = { id: null, data: null, params: null, src: null, blur: null, out: null, ctx: null, w: 0, h: 0, raf: 0, armed: 0, saving: false };
+
+/* enhKnobs, enhGains, enhCurves and enhTables mirror Enhance::knobs, ::gains, ::curves and
+   ::tables in lib/Enhance.php, operation for operation, so the preview computes exactly what the
+   full-size save computes. Change one, change the other. */
+function enhKnobs(p) {
+  const b = p.brightness / 100;
+  return { k: Math.pow(2, 2.5 * b) - 1, c: p.contrast / 100 * 0.8, T: p.warmth / 100 * 0.4,
+           N: p.tint / 100 * 0.3, s: 1 + p.saturation / 100, a: p.sharpen / 100 };
+}
+function enhGains(T, N) {
+  const g = [Math.exp(T), Math.exp(-N), Math.exp(-T)];
+  const n = ENH_W[0] * g[0] + ENH_W[1] * g[1] + ENH_W[2] * g[2];
+  return [g[0] / n, g[1] / n, g[2] / n];
+}
+function enhCurves(p) {
+  const q = enhKnobs(p), g = enhGains(q.T, q.N);
+  const lo = p.levels ? p.levels.lo : 0, hi = p.levels ? p.levels.hi : 1, span = hi - lo;
+  const L = [new Float64Array(256), new Float64Array(256), new Float64Array(256)];
+  for (let ch = 0; ch < 3; ch++) {
+    for (let v = 0; v < 256; v++) {
+      let x = (g[ch] * v / 255 - lo) / span;
+      x = x < 0 ? 0 : (x > 1 ? 1 : x);
+      if (q.k !== 0) x = (1 + q.k) * x / (1 + q.k * x);
+      if (q.c !== 0) x = x + q.c * (2 * x - 1) * x * (1 - x);
+      L[ch][v] = 255 * x;
+    }
+  }
+  return L;
+}
+function enhTables(p) {
+  const L = enhCurves(p), q = enhKnobs(p), s = q.s, a = q.a;
+  const T = [[], [], []], U = [];
+  for (let c = 0; c < 3; c++) {
+    for (let k = 0; k < 3; k++) {
+      const m = (c === k ? s : 0) + (1 - s) * ENH_W[k] + a * ENH_W[k];
+      const t = new Int32Array(256);
+      for (let v = 0; v < 256; v++) t[v] = Math.floor(64 * m * L[k][v] + 0.5);
+      T[c][k] = t;
+    }
+  }
+  for (let k = 0; k < 3; k++) {
+    const m = a * ENH_W[k], u = new Int32Array(256);
+    for (let v = 0; v < 256; v++) u[v] = Math.floor(64 * m * L[k][v] + 0.5);
+    U[k] = u;
+  }
+  return [T, U];
+}
+/* GD's IMG_FILTER_GAUSSIAN_BLUR: [1 2 1; 2 4 2; 1 2 1] / 16, edge pixels repeated, truncated. */
+function enhGauss(src, w, h) {
+  const out = new Uint8ClampedArray(src.length);
+  for (let y = 0; y < h; y++) {
+    const rowU = Math.max(y - 1, 0) * w, rowC = y * w, rowD = Math.min(y + 1, h - 1) * w;
+    for (let x = 0; x < w; x++) {
+      const xl = Math.max(x - 1, 0), xr = Math.min(x + 1, w - 1);
+      const a = (rowU + xl) * 4, b = (rowU + x) * 4, c = (rowU + xr) * 4;
+      const d = (rowC + xl) * 4, e = (rowC + x) * 4, f = (rowC + xr) * 4;
+      const g = (rowD + xl) * 4, h2 = (rowD + x) * 4, i = (rowD + xr) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        out[e + ch] = (src[a + ch] + 2 * src[b + ch] + src[c + ch] + 2 * src[d + ch] + 4 * src[e + ch]
+          + 2 * src[f + ch] + src[g + ch] + 2 * src[h2 + ch] + src[i + ch]) >> 4;
+      }
+      out[e + 3] = 255;
+    }
+  }
+  return out;
+}
+function enhRender() {
+  enh.raf = 0;
+  if (!enh.src || !enh.params) return;
+  const [T, U] = enhTables(enh.params);
+  const src = enh.src, out = enh.out.data, n = src.length;
+  const r0 = T[0][0], r1 = T[0][1], r2 = T[0][2], g0 = T[1][0], g1 = T[1][1], g2 = T[1][2], b0 = T[2][0], b1 = T[2][1], b2 = T[2][2];
+  if (enh.params.sharpen > 0) {
+    const bl = enh.blur, u0 = U[0], u1 = U[1], u2 = U[2];
+    for (let i = 0; i < n; i += 4) {
+      const r = src[i], g = src[i + 1], b = src[i + 2];
+      const d = u0[bl[i]] + u1[bl[i + 1]] + u2[bl[i + 2]];
+      out[i] = (r0[r] + r1[g] + r2[b] - d + 32) >> 6;
+      out[i + 1] = (g0[r] + g1[g] + g2[b] - d + 32) >> 6;
+      out[i + 2] = (b0[r] + b1[g] + b2[b] - d + 32) >> 6;
+      out[i + 3] = 255;
+    }
+  } else {
+    for (let i = 0; i < n; i += 4) {
+      const r = src[i], g = src[i + 1], b = src[i + 2];
+      out[i] = (r0[r] + r1[g] + r2[b] + 32) >> 6;
+      out[i + 1] = (g0[r] + g1[g] + g2[b] + 32) >> 6;
+      out[i + 2] = (b0[r] + b1[g] + b2[b] + 32) >> 6;
+      out[i + 3] = 255;
+    }
+  }
+  enh.ctx.putImageData(enh.out, 0, 0);
+}
+function enhSchedule() { if (!enh.raf) enh.raf = requestAnimationFrame(enhRender); }
+function enhP3() {
+  try {
+    const c = document.createElement('canvas').getContext('2d', { colorSpace: 'display-p3' });
+    return !!(c && c.getContextAttributes && c.getContextAttributes().colorSpace === 'display-p3');
+  } catch (e) { return false; }
+}
+function enhIsNeutral(p) { return !p || (!p.levels && ENH_KEYS.every(k => p[k] === 0)); }
+function enhFmt(key, v) { return key === 'sharpen' || v <= 0 ? String(v) : '+' + v; }
+function enhBusy(text) { const b = $('#enhBusy'); b.textContent = text; b.classList.toggle('show', !!text); }
+function enhStatus(text, isErr) { const s = $('#enhStatus'); s.textContent = text; s.classList.toggle('err', !!isErr); }
+function enhSetControls(on) {
+  $$('#enhanceDlg .enh-panel input, #enhanceDlg .enh-panel button').forEach(el => {
+    if (el.id === 'enhClose') return;
+    el.disabled = !on || (el.id === 'enhReplaceRadio' && !(enh.data && enh.data.can_replace));
+  });
+  if (on) enhSaveState();
+}
+function enhMode() { return document.querySelector('input[name=enhMode]:checked').value; }
+function enhSaveState() {
+  const btn = $('#enhSave'), hint = $('#enhSaveHint'), mode = enhMode(), d = enh.data;
+  const none = enhIsNeutral(enh.params);
+  btn.disabled = none || enh.saving || !d;
+  btn.classList.toggle('danger', mode === 'replace' && !!enh.armed);
+  btn.classList.toggle('primary', !(mode === 'replace' && enh.armed));
+  hint.classList.toggle('warn', mode === 'replace' && !!enh.armed);
+  $('#enhReplaceLabel').classList.toggle('disabled', !(d && d.can_replace));
+  if (mode === 'copy') {
+    btn.textContent = 'Save as a copy';
+    hint.textContent = none ? 'No changes to save.' : 'Saves “' + (d ? d.copy_name : '') + '” next to the original, with the same date, place, description and people. The original is not changed.';
+  } else if (!enh.armed) {
+    btn.textContent = 'Replace the original…';
+    hint.textContent = none ? 'No changes to save.' : 'The original goes to the Recycle Bin (you can restore it from there) and the enhanced photo takes its name, date, place, description and people.';
+  } else {
+    btn.textContent = 'Click again to replace the original';
+    hint.textContent = 'Are you sure? Click the red button within 8 seconds to replace “' + (d ? d.name : '') + '”. The original goes to the Recycle Bin.';
+  }
+  if (d && !d.can_replace) $('#enhReplaceLabel').title = 'Replacing works for JPEG photos only. Save as a copy instead.';
+}
+function enhArm(on) {
+  clearTimeout(enh.armTimer);
+  enh.armed = on ? Date.now() : 0;
+  if (on) enh.armTimer = setTimeout(() => { enh.armed = 0; enhSaveState(); }, 8000);
+  enhSaveState();
+}
+function enhSetParams(p) {
+  enh.params = JSON.parse(JSON.stringify(p));
+  ENH_KEYS.forEach(k => {
+    const el = $('#enh_' + k);
+    el.value = enh.params[k];
+    $('#enh_' + k + '_out').textContent = enhFmt(k, enh.params[k]);
+  });
+  enhArm(false);
+  enhSchedule();
+}
+function enhSplit(v) {
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  $('#enhFrame').style.setProperty('--split', v + '%');
+  $('#enhSplit').value = v;
+  $('#enhSplitOut').textContent = v + '%';
+}
+function enhLayout() {
+  if (!enh.data) return;
+  const stage = $('#enhStage'), cs = getComputedStyle(stage);
+  const aw = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const ah = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const w = enh.data.preview.width, h = enh.data.preview.height;
+  const scale = Math.max(0.05, Math.min(aw / w, ah / h, 2));
+  const f = $('#enhFrame');
+  f.style.width = Math.floor(w * scale) + 'px';
+  f.style.height = Math.floor(h * scale) + 'px';
+}
+
+async function enhOpen() {
+  if (lbIndex < 0 || !lastResults[lbIndex]) return;
+  const r = lastResults[lbIndex];
+  const dlg = $('#enhanceDlg');
+  Object.assign(enh, { id: r.id, data: null, params: null, src: null, blur: null, out: null, armed: 0 });
+  $('#enhName').textContent = String(r.path || '').split('/').pop();
+  $('#enhBefore').removeAttribute('src');
+  $('#enhFrame').style.width = $('#enhFrame').style.height = '0px';
+  $('#enhToggle').setAttribute('aria-pressed', 'false');
+  $('#enhToggle').textContent = 'Show original';
+  $('#enhFrame').classList.remove('show-before');
+  document.querySelector('input[name=enhMode][value=copy]').checked = true;
+  enhSplit(50);
+  enhStatus('');
+  enhBusy('Preparing the preview…');
+  enhSetControls(false);
+  if (!dlg.open) dlg.showModal();
+  let d;
+  try {
+    d = await api('enhance_open', { qs: 'id=' + encodeURIComponent(r.id) });
+  } catch (e) {
+    enhBusy('');
+    enhStatus(e.message, true);
+    return;
+  }
+  if (enh.id !== r.id || !dlg.open) return;
+  const img = $('#enhBefore');
+  img.src = d.preview.src;
+  try { await img.decode(); } catch (e) { enhBusy(''); enhStatus('Could not show the preview.', true); return; }
+  if (enh.id !== r.id || !dlg.open) return;
+  // Draw in the photo's own colour space (wide-gamut phone photos are Display P3), so the
+  // numbers the preview works on are the numbers the saved file has.
+  const w = d.preview.width, h = d.preview.height;
+  const space = d.preview.color !== 'srgb' && enhP3() ? 'display-p3' : 'srgb';
+  const old = $('#enhAfter'), cv = document.createElement('canvas');
+  cv.id = 'enhAfter';
+  cv.setAttribute('role', 'img');
+  cv.setAttribute('aria-label', old.getAttribute('aria-label'));
+  cv.width = w;
+  cv.height = h;
+  old.replaceWith(cv);
+  const ctx = cv.getContext('2d', { colorSpace: space, willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  enh.src = ctx.getImageData(0, 0, w, h, { colorSpace: space }).data;
+  enh.blur = enhGauss(enh.src, w, h);
+  enh.out = ctx.createImageData(w, h, { colorSpace: space });
+  Object.assign(enh, { data: d, ctx, w, h });
+  enhLayout();
+  enhSetParams(d.auto);
+  enhBusy('');
+  enhSetControls(true);
+  enhStatus(enhIsNeutral(d.auto) ? 'Auto found nothing to change; use the sliders.' : 'Auto settings applied. Adjust them or save.');
+  $('#enhAuto').focus();
+}
+
+function enhClose() { const dlg = $('#enhanceDlg'); if (dlg.open) dlg.close(); }
+
+async function enhSave() {
+  if (!enh.params || enh.saving || !enh.data || enhIsNeutral(enh.params)) return;
+  const mode = enhMode();
+  if (mode === 'replace' && !enh.armed) { enhArm(true); return; }
+  enh.saving = true;
+  enhArm(false);
+  enhSetControls(false);
+  enhBusy('Saving the full-size photo…');
+  enhStatus('Saving. Large photos take a few seconds.');
+  const id = enh.id;
+  try {
+    const res = await api('enhance_save', { body: { id, mode, params: enh.params } });
+    const row = res.image;
+    // Re-draw the grid only if this photo is in it (the Errors dialog shows photos in the lightbox too).
+    const inGrid = !!document.querySelector('.card[data-id="' + id + '"]');
+    if (mode === 'copy') {
+      lastResults = lastResults.filter(x => x.id !== row.id);
+      const at = lastResults.findIndex(x => x.id === id);
+      lastResults.splice(at + 1, 0, row);
+      if (inGrid) renderResults(lastResults);
+      enh.saving = false;
+      enhClose();
+      openLightbox(lastResults.indexOf(row));
+      toast('Saved “' + res.name + '” next to the original.');
+    } else {
+      const at = lastResults.findIndex(x => x.id === id);
+      if (at >= 0) Object.assign(lastResults[at], row);
+      // The thumbnail and photo URLs are unchanged: fetch them again so the browser's cache has the new picture.
+      fetch('thumb.php?id=' + encodeURIComponent(id), { cache: 'reload' }).catch(() => {});
+      fetch('file.php?id=' + encodeURIComponent(id), { cache: 'reload' }).catch(() => {});
+      if (inGrid) renderResults(lastResults);
+      enh.saving = false;
+      enhClose();
+      if (at >= 0) openLightbox(at);
+      toast('Replaced “' + res.name + '”. The original is in the Recycle Bin.');
+    }
+    if (res.stats) setStats(res.stats);
+  } catch (e) {
+    enhStatus(e.message, true);
+  } finally {
+    enh.saving = false;
+    enhBusy('');
+    if ($('#enhanceDlg').open) enhSetControls(true);
+  }
+}
+
+$('#lbEnhBtn').addEventListener('click', e => { e.stopPropagation(); enhOpen(); });
+$('#enhClose').addEventListener('click', enhClose);
+$('#enhSave').addEventListener('click', enhSave);
+$('#enhAuto').addEventListener('click', () => { if (enh.data) { enhSetParams(enh.data.auto); enhStatus('Auto settings applied.'); } });
+$('#enhReset').addEventListener('click', () => { if (enh.data) { enhSetParams(enh.data.neutral); enhStatus('Reset: no changes.'); } });
+$('#enhToggle').addEventListener('click', () => {
+  const on = $('#enhToggle').getAttribute('aria-pressed') !== 'true';
+  $('#enhToggle').setAttribute('aria-pressed', String(on));
+  $('#enhToggle').textContent = on ? 'Show enhanced' : 'Show original';
+  $('#enhFrame').classList.toggle('show-before', on);
+});
+$$('#enhSliders input[type=range]').forEach(el => el.addEventListener('input', () => {
+  if (!enh.params) return;
+  enh.params[el.dataset.enh] = +el.value;
+  $('#' + el.id + '_out').textContent = enhFmt(el.dataset.enh, +el.value);
+  enhArm(false);
+  enhSchedule();
+}));
+$$('input[name=enhMode]').forEach(el => el.addEventListener('change', () => enhArm(false)));
+$('#enhSplit').addEventListener('input', e => enhSplit(+e.target.value));
+(() => {
+  const f = $('#enhFrame');
+  const at = e => { const r = f.getBoundingClientRect(); enhSplit((e.clientX - r.left) / r.width * 100); };
+  f.addEventListener('pointerdown', e => { f.setPointerCapture(e.pointerId); at(e); });
+  f.addEventListener('pointermove', e => { if (f.hasPointerCapture(e.pointerId)) at(e); });
+})();
+// Keys pressed in the enhance view stay there (the lightbox behind it reacts to arrows and Delete).
+$('#enhanceDlg').addEventListener('keydown', e => e.stopPropagation());
+$('#enhanceDlg').addEventListener('cancel', e => { if (enh.saving) e.preventDefault(); });
+$('#enhanceDlg').addEventListener('close', () => {
+  clearTimeout(enh.armTimer);
+  Object.assign(enh, { id: null, src: null, blur: null, out: null, armed: 0 });
+  if ($('#lightbox').open) $('#lbEnhBtn').focus();
+});
+window.addEventListener('resize', () => { if ($('#enhanceDlg').open) enhLayout(); });
 
 const PAGE = 200;
 /** Loads the first page (append = false) or the next one, in the chosen order. */
