@@ -168,6 +168,79 @@ $apiKeySet = $settings['api_key'] !== '';
   .log-panel pre .ok { color: var(--ok); }
   .log-panel pre .err { color: var(--err-text); }
   .log-panel pre .mute { color: var(--mute); }
+
+  /* ---- Clean up (review screen) ----
+     WCAG AA on the panels: --text on --panel/--panel2 > 11:1; --mute (#9aa3b2) on them > 5.9:1;
+     --ok (#4ade80) on --panel 10:1; --err-text on --panel 6:1; white on --err-bg 5.6:1;
+     #c7d8ff on #1b2a45 (selected card, active tab) 10:1. Nothing is drawn over the photos. */
+  dialog.cleanup { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 0; width: 96vw; max-width: 1500px; height: 92vh; max-height: none; overflow: hidden; }
+  dialog.cleanup[open] { display: flex; flex-direction: column; }
+  dialog.cleanup::backdrop { background: rgba(0,0,0,0.7); }
+  .cleanup button:disabled { opacity: 1; color: var(--mute); background: var(--panel2); border-color: var(--line); }
+  .cleanup button:focus-visible, .cleanup input:focus-visible, .cleanup select:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  .cu-head { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .cu-head h2 { margin: 0; font-size: 17px; }
+  .cu-status { color: var(--mute); font-size: 13px; flex: 1; min-width: 200px; }
+  .cu-status strong { color: var(--text); }
+  .cu-close { font-size: 20px; line-height: 1; padding: 4px 12px; }
+  .cu-progress { display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text); }
+  .cu-progress[hidden] { display: none; }
+  .cu-progress progress { width: 240px; height: 8px; }
+  .cu-tabs { display: flex; gap: 4px; padding: 0 18px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .cu-tabs button { background: transparent; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 10px 14px; color: var(--mute); font-size: 14px; }
+  .cu-tabs button:hover { color: var(--text); background: var(--panel2); }
+  .cu-tabs button[aria-selected="true"] { color: #c7d8ff; background: #1b2a45; border-bottom-color: var(--accent); }
+  .cu-count { display: inline-block; min-width: 22px; margin-left: 6px; padding: 0 7px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); color: var(--text); font-size: 12px; text-align: center; }
+  .cu-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text); }
+  .cu-controls[hidden] { display: none; }
+  .cu-controls label { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--text); }
+  .cu-controls input[type=range] { width: 200px; accent-color: var(--accent); }
+  .cu-controls select { width: auto; }
+  .cu-controls .hint { margin: 0; font-size: 12px; color: var(--mute); }
+  .cu-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .cu-actions .spacer { flex: 1; }
+  .cu-selcount { font-weight: 600; margin: 0 6px; }
+  .cu-actions button.danger { background: var(--err-bg); border-color: var(--err-bg); color: #fff; }
+  .cu-actions button.danger:hover { background: #a91f1f; border-color: #a91f1f; }
+  .cu-actions button.danger.armed { background: #8e1717; border-color: #fff; }
+  .cu-actions button.danger:disabled { background: var(--panel2); border-color: var(--line); color: var(--mute); }
+  .cu-result { margin: 10px 18px 0; padding: 10px 14px; border: 1px solid var(--line); border-left: 3px solid var(--ok); border-radius: 8px; background: var(--panel); font-size: 13px; }
+  .cu-result.has-fail { border-left-color: var(--err-text); }
+  .cu-result[hidden] { display: none; }
+  .cu-result ul { margin: 6px 0 0 18px; padding: 0; max-height: 120px; overflow: auto; }
+  .cu-result li { color: var(--err-text); margin: 2px 0; word-break: break-all; }
+  .cu-result .close { float: right; padding: 2px 8px; }
+  .cu-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+  .cu-explain { color: var(--mute); font-size: 12px; margin: 0 0 12px; }
+  .cu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .cu-group { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 14px; background: var(--panel); }
+  .cu-group-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text); margin-bottom: 8px; }
+  .cu-group-head .muted { color: var(--mute); }
+  .cu-group .cu-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .cu-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .cu-group .cu-card { background: var(--panel2); }
+  .cu-card.selected { border-color: var(--accent); outline: 2px solid var(--accent); background: #1b2a45; }
+  .cu-card.best { border-color: var(--ok); }
+  .cu-thumb { display: block; padding: 0; border: none; border-radius: 0; background: #0a0c10; aspect-ratio: 4 / 3; overflow: hidden; cursor: zoom-in; width: 100%; }
+  .cu-thumb:hover { background: #0a0c10; }
+  .cu-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cu-meta { padding: 8px 10px 10px; font-size: 12px; color: var(--mute); display: flex; flex-direction: column; gap: 5px; }
+  .cu-pick { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; margin: 0; cursor: pointer; }
+  .cu-pick input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+  .cu-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cu-chip { display: inline-block; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 11px; }
+  .cu-chip.ai { border-color: #6b5bd6; color: #d4ccff; }
+  .cu-chip.best { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+  .cu-chip.kept { border-color: var(--warn); color: #fcd34d; }
+  .cu-name { color: var(--text); word-break: break-all; }
+  .cu-path { word-break: break-all; }
+  .cu-empty { text-align: center; color: var(--mute); padding: 50px 20px; font-size: 14px; }
+  .cu-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 18px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+  .cu-pager[hidden] { display: none; }
+  .cu-foot { display: flex; align-items: center; gap: 10px; padding: 8px 18px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--mute); }
+  .cu-foot .spacer { flex: 1; }
+  dialog.lightbox.from-cleanup .lb-del-btn { display: none; }
+  /* ---- end Clean up ---- */
 </style>
 </head>
 <body>
@@ -201,6 +274,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <button id="indexBtn" class="primary">Start indexing</button>
   <button id="exportBtn" title="Write descriptions and tags into the photo files themselves (XMP/IPTC) so Windows, Bridge, Lightroom etc. can see them">Embed metadata</button>
   <button id="stopBtn" style="display:none">Stop</button>
+  <button id="cleanupBtn" title="Find blurry, badly exposed and duplicate photos and move them to the Recycle Bin">Clean up</button>
   <button id="logBtn" title="Show live worker log">Log</button>
   <button id="settingsBtn">Settings</button>
 </header>
@@ -440,6 +514,69 @@ $apiKeySet = $settings['api_key'] !== '';
     </div>
   </div>
 </dialog>
+
+<!-- ---- Clean up: review screen (lib/Cleanup.php, api.php cleanup_* actions) ---- -->
+<dialog id="cleanupDlg" class="cleanup" aria-labelledby="cuTitle">
+  <div class="cu-head">
+    <h2 id="cuTitle">Clean up</h2>
+    <span class="cu-status" id="cuStatus" role="status"></span>
+    <button type="button" id="cuAnalyzeBtn" title="Measure sharpness, brightness and duplicates from the thumbnails. Runs on this PC; no AI, no cost.">Analyse library</button>
+    <button type="button" class="cu-close" id="cuClose" aria-label="Close clean up" title="Close (Esc)">×</button>
+  </div>
+  <div class="cu-progress" id="cuProgress" hidden>
+    <progress id="cuProg" value="0" max="100"></progress>
+    <span id="cuProgTxt" role="status"></span>
+    <button type="button" id="cuStopBtn">Stop</button>
+  </div>
+  <div class="cu-tabs" role="tablist" aria-label="Kinds of problem photos">
+    <button type="button" role="tab" id="cuTabBlurry" data-cu-tab="blurry" aria-selected="true" aria-controls="cuBody">Blurry<span class="cu-count" id="cuCountBlurry">–</span></button>
+    <button type="button" role="tab" id="cuTabExposure" data-cu-tab="exposure" aria-selected="false" aria-controls="cuBody">Too dark / too bright / blank<span class="cu-count" id="cuCountExposure">–</span></button>
+    <button type="button" role="tab" id="cuTabDuplicates" data-cu-tab="duplicates" aria-selected="false" aria-controls="cuBody">Duplicates<span class="cu-count" id="cuCountDuplicates">–</span></button>
+  </div>
+  <div class="cu-controls" id="cuCtlBlurry">
+    <label for="cuBlurRange">Sensitivity</label>
+    <span class="hint" aria-hidden="true">only the worst</span>
+    <input type="range" id="cuBlurRange" min="10" max="150" step="5" value="40" aria-describedby="cuBlurVal">
+    <span class="hint" aria-hidden="true">more</span>
+    <span id="cuBlurVal"></span>
+    <label><input type="checkbox" id="cuBlurAi" checked> Include photos the AI described as blurry</label>
+  </div>
+  <div class="cu-controls" id="cuCtlExposure" hidden>
+    <span class="hint">Nearly black photos with no highlights, washed-out white ones, and frames with hardly any detail.</span>
+  </div>
+  <div class="cu-controls" id="cuCtlDuplicates" hidden>
+    <label for="cuDupMode">Find</label>
+    <select id="cuDupMode">
+      <option value="0">Exact copies only</option>
+      <option value="4" selected>Copies, including resized ones</option>
+      <option value="6">Copies and similar shots (bursts)</option>
+    </select>
+    <span class="hint">The best copy (most pixels, then largest file, then earliest date) is never selected for you.</span>
+  </div>
+  <div class="cu-actions">
+    <button type="button" id="cuSelAll">Select all</button>
+    <button type="button" id="cuSelNone">Select none</button>
+    <button type="button" id="cuSelExtra" hidden>Select all extra copies</button>
+    <span class="cu-selcount" id="cuSelCount" role="status">0 selected</span>
+    <span class="spacer"></span>
+    <button type="button" id="cuKeepBtn" title="Hide the selected photos from Clean up for good. Nothing is deleted.">Keep (don't show again)</button>
+    <button type="button" id="cuDeleteBtn" class="danger">Move selected to Recycle Bin</button>
+    <button type="button" id="cuDeleteCancel" hidden>Cancel</button>
+  </div>
+  <div class="cu-result" id="cuResult" role="status" hidden></div>
+  <div class="cu-body" id="cuBody" role="tabpanel" aria-labelledby="cuTabBlurry"></div>
+  <div class="cu-pager" id="cuPager" hidden>
+    <button type="button" id="cuPrev">‹ Previous</button>
+    <span id="cuPageTxt"></span>
+    <button type="button" id="cuNext">Next ›</button>
+  </div>
+  <div class="cu-foot">
+    <span id="cuKeptTxt"></span>
+    <span class="spacer"></span>
+    <button type="button" id="cuUnkeepBtn" hidden>Show kept photos again</button>
+  </div>
+</dialog>
+<!-- ---- end Clean up ---- -->
 
 <div id="logPanel" class="log-panel">
   <div class="log-head">
@@ -1432,6 +1569,512 @@ $('#checkUpdatesBtn').addEventListener('click', async () => {
 refreshStats().then(() => doSearch());
 checkUpdates(false);
 checkProviderSetup();
+
+// ---- Clean up: review blurry, badly exposed and duplicate photos ----
+// Analysis runs on the server from the thumbnails (cleanup_analyze, no AI). Deleting uses the
+// existing delete_files action, which moves files to the Recycle Bin. Nothing is pre-selected.
+const CU_PAGE = 120;        // cards per page (Blurry, Exposure)
+const CU_GROUP_PAGE = 40;   // groups per page (Duplicates)
+const CU_TABS = ['blurry', 'exposure', 'duplicates'];
+const cu = {
+  tab: 'blurry',
+  cfg: { blur_default: 40, blur_min: 10, blur_max: 150, dup_default: 4, batch: 150 },
+  status: null,
+  lists: { blurry: [], exposure: [], duplicates: [] },   // from the server (duplicates = groups)
+  view: { blurry: [], exposure: [], duplicates: [] },    // what the current filters show
+  sel: { blurry: new Set(), exposure: new Set(), duplicates: new Set() },
+  page: { blurry: 0, exposure: 0, duplicates: 0 },
+  loaded: false, analysing: false, stop: false, busy: false,
+  armTimer: null, unkeepArmed: false, lbSaved: null,
+};
+
+function cuFmtSize(b) {
+  if (!b) return '';
+  if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+  return Math.max(1, Math.round(b / 1024)) + ' KB';
+}
+function cuBase(p) { return String(p || '').split(/[\\/]/).pop(); }
+function cuFolder(p) { const a = String(p || '').split(/[\\/]/); return a.length > 1 ? a[a.length - 2] : ''; }
+function cuPlural(n, one, many) { return Number(n).toLocaleString() + ' ' + (n === 1 ? one : (many || one + 's')); }
+function cuDescribedKeys(r) { return Object.keys(r.described || {}); }
+
+function cuSetStatus(s) {
+  if (!s) return;
+  cu.status = s;
+  const el = $('#cuStatus');
+  el.textContent = '';
+  const strong = document.createElement('strong');
+  if (s.remaining > 0) {
+    strong.textContent = `${s.analyzed.toLocaleString()} of ${s.total.toLocaleString()} photos analysed.`;
+    el.append(strong, ' The lists below only cover analysed photos.');
+  } else {
+    strong.textContent = `${s.total.toLocaleString()} photos analysed.`;
+    el.append(strong);
+  }
+  if (s.no_thumbnail) el.append(` ${cuPlural(s.no_thumbnail, 'photo has', 'photos have')} no thumbnail yet and ${s.no_thumbnail === 1 ? 'was' : 'were'} skipped.`);
+  el.append(' Measured on this PC from the thumbnails: no AI, no cost.');
+  $('#cuAnalyzeBtn').hidden = !(s.remaining > 0);
+  $('#cuAnalyzeBtn').textContent = `Analyse ${s.remaining.toLocaleString()} more`;
+  $('#cuKeptTxt').textContent = s.kept ? `${cuPlural(s.kept, 'photo is', 'photos are')} marked Keep and hidden from Clean up.` : '';
+  $('#cuUnkeepBtn').hidden = !s.kept;
+}
+
+async function cuOpen() {
+  $('#cleanupDlg').showModal();
+  try {
+    const r = await api('cleanup_status');
+    Object.assign(cu.cfg, r.config || {});
+    const range = $('#cuBlurRange');
+    range.min = cu.cfg.blur_min; range.max = cu.cfg.blur_max;
+    if (!cu.loaded) range.value = cu.cfg.blur_default;
+    cuSetStatus(r.status);
+    if (r.status.remaining > 0) await cuAnalyze();
+    else await cuLoadAll();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function cuAnalyze() {
+  if (cu.analysing) return;
+  cu.analysing = true; cu.stop = false;
+  $('#cuProgress').hidden = false;
+  $('#cuAnalyzeBtn').disabled = true;
+  try {
+    while (!cu.stop) {
+      const r = await api('cleanup_analyze', { body: { limit: cu.cfg.batch || 150 } });
+      cuSetStatus(r);
+      $('#cuProg').max = r.total || 1;
+      $('#cuProg').value = r.analyzed;
+      $('#cuProgTxt').textContent = `Analysing… ${r.analyzed.toLocaleString()} of ${r.total.toLocaleString()} photos`;
+      if (!r.processed || !r.remaining) break;
+    }
+  } catch (e) { toast(e.message, 'err', 6000); }
+  cu.analysing = false;
+  $('#cuProgress').hidden = true;
+  $('#cuAnalyzeBtn').disabled = false;
+  if ($('#cleanupDlg').open) await cuLoadAll();
+}
+
+async function cuLoad(kind) {
+  const qs = 'kind=' + kind + (kind === 'duplicates' ? '&dist=' + encodeURIComponent($('#cuDupMode').value) : '');
+  const r = await api('cleanup_list', { qs });
+  cu.lists[kind] = kind === 'duplicates' ? (r.groups || []) : (r.items || []);
+  if (r.status) cuSetStatus(r.status);
+  cuFilter(kind);
+}
+
+async function cuLoadAll() {
+  $('#cuBody').innerHTML = '<div class="cu-empty">Loading…</div>';
+  try {
+    await Promise.all(CU_TABS.map(cuLoad));
+    cu.loaded = true;
+  } catch (e) { toast(e.message, 'err', 6000); }
+  cuRender();
+}
+
+/** Apply the tab's filters, keep the selection to what is still listed, clamp the page. */
+function cuFilter(kind) {
+  if (kind === 'blurry') {
+    const t = +$('#cuBlurRange').value;
+    const ai = $('#cuBlurAi').checked;
+    cu.view.blurry = cu.lists.blurry.filter(r => (r.pixel_blur && r.sharpness < t) || (ai && cuDescribedKeys(r).length));
+    const pix = cu.lists.blurry.filter(r => r.pixel_blur && r.sharpness < t).length;
+    $('#cuBlurVal').textContent = `sharpness below ${t}: ${cuPlural(pix, 'photo')}`;
+  } else {
+    cu.view[kind] = cu.lists[kind];
+  }
+  const ids = new Set(cuIds(kind));
+  cu.sel[kind].forEach(id => { if (!ids.has(id)) cu.sel[kind].delete(id); });
+  cu.page[kind] = Math.min(cu.page[kind], Math.max(0, cuPages(kind) - 1));
+  const count = kind === 'duplicates' ? cu.view.duplicates.length : cu.view[kind].length;
+  $('#cuCount' + kind[0].toUpperCase() + kind.slice(1)).textContent = count.toLocaleString();
+}
+
+function cuIds(kind) {
+  if (kind === 'duplicates') return cu.view.duplicates.flatMap(g => g.members.map(m => m.id));
+  return cu.view[kind].map(r => r.id);
+}
+function cuPages(kind) {
+  const n = cu.view[kind].length;
+  return Math.max(1, Math.ceil(n / (kind === 'duplicates' ? CU_GROUP_PAGE : CU_PAGE)));
+}
+
+function cuChip(text, cls) {
+  const c = document.createElement('span');
+  c.className = 'cu-chip' + (cls ? ' ' + cls : '');
+  c.textContent = text;
+  return c;
+}
+
+const CU_REL = { best: 'Best copy', exact: 'Exact copy', smaller: 'Smaller copy', same: 'Same picture, other file', similar: 'Similar shot' };
+
+function cuCard(r, kind, pageItems, idx) {
+  const card = document.createElement('div');
+  const sel = cu.sel[kind].has(r.id);
+  card.className = 'cu-card' + (sel ? ' selected' : '') + (r.best ? ' best' : '');
+  card.dataset.id = r.id;
+  const name = cuBase(r.path);
+
+  const thumb = document.createElement('button');
+  thumb.type = 'button';
+  thumb.className = 'cu-thumb';
+  thumb.setAttribute('aria-label', 'Open ' + name);
+  thumb.title = 'Open full size';
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.alt = '';
+  img.src = 'thumb.php?id=' + encodeURIComponent(r.id);
+  thumb.appendChild(img);
+  thumb.addEventListener('click', () => cuOpenLightbox(pageItems, idx));
+
+  const meta = document.createElement('div');
+  meta.className = 'cu-meta';
+  const pick = document.createElement('label');
+  pick.className = 'cu-pick';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = sel;
+  cb.setAttribute('aria-label', 'Select ' + name);
+  cb.addEventListener('change', () => cuToggle(r.id, cb.checked));
+  pick.append(cb, 'Select');
+
+  const chips = document.createElement('div');
+  chips.className = 'cu-chips';
+  if (kind === 'blurry') {
+    const t = +$('#cuBlurRange').value;
+    chips.appendChild(cuChip((r.pixel_blur && r.sharpness < t ? 'Soft: sharpness ' : 'Sharpness ') + Math.round(r.sharpness)));
+    const d = r.described || {};
+    if (d.blurry) chips.appendChild(cuChip('AI: "' + d.blurry + '"', 'ai'));
+    if (d.lowres) chips.appendChild(cuChip('AI: "' + d.lowres + '"', 'ai'));
+  } else if (kind === 'exposure') {
+    (r.problems || []).forEach(p => chips.appendChild(cuChip(p.text)));
+    Object.values(r.described || {}).forEach(ph => chips.appendChild(cuChip('AI: "' + ph + '"', 'ai')));
+  } else {
+    chips.appendChild(cuChip(CU_REL[r.relation] || r.relation, r.best ? 'best' : ''));
+    if (r.cleanup_keep) chips.appendChild(cuChip('Kept', 'kept'));
+  }
+
+  const nm = document.createElement('div');
+  nm.className = 'cu-name';
+  nm.textContent = name;
+  nm.title = r.path;
+  const sub = document.createElement('div');
+  const bits = [];
+  if (r.width && r.height) bits.push(r.width + '×' + r.height);
+  if (r.size) bits.push(cuFmtSize(r.size));
+  if (r.taken_at) bits.push(String(r.taken_at).slice(0, 10));
+  sub.textContent = bits.join(' · ');
+  const folder = document.createElement('div');
+  folder.className = 'cu-path';
+  folder.textContent = cuFolder(r.path);
+  folder.title = r.path;
+  meta.append(pick, chips, nm, sub, folder);
+  card.append(thumb, meta);
+  return card;
+}
+
+function cuRender() {
+  const kind = cu.tab;
+  const body = $('#cuBody');
+  body.innerHTML = '';
+  body.setAttribute('aria-labelledby', 'cuTab' + kind[0].toUpperCase() + kind.slice(1));
+  const list = cu.view[kind];
+  if (!cu.loaded) {
+    body.innerHTML = '<div class="cu-empty">Loading…</div>';
+  } else if (!list.length) {
+    const empty = {
+      blurry: 'No blurry photos at this sensitivity.',
+      exposure: 'No photos that are too dark, too bright or blank.',
+      duplicates: 'No duplicates found.',
+    }[kind];
+    body.innerHTML = '<div class="cu-empty"></div>';
+    body.firstChild.textContent = empty + (cu.status && cu.status.remaining ? ' Some photos are not analysed yet.' : '');
+  } else if (kind === 'duplicates') {
+    const start = cu.page.duplicates * CU_GROUP_PAGE;
+    const groups = list.slice(start, start + CU_GROUP_PAGE);
+    const pageItems = groups.flatMap(g => g.members);
+    let idx = 0;
+    groups.forEach(g => {
+      const box = document.createElement('section');
+      box.className = 'cu-group';
+      const head = document.createElement('div');
+      head.className = 'cu-group-head';
+      const title = document.createElement('strong');
+      title.textContent = { exact: 'Exact copies', copies: 'Copies of the same photo', similar: 'Similar shots' }[g.kind] || 'Duplicates';
+      const muted = document.createElement('span');
+      muted.className = 'muted';
+      muted.textContent = cuPlural(g.members.length, 'photo') + ' · best copy: ' + cuBase(g.members[0].path);
+      head.append(title, muted);
+      const grid = document.createElement('div');
+      grid.className = 'cu-grid';
+      g.members.forEach(m => grid.appendChild(cuCard(m, kind, pageItems, idx++)));
+      box.append(head, grid);
+      body.appendChild(box);
+    });
+  } else {
+    const start = cu.page[kind] * CU_PAGE;
+    const items = list.slice(start, start + CU_PAGE);
+    if (kind === 'blurry') {
+      const p = document.createElement('p');
+      p.className = 'cu-explain';
+      p.textContent = 'Sharpness is measured on the thumbnail: lower is softer. The AI saw each photo at full size, so photos it described as blurry are listed even when the thumbnail looks sharp.';
+      body.appendChild(p);
+    }
+    const grid = document.createElement('div');
+    grid.className = 'cu-grid';
+    items.forEach((r, i) => grid.appendChild(cuCard(r, kind, items, i)));
+    body.appendChild(grid);
+  }
+  const pages = cuPages(kind);
+  $('#cuPager').hidden = pages <= 1;
+  const total = kind === 'duplicates' ? cuPlural(list.length, 'group') : cuPlural(list.length, 'photo');
+  $('#cuPageTxt').textContent = `Page ${cu.page[kind] + 1} of ${pages} (${total})`;
+  $('#cuPrev').disabled = cu.page[kind] <= 0;
+  $('#cuNext').disabled = cu.page[kind] >= pages - 1;
+  cuUpdateSelBar();
+}
+
+function cuUpdateSelBar() {
+  const n = cu.sel[cu.tab].size;
+  $('#cuSelCount').textContent = n.toLocaleString() + ' selected';
+  $('#cuKeepBtn').disabled = !n || cu.busy;
+  $('#cuDeleteBtn').disabled = !n || cu.busy;
+  const all = cu.tab === 'duplicates' ? cuSelectable('all').length : cu.view[cu.tab].length;
+  $('#cuSelAll').textContent = cu.tab === 'duplicates' ? `Select all but the best copies (${all.toLocaleString()})` : `Select all (${all.toLocaleString()})`;
+  $('#cuSelAll').disabled = !all || cu.busy;
+  $('#cuSelNone').disabled = !n || cu.busy;
+  const extra = cuSelectable('extra').length;
+  $('#cuSelExtra').textContent = `Select all extra copies (${extra.toLocaleString()})`;
+  $('#cuSelExtra').disabled = !extra || cu.busy;
+}
+
+/** Duplicates: ids "Select all" may pick ('all' = everything but best copies and kept photos;
+ *  'extra' = only true copies, not similar shots, which are different moments). */
+function cuSelectable(which) {
+  const out = [];
+  cu.view.duplicates.forEach(g => g.members.forEach(m => {
+    if (m.best || m.cleanup_keep) return;
+    if (which === 'extra' && m.relation === 'similar') return;
+    out.push(m.id);
+  }));
+  return out;
+}
+
+function cuToggle(id, on) {
+  const s = cu.sel[cu.tab];
+  if (on) s.add(id); else s.delete(id);
+  document.querySelectorAll('#cuBody .cu-card[data-id="' + id + '"]').forEach(card => {
+    card.classList.toggle('selected', on);
+    const cb = card.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = on;
+  });
+  cuDisarm();
+  cuUpdateSelBar();
+}
+
+function cuSelectIds(ids) {
+  const s = cu.sel[cu.tab];
+  s.clear();
+  ids.forEach(id => s.add(id));
+  cuDisarm();
+  cuRender();
+}
+
+function cuSwitchTab(kind, focus) {
+  cu.tab = kind;
+  $$('#cleanupDlg [data-cu-tab]').forEach(b => {
+    const on = b.dataset.cuTab === kind;
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.tabIndex = on ? 0 : -1;
+    if (on && focus) b.focus();
+  });
+  $('#cuCtlBlurry').hidden = kind !== 'blurry';
+  $('#cuCtlExposure').hidden = kind !== 'exposure';
+  $('#cuCtlDuplicates').hidden = kind !== 'duplicates';
+  $('#cuSelExtra').hidden = kind !== 'duplicates';
+  cuDisarm();
+  cuRender();
+  $('#cuBody').scrollTop = 0;
+}
+
+// Two clicks instead of a confirm() dialog: the first arms the button and says what will happen.
+function cuDisarm() {
+  const b = $('#cuDeleteBtn');
+  if (cu.armTimer) { clearTimeout(cu.armTimer); cu.armTimer = null; }
+  b.classList.remove('armed');
+  b.textContent = 'Move selected to Recycle Bin';
+  $('#cuDeleteCancel').hidden = true;
+}
+function cuArm() {
+  const ids = [...cu.sel[cu.tab]];
+  const b = $('#cuDeleteBtn');
+  let text = `Click again to move ${cuPlural(ids.length, 'photo')} to the Recycle Bin`;
+  if (cu.tab === 'duplicates') {
+    const sel = cu.sel.duplicates;
+    const whole = cu.view.duplicates.filter(g => g.members.every(m => sel.has(m.id))).length;
+    if (whole) text += ` (this removes every copy of ${cuPlural(whole, 'photo')})`;
+  }
+  b.textContent = text;
+  b.classList.add('armed');
+  $('#cuDeleteCancel').hidden = false;
+  cu.armTimer = setTimeout(cuDisarm, 10000);
+}
+
+function cuShowResult(deleted, failed) {
+  const box = $('#cuResult');
+  box.innerHTML = '';
+  box.classList.toggle('has-fail', failed.length > 0);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'close';
+  close.textContent = 'Dismiss';
+  close.addEventListener('click', () => { box.hidden = true; });
+  const line = document.createElement('div');
+  line.textContent = `Moved ${cuPlural(deleted, 'photo')} to the Recycle Bin. You can restore ${deleted === 1 ? 'it' : 'them'} from there.`
+    + (failed.length ? ` ${failed.length} could not be moved:` : '');
+  box.append(close, line);
+  if (failed.length) {
+    const ul = document.createElement('ul');
+    failed.forEach(f => {
+      const li = document.createElement('li');
+      li.textContent = (cuBase(f.path) || f.id) + ': ' + f.error;
+      li.title = f.path || '';
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+  box.hidden = false;
+}
+
+async function cuDelete() {
+  const ids = [...cu.sel[cu.tab]];
+  if (!ids.length) return;
+  cuDisarm();
+  cu.busy = true;
+  cuUpdateSelBar();
+  const gone = new Set();
+  const failed = [];
+  let stats = null;
+  try {
+    for (let i = 0; i < ids.length; i += 100) {
+      $('#cuSelCount').textContent = `Moving ${Math.min(i + 100, ids.length)} of ${ids.length}…`;
+      const r = await api('delete_files', { body: { ids: ids.slice(i, i + 100) } });
+      (r.deleted_ids || []).forEach(id => gone.add(id));
+      (r.failed || []).forEach(f => failed.push(f));
+      stats = r.stats || stats;
+    }
+  } catch (e) { toast(e.message, 'err', 6000); }
+  cu.busy = false;
+  if (stats) setStats(stats);
+  // Forget the recycled photos everywhere: these lists, every tab's selection, the main grid.
+  CU_TABS.forEach(k => gone.forEach(id => cu.sel[k].delete(id)));
+  cu.lists.blurry = cu.lists.blurry.filter(r => !gone.has(r.id));
+  cu.lists.exposure = cu.lists.exposure.filter(r => !gone.has(r.id));
+  lastResults = lastResults.filter(r => !gone.has(r.id));
+  gone.forEach(id => selectedIds.delete(id));
+  renderResults(lastResults);
+  cuShowResult(gone.size, failed);
+  toast(`Moved ${cuPlural(gone.size, 'photo')} to the Recycle Bin` + (failed.length ? ` (${failed.length} failed)` : ''), failed.length ? 'err' : 'ok');
+  try { await cuLoad('duplicates'); } catch (e) { toast(e.message, 'err'); }
+  cuFilter('blurry'); cuFilter('exposure');
+  cuRender();
+}
+
+async function cuKeep() {
+  const ids = [...cu.sel[cu.tab]];
+  if (!ids.length) return;
+  cu.busy = true;
+  cuUpdateSelBar();
+  try {
+    const r = await api('cleanup_keep', { body: { ids, keep: true } });
+    const kept = new Set(ids);
+    CU_TABS.forEach(k => kept.forEach(id => cu.sel[k].delete(id)));
+    cu.lists.blurry = cu.lists.blurry.filter(x => !kept.has(x.id));
+    cu.lists.exposure = cu.lists.exposure.filter(x => !kept.has(x.id));
+    if (r.status) cuSetStatus(r.status);
+    toast(`Keeping ${cuPlural(ids.length, 'photo')}: ${ids.length === 1 ? 'it' : 'they'} won't be suggested again.`);
+    await cuLoad('duplicates');
+  } catch (e) { toast(e.message, 'err'); }
+  cu.busy = false;
+  cuFilter('blurry'); cuFilter('exposure');
+  cuRender();
+}
+
+// The lightbox shows the clicked page's photos; its own Delete is hidden while it does, so
+// everything that deletes from here goes through the review screen's selection.
+function cuOpenLightbox(items, idx) {
+  if (!cu.lbSaved) cu.lbSaved = lastResults;
+  lastResults = items;
+  $('#lightbox').classList.add('from-cleanup');
+  openLightbox(idx);
+}
+$('#lightbox').addEventListener('close', () => {
+  if (!cu.lbSaved) return;
+  lastResults = cu.lbSaved;
+  cu.lbSaved = null;
+  $('#lightbox').classList.remove('from-cleanup');
+});
+window.addEventListener('keydown', e => {
+  if (cu.lbSaved && $('#lightbox').open && e.key === 'Delete') { e.preventDefault(); e.stopPropagation(); }
+}, true);
+
+$('#cleanupBtn').addEventListener('click', cuOpen);
+$('#cuClose').addEventListener('click', () => $('#cleanupDlg').close());
+$('#cleanupDlg').addEventListener('close', () => { cu.stop = true; cuDisarm(); });
+$('#cuAnalyzeBtn').addEventListener('click', cuAnalyze);
+$('#cuStopBtn').addEventListener('click', () => { cu.stop = true; $('#cuProgTxt').textContent = 'Stopping after this batch…'; });
+$$('#cleanupDlg [data-cu-tab]').forEach(b => {
+  b.addEventListener('click', () => cuSwitchTab(b.dataset.cuTab));
+  b.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const i = CU_TABS.indexOf(cu.tab) + (e.key === 'ArrowRight' ? 1 : -1);
+    cuSwitchTab(CU_TABS[(i + CU_TABS.length) % CU_TABS.length], true);
+  });
+});
+$('#cuBlurRange').addEventListener('input', () => { cu.page.blurry = 0; cuFilter('blurry'); cuDisarm(); cuRender(); });
+$('#cuBlurAi').addEventListener('change', () => { cu.page.blurry = 0; cuFilter('blurry'); cuDisarm(); cuRender(); });
+$('#cuDupMode').addEventListener('change', async () => {
+  cu.page.duplicates = 0;
+  $('#cuBody').innerHTML = '<div class="cu-empty">Looking for duplicates…</div>';
+  try { await cuLoad('duplicates'); } catch (e) { toast(e.message, 'err'); }
+  cuDisarm();
+  cuRender();
+});
+$('#cuSelAll').addEventListener('click', () => cuSelectIds(cu.tab === 'duplicates' ? cuSelectable('all') : cuIds(cu.tab)));
+$('#cuSelNone').addEventListener('click', () => cuSelectIds([]));
+$('#cuSelExtra').addEventListener('click', () => cuSelectIds(cuSelectable('extra')));
+$('#cuKeepBtn').addEventListener('click', cuKeep);
+$('#cuDeleteBtn').addEventListener('click', () => {
+  if (!cu.sel[cu.tab].size || cu.busy) return;
+  if ($('#cuDeleteBtn').classList.contains('armed')) cuDelete(); else cuArm();
+});
+$('#cuDeleteCancel').addEventListener('click', cuDisarm);
+$('#cuPrev').addEventListener('click', () => { cu.page[cu.tab]--; cuRender(); $('#cuBody').scrollTop = 0; });
+$('#cuNext').addEventListener('click', () => { cu.page[cu.tab]++; cuRender(); $('#cuBody').scrollTop = 0; });
+$('#cuUnkeepBtn').addEventListener('click', async () => {
+  const b = $('#cuUnkeepBtn');
+  if (!cu.unkeepArmed) {
+    cu.unkeepArmed = true;
+    b.textContent = 'Click again to show them again';
+    setTimeout(() => { cu.unkeepArmed = false; b.textContent = 'Show kept photos again'; }, 8000);
+    return;
+  }
+  cu.unkeepArmed = false;
+  b.textContent = 'Show kept photos again';
+  try {
+    const r = await api('cleanup_unkeep_all', { body: {} });
+    if (r.status) cuSetStatus(r.status);
+    toast(`${cuPlural(r.changed, 'photo')} will be suggested again`);
+    await cuLoadAll();
+  } catch (e) { toast(e.message, 'err'); }
+});
+// A link to index.php#cleanup (or #cleanup-duplicates etc.) opens the review screen.
+if (/^#cleanup\b/.test(location.hash)) {
+  const t = location.hash.split('-')[1];
+  if (CU_TABS.includes(t)) cuSwitchTab(t);
+  cuOpen();
+}
+// ---- end Clean up ----
 </script>
 </body>
 </html>
