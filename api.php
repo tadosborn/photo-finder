@@ -34,6 +34,65 @@ function pf_provider_fields(array $in, array $saved): array {
     return $out;
 }
 
+// ---- Find photos on this PC and consolidate them (lib/Consolidate.php) ----------------------
+// Search and move steps are short batches the page drives. Anything that writes is POST-only.
+if (str_starts_with($action, 'consolidate_')) {
+    require_once __DIR__ . '/lib/Consolidate.php';
+    try {
+        $isPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
+        $in = $isPost ? pf_input_json() : [];
+        $needPost = function () use ($isPost): void {
+            if (!$isPost) pf_json(['error' => 'POST required'], 405);
+        };
+        switch ($action) {
+            case 'consolidate_status':
+                pf_json(Consolidate::status());
+            case 'consolidate_results':
+                pf_json(Consolidate::results((string)($_GET['id'] ?? '')));
+            case 'consolidate_thumb': {
+                $file = Consolidate::thumb((int)($_GET['id'] ?? 0));
+                if ($file === null) { http_response_code(404); exit; }
+                header('Content-Type: image/jpeg');
+                header('Cache-Control: private, max-age=3600');
+                readfile($file);
+                exit;
+            }
+            case 'consolidate_run':
+                pf_json(Consolidate::runSummary((string)($_GET['run_id'] ?? '')));
+            case 'consolidate_search_start':
+                $needPost();
+                pf_json(Consolidate::searchStart(!empty($in['drives'])));
+            case 'consolidate_search_tick':
+                $needPost();
+                pf_json(Consolidate::searchTick((string)($in['id'] ?? '')));
+            case 'consolidate_search_cancel':
+                $needPost();
+                pf_json(Consolidate::searchCancel((string)($in['id'] ?? '')));
+            case 'consolidate_start':
+                $needPost();
+                pf_json(Consolidate::moveStart((string)($in['search_id'] ?? ''), (string)($in['target'] ?? ''),
+                    is_array($in['ids'] ?? null) ? $in['ids'] : []));
+            case 'consolidate_tick':
+                $needPost();
+                pf_json(Consolidate::moveTick((string)($in['run_id'] ?? '')));
+            case 'consolidate_cancel':
+                $needPost();
+                pf_json(Consolidate::moveCancel((string)($in['run_id'] ?? '')));
+            case 'consolidate_finish':
+                $needPost();
+                pf_json(Consolidate::moveFinish((string)($in['run_id'] ?? '')));
+            case 'consolidate_undo_tick':
+                $needPost();
+                pf_json(Consolidate::undoTick((string)($in['run_id'] ?? '')));
+            default:
+                pf_json(['error' => 'unknown action', 'action' => $action], 400);
+        }
+    } catch (Throwable $e) {
+        pf_json(['error' => $e->getMessage()], 500);
+    }
+}
+// ---- end of Find photos / consolidate -------------------------------------------------------
+
 try {
     switch ($action) {
         case 'settings_get': {
