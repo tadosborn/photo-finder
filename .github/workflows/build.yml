@@ -57,7 +57,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $signed = @(Get-ChildItem dist/signed -Filter 'PhotoFinderSetup-*.exe' -ErrorAction SilentlyContinue)
-          $files = if ($signed) { $signed.FullName } else { (Get-ChildItem dist -Filter 'PhotoFinderSetup-*.exe').FullName }
-          foreach ($f in $files) { (Get-FileHash $f -Algorithm SHA256).Hash.ToLower() + '  ' + (Split-Path -Leaf $f) | Set-Content "$f.sha256" -NoNewline }
-          $notes = if ($signed) { 'Signed by SignPath Foundation.' } else { 'Unsigned build (code signing pending).' }
-          gh release create $env:GITHUB_REF_NAME --draft --title "Photo Finder $($env:GITHUB_REF_NAME.TrimStart('v'))" --notes $notes @files @($files | ForEach-Object { "$_.sha256" })
+          $files = @(if ($signed) { $signed.FullName } else { (Get-ChildItem dist -Filter 'PhotoFinderSetup-*.exe').FullName })
+          if (-not $files) { throw 'no installer to release' }
+          $assets = @()
+          foreach ($f in $files) {
+            (Get-FileHash $f -Algorithm SHA256).Hash.ToLower() + '  ' + (Split-Path -Leaf $f) | Set-Content "$f.sha256" -NoNewline
+            $assets += $f, "$f.sha256"
+          }
+          $notes = if ($signed) { 'Signed by SignPath Foundation.' } else { 'Unsigned build: code signing through SignPath Foundation is pending.' }
+          gh release create $env:GITHUB_REF_NAME --draft --title "Photo Finder $($env:GITHUB_REF_NAME.TrimStart('v'))" --notes $notes $assets
