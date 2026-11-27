@@ -69,10 +69,11 @@ final class Deblur {
     public const UPSCALE = ['name' => 'Real-ESRGAN enlarging model', 'kind' => 'upscale', 'file' => 'real_esrgan_general_x4v3-onnx-float.zip', 'size' => 4541448,
         'url' => 'https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_general_x4v3/releases/v0.67.0/real_esrgan_general_x4v3-onnx-float.zip',
         'sha256' => '4f3619c89eb0727ff9170b977578d160fa4d696680a0cac4c7f870b52973033b'];
-    public const KINDS = ['local', 'cloud', 'chain', 'up_local', 'up_cloud'];
+    /** 'fixed' is a batch's result (runBatch): made only by a batch, never started on its own. */
+    public const KINDS = ['local', 'cloud', 'chain', 'up_local', 'up_cloud', 'fixed'];
     private const CLOUD_KINDS = ['cloud', 'chain', 'up_cloud'];
     public const SUFFIX = ['local' => 'deblurred', 'cloud' => 'restored', 'chain' => 'deblurred, restored',
-                           'up_local' => 'enlarged', 'up_cloud' => 'AI enlarged'];
+                           'up_local' => 'enlarged', 'up_cloud' => 'AI enlarged', 'fixed' => 'fixed'];
     /** Enlarge takes photos up to ENLARGE_MAX_SIDE px on the long side: 4x up to ENLARGE_X4_SIDE,
      *  2x above it, so a result is at most 4800 px (and the job's memory stays near 300 MB). */
     public const ENLARGE_MAX_SIDE = 2400;
@@ -299,7 +300,7 @@ final class Deblur {
 
     /** Start a job of $kind (see KINDS) for photo $row. */
     public static function start(array $row, string $kind): void {
-        if (!in_array($kind, self::KINDS, true)) throw new InvalidArgumentException('Unknown kind.');
+        if (!in_array($kind, self::KINDS, true) || $kind === 'fixed') throw new InvalidArgumentException('Unknown kind.');
         $id = (string)$row['id'];
         $st = self::jobStatus($id, $kind);
         if (($st['state'] ?? '') === 'running') throw new RuntimeException('Already working on this photo.');
@@ -378,6 +379,16 @@ final class Deblur {
         }
     }
 
+    /** The picture a finished job shows and saves: its own file, or (a batch keeps no second
+     *  copy) the copy it saved next to the original. '' if neither is there. */
+    public static function resultFile(string $id, string $kind, ?array $j = null): string {
+        $f = self::jobFile($id, $kind, 'jpg');
+        if (is_file($f)) return $f;
+        $j ??= json_decode((string)@file_get_contents(self::jobFile($id, $kind, 'json')), true) ?: [];
+        $sp = (string)($j['saved_path'] ?? '');
+        return $sp !== '' && is_file($sp) ? $sp : '';
+    }
+
     public static function jobStatus(string $id, string $kind): array {
         $j = json_decode((string)@file_get_contents(self::jobFile($id, $kind, 'json')), true);
         if (!is_array($j)) return ['state' => 'none'];
@@ -388,7 +399,7 @@ final class Deblur {
             $j['state'] = 'error';
             $j['error'] = 'It stopped without finishing. Try again.';
         }
-        if (($j['state'] ?? '') === 'done' && !is_file(self::jobFile($id, $kind, 'jpg'))) $j = ['state' => 'none'];
+        if (($j['state'] ?? '') === 'done' && self::resultFile($id, $kind, $j) === '') $j = ['state' => 'none'];
         // 'autosave': the job will save its result itself (the page waits for 'saved'). A job that
         // died between its result and its copy left the marker behind: say so after two minutes.
         unset($j['autosave']);
@@ -576,8 +587,8 @@ final class Deblur {
     /** "<name> (<SUFFIX>).jpg" beside the original, never an existing file. The same suffix is not
      *  repeated ("X (enlarged).jpg" enlarged again is "X (enlarged 2).jpg"); a different one is
      *  added ("X (deblurred).jpg" enlarged is "X (deblurred) (enlarged).jpg"). */
-    public static function copyPath(string $path, string $kind): string {
-        $suffix = self::SUFFIX[$kind];
+    public static function copyPath(string $path, string $kind, ?string $suffix = null): string {
+        $suffix ??= self::SUFFIX[$kind];
         $dir = pf_norm_path(dirname($path));
         $stem = (string)preg_replace('/ \(' . preg_quote($suffix, '/') . '(?: \d+)?\)$/i', '', pathinfo($path, PATHINFO_FILENAME));
         for ($n = 1; $n < 1000; $n++) {
@@ -596,9 +607,9 @@ final class Deblur {
             throw new RuntimeException('Replacing works for JPEG photos only. Save as a copy instead.');
         }
         $id = (string)$row['id'];
-        $res = self::jobFile($id, $kind, 'jpg');
         $job = self::jobStatus($id, $kind);
-        if (($job['state'] ?? '') !== 'done' || !is_file($res)) throw new RuntimeException('There is no result to save yet.');
+        $res = self::resultFile($id, $kind, $job);
+        if (($job['state'] ?? '') !== 'done' || $res === '') throw new RuntimeException('There is no result to save yet.');
         if ($mode === 'copy' && !empty($job['saved'])) throw new RuntimeException('This result is already saved as "' . $job['saved'] . '".');
         $path = (string)$row['path'];
         if (!is_file($path)) throw new RuntimeException('The photo is no longer on disk.');
@@ -639,7 +650,7 @@ final class Deblur {
             Db::upsertPending($newId, $path, (int)filesize($path), (int)filemtime($path));
             @unlink(PF_THUMBS . '/' . $newId . '.jpg');
         } else {
-            $dest = self::copyPath($path, $kind);
+            $dest = self::copyPath($path, $kind, isset($job['suffix']) ? (string)$job['suffix'] : null);
             if (!@rename($tmp, $dest)) {
                 if (!@copy($tmp, $dest)) { @unlink($tmp); throw new RuntimeException('Could not write ' . $dest); }
                 @unlink($tmp);
@@ -682,6 +693,260 @@ final class Deblur {
         return ['ok' => true, 'mode' => $mode, 'name' => basename($dest), 'image' => $r, 'removed_copy' => $removed, 'stats' => Db::stats()];
     }
 
+    // ---- Batch: the same fixes for many photos, one after another, on this PC ----
+    //
+    // Clean up starts it for the photos selected there (batchStart). deblur-batch.php works
+    // through them one at a time at idle priority (runBatch): for each photo the chosen steps run
+    // in turn on the previous step's output (remove blur, correct colour, enlarge a small photo),
+    // and the result is saved as ONE copy next to the original: "(fixed)", or the single step's
+    // own suffix. It is also kept as the photo's 'fixed' job, so the Fix blur / Enlarge window
+    // shows it beside the original and can put it in the original's place. State goes to
+    // data/deblur/batch.json; a Stop request is the file batch.cancel.
+
+    public const BATCH_STEPS = ['deblur', 'color', 'enlarge'];
+    private const BATCH_STEP_SUFFIX = ['deblur' => 'deblurred', 'color' => 'enhanced', 'enlarge' => 'enlarged'];
+    private static function batchFile(): string { return self::dir() . '/batch.json'; }
+    private static function batchCancelFile(): string { return self::dir() . '/batch.cancel'; }
+    private static function batchWorkDir(): string { return self::dir() . '/batch-work'; }
+
+    public static function batchStatus(): ?array {
+        $b = json_decode((string)@file_get_contents(self::batchFile()), true);
+        if (!is_array($b)) return null;
+        // The runner writes at least every few seconds while it works (a step on this PC reports
+        // every tile); one that has been silent for five minutes is gone.
+        if (($b['state'] ?? '') === 'running' && ($b['updated'] ?? 0) < time() - 300) {
+            $b['state'] = 'stopped';
+            $b['note'] = 'The batch stopped unexpectedly (the PC restarted, or it was ended).';
+        }
+        $b['cancelling'] = ($b['state'] ?? '') === 'running' && is_file(self::batchCancelFile());
+        return $b;
+    }
+
+    /** Queue $ids for the $steps (BATCH_STEPS) and start the runner. Photos outside the photo
+     *  folders are left out; so are photos already fixed by an earlier batch with the same steps. */
+    public static function batchStart(array $ids, array $steps): array {
+        $steps = array_values(array_intersect(self::BATCH_STEPS, $steps));
+        if (!$steps) throw new RuntimeException('Choose at least one fix.');
+        $b = self::batchStatus();
+        if ($b && ($b['state'] ?? '') === 'running') throw new RuntimeException('A batch is already running. Wait for it to finish, or stop it in Queue.');
+        if (in_array('deblur', $steps, true) && !self::isReady()) {
+            throw new RuntimeException('Removing blur on this PC is not set up yet: open "Fix blur" on any one photo first (a one-time download).');
+        }
+        if (in_array('enlarge', $steps, true) && !self::isUpscaleReady()) {
+            throw new RuntimeException('Enlarging on this PC is not set up yet: open "Enlarge" on any one small photo first (a one-time download).');
+        }
+        $roots = pf_load_settings()['photo_dirs'] ?? [];
+        $items = [];
+        $already = 0;
+        foreach (array_unique(array_map('strval', $ids)) as $id) {
+            $id = (string)preg_replace('/[^a-f0-9]/', '', $id);
+            $row = $id !== '' ? Db::getById($id) : null;
+            if (!$row || !pf_path_inside_roots((string)$row['path'], $roots)) continue;
+            $f = self::jobStatus($id, 'fixed');
+            if (($f['state'] ?? '') === 'done' && !empty($f['saved']) && ($f['steps'] ?? []) === $steps) { $already++; continue; }
+            $items[] = ['id' => $id, 'name' => basename((string)$row['path']), 'path' => (string)$row['path'], 'state' => 'queued'];
+        }
+        if (!$items) {
+            throw new RuntimeException($already ? 'Every selected photo was already fixed this way by an earlier batch.' : 'None of the selected photos can be fixed.');
+        }
+        @unlink(self::batchCancelFile());
+        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'state' => 'running', 'items' => $items, 'already' => $already,
+              'current' => -1, 'started' => time(), 'updated' => time()];
+        self::writeJson(self::batchFile(), $b);
+        try {
+            self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-batch.php'), self::win(PF_DATA)]);
+        } catch (Throwable $e) {
+            $b['state'] = 'stopped';
+            $b['note'] = 'The batch could not start: ' . $e->getMessage();
+            self::writeJson(self::batchFile(), $b);
+            throw $e;
+        }
+        return self::batchStatus() ?? $b;
+    }
+
+    /** Ask the runner to stop: the step in progress is ended, the rest is not started. */
+    public static function batchCancel(): void {
+        $b = self::batchStatus();
+        if ($b && ($b['state'] ?? '') === 'running') touch(self::batchCancelFile());
+    }
+
+    /** Runs in deblur-batch.php. */
+    public static function runBatch(): void {
+        $b = json_decode((string)@file_get_contents(self::batchFile()), true);
+        if (!is_array($b) || ($b['state'] ?? '') !== 'running') return;
+        $work = self::batchWorkDir();
+        if (!is_dir($work)) @mkdir($work, 0777, true);
+        $last = 0;
+        $save = function (bool $now = true) use (&$b, &$last): void {
+            if (!$now && time() === $last) return;
+            $last = time();
+            $b['updated'] = time();
+            self::writeJson(self::batchFile(), $b);
+        };
+        $cancelled = false;
+        $n = count($b['items']);
+        for ($i = 0; $i < $n; $i++) {
+            if (($b['items'][$i]['state'] ?? '') !== 'queued') continue;
+            if (is_file(self::batchCancelFile())) { $cancelled = true; break; }
+            $b['current'] = $i;
+            $b['items'][$i] = array_merge($b['items'][$i], ['state' => 'running', 'step' => '', 'done' => 0, 'total' => 0, 'started' => time()]);
+            $save();
+            $tick = function (string $step, int $done = 0, int $total = 0, int $eta = 0) use (&$b, $i, $save): bool {
+                $b['items'][$i] = array_merge($b['items'][$i], ['step' => $step, 'done' => $done, 'total' => $total, 'eta' => $eta]);
+                $save(false);
+                return !is_file(self::batchCancelFile());
+            };
+            try {
+                $b['items'][$i] = array_merge($b['items'][$i], self::batchOne((string)$b['items'][$i]['id'], $b['steps'], $tick));
+            } catch (DeblurCancelled $e) {
+                $b['items'][$i]['state'] = 'cancelled';
+                $cancelled = true;
+            } catch (Throwable $e) {
+                $b['items'][$i]['state'] = 'error';
+                $b['items'][$i]['error'] = $e->getMessage();
+            }
+            $b['items'][$i]['seconds'] = time() - (int)$b['items'][$i]['started'];
+            foreach (glob($work . '/' . $b['items'][$i]['id'] . '-*') ?: [] as $f) @unlink($f);
+            $save();
+            if ($cancelled) break;
+        }
+        if ($cancelled) {
+            foreach ($b['items'] as &$it) if (($it['state'] ?? '') === 'queued') $it['state'] = 'cancelled';
+            unset($it);
+        }
+        $b['state'] = $cancelled ? 'stopped' : 'done';
+        $b['current'] = -1;
+        $b['finished'] = time();
+        $save();
+        @unlink(self::batchCancelFile());
+    }
+
+    /** One photo through the batch's steps; its result saved as one copy. */
+    private static function batchOne(string $id, array $steps, callable $tick): array {
+        $row = Db::getById($id);
+        if (!$row || !is_file((string)$row['path'])) throw new RuntimeException('The photo is no longer on disk.');
+        $work = self::batchWorkDir();
+        $prog = "$work/$id-progress.json";
+        $cur = (string)$row['path'];
+        $done = [];
+        $notes = [];
+        $t0 = time();
+        if (in_array('deblur', $steps, true)) {
+            $out = "$work/$id-1.jpg";
+            self::runPython([self::python(), '-I', PF_ROOT . '/deblur.py', self::model(), $cur, $out, $prog], $prog, 'removing blur', $tick);
+            $cur = $out;
+            $done['deblur'] = 'blur removed';
+        }
+        if (in_array('color', $steps, true)) {
+            if (!$tick('correcting colour')) throw new DeblurCancelled();
+            $out = "$work/$id-2.jpg";
+            if (self::autoColour($cur, $out)) { $cur = $out; $done['color'] = 'colour corrected'; }
+            else $notes[] = 'colour already fine';
+        }
+        if (in_array('enlarge', $steps, true)) {
+            $e = self::enlargeInfo(['path' => $cur]);
+            if ($e['ok']) {
+                $out = "$work/$id-3.jpg";
+                self::runPython([self::python(), '-I', PF_ROOT . '/enlarge.py', self::upscaleModel(), $cur, $out, $prog, (string)$e['scale']],
+                    $prog, 'enlarging', $tick);
+                $cur = $out;
+                $done['enlarge'] = 'enlarged ' . $e['scale'] . '×';
+            } else {
+                $notes[] = 'already large, not enlarged';
+            }
+        }
+        if (!$done) return ['state' => 'skipped', 'note' => ucfirst(implode('; ', $notes) ?: 'nothing to change') . '.'];
+        if (!$tick('saving')) throw new DeblurCancelled();
+        $jpg = self::jobFile($id, 'fixed', 'jpg');
+        if (!is_dir(self::jobsDir())) @mkdir(self::jobsDir(), 0777, true);
+        if (!copy($cur, $jpg)) throw new RuntimeException('Could not keep the result.');
+        [$w, $h] = getimagesize($jpg) ?: [0, 0];
+        self::writeJson(self::jobFile($id, 'fixed', 'json'), [
+            'state' => 'done', 'started' => $t0, 'seconds' => time() - $t0, 'width' => (int)$w, 'height' => (int)$h, 'updated' => time(),
+            'steps' => $steps, 'label' => 'Batch: ' . implode(', ', $done),
+            'suffix' => count($done) > 1 ? 'fixed' : self::BATCH_STEP_SUFFIX[array_key_first($done)],
+        ]);
+        @unlink(self::jobFile($id, 'fixed', 'auto'));
+        try {
+            $res = self::save($row, 'fixed', 'copy');
+        } finally {
+            @unlink($jpg);   // the saved copy stands for the result from here on (resultFile)
+        }
+        return ['state' => 'done', 'saved' => $res['name'], 'saved_id' => (string)($res['image']['id'] ?? ''),
+                'note' => ucfirst(implode(', ', $done)) . ($notes ? '; ' . implode('; ', $notes) : '') . '.'];
+    }
+
+    /** deblur.py / enlarge.py for a batch: waits, passing its progress to $tick, and ends it
+     *  when $tick says the batch was stopped. */
+    private static function runPython(array $cmd, string $progress, string $step, callable $tick): void {
+        @unlink($progress);
+        $err = self::batchWorkDir() . '/python-stderr.txt';
+        $proc = proc_open(array_map([self::class, 'win'], $cmd), [0 => ['pipe', 'r'], 1 => ['file', $err . '.out', 'w'], 2 => ['file', $err, 'w']],
+            $pipes, null, null, ['bypass_shell' => true]);
+        if (!is_resource($proc)) throw new RuntimeException('Could not start the on-PC AI.');
+        fclose($pipes[0]);
+        while (true) {
+            $running = proc_get_status($proc)['running'];
+            $p = json_decode((string)@file_get_contents($progress), true) ?: [];
+            if (!$tick($step, (int)($p['done'] ?? 0), (int)($p['total'] ?? 0), (int)($p['eta'] ?? 0))) {
+                proc_terminate($proc);
+                proc_close($proc);
+                throw new DeblurCancelled();
+            }
+            if (!$running) break;
+            usleep(500000);
+        }
+        proc_close($proc);
+        $p = json_decode((string)@file_get_contents($progress), true) ?: [];
+        if (($p['state'] ?? '') !== 'done') {
+            $last = trim((string)strrchr("\n" . trim((string)@file_get_contents($err)), "\n"));
+            throw new RuntimeException(ucfirst($step) . ' failed: ' . ((string)($p['error'] ?? '') ?: ($last !== '' ? mb_substr($last, 0, 200) : 'it stopped without finishing.')));
+        }
+    }
+
+    /** Enhance's Auto settings (colour, brightness, contrast, gentle sharpening), as its Auto
+     *  button gives them, applied to $in; false when Auto finds nothing to change. Pixels stay in
+     *  the stored orientation (the final copy takes the original's metadata and Orientation). */
+    private static function autoColour(string $in, string $out): bool {
+        [$im] = Enhance::load($in);
+        $sample = Enhance::fit(Enhance::fit($im, Enhance::PREVIEW_MAX), 400);
+        $p = Enhance::sanitize(Enhance::auto($sample));
+        $sample = null;
+        if (Enhance::isNeutral($p)) return false;
+        [$blur, $bx, $by] = $p['sharpen'] > 0 ? Enhance::blurFor($im) : [null, 0, 0];
+        Enhance::apply($im, $p, $blur, $bx, $by);
+        $blur = null;
+        if (!imagejpeg($im, $out, 95)) throw new RuntimeException('Could not write the colour-corrected picture.');
+        return true;
+    }
+
+    // ---- Queue: everything Fix blur / Enlarge is doing, for the Queue page ----
+
+    /** Single-photo jobs that are running, saving, or finished in the last day; and the batch. */
+    public static function queue(): array {
+        $jobs = [];
+        foreach (glob(self::jobsDir() . '/*.json') ?: [] as $f) {
+            if (!preg_match('/^([a-f0-9]{40})-(local|cloud|chain|up_local|up_cloud)\.json$/', basename($f), $m)) continue;   // a batch's results are listed with the batch
+            [, $id, $kind] = $m;
+            $j = self::jobStatus($id, $kind);
+            if (($j['state'] ?? 'none') === 'none') continue;
+            $active = ($j['state'] ?? '') === 'running' || !empty($j['autosave']);
+            $updated = (int)($j['updated'] ?? @filemtime($f));
+            if (!$active && $updated < time() - 86400) continue;
+            $row = Db::getById($id);
+            $jobs[] = [
+                'id' => $id, 'kind' => $kind, 'active' => $active, 'updated' => $updated,
+                'name' => $row ? basename((string)$row['path']) : '(no longer in the index)', 'path' => $row ? (string)$row['path'] : '',
+                'state' => (string)($j['state'] ?? ''), 'done' => (int)($j['done'] ?? 0), 'total' => (int)($j['total'] ?? 0), 'eta' => (int)($j['eta'] ?? 0),
+                'saved' => (string)($j['saved'] ?? ''), 'error' => (string)($j['error'] ?? ($j['save_error'] ?? '')),
+            ];
+        }
+        usort($jobs, fn($a, $b) => [$b['active'], $b['updated']] <=> [$a['active'], $a['updated']]);
+        $batch = self::batchStatus();
+        $active = count(array_filter($jobs, fn($j) => $j['active'])) + ($batch && ($batch['state'] ?? '') === 'running' ? 1 : 0);
+        return ['jobs' => array_slice($jobs, 0, 100), 'batch' => $batch, 'active' => $active];
+    }
+
     // ---- Helpers ----
 
     private static function writeJson(string $file, array $data): void {
@@ -709,3 +974,6 @@ final class Deblur {
         if ($exit !== 0) throw new RuntimeException('Could not start: ' . trim((string)$err));
     }
 }
+
+/** A batch was stopped (Deblur::runBatch). */
+final class DeblurCancelled extends RuntimeException {}

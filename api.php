@@ -576,6 +576,27 @@ try {
             pf_json(['ok' => true, 'image' => Rotate::rotate($row, ($in['dir'] ?? '') === 'ccw' ? 'ccw' : 'cw')]);
         }
 
+        // ---- Queue and batch (lib/Deblur.php): what Fix blur / Enlarge is doing; many photos at once ----
+        case 'queue_status': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            $q = Deblur::queue();
+            $w = Db::workerStatus();
+            $q['indexing'] = ['pending' => Db::stats()['pending'], 'running' => $w['alive'] && $w['active'] === 1];
+            pf_json($q);
+        }
+        case 'batch_start': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            pf_json(['ok' => true, 'batch' => Deblur::batchStart(is_array($in['ids'] ?? null) ? $in['ids'] : [], is_array($in['steps'] ?? null) ? $in['steps'] : [])]);
+        }
+        case 'batch_cancel': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            Deblur::batchCancel();
+            pf_json(['ok' => true, 'batch' => Deblur::batchStatus()]);
+        }
+
         // ---- Fix blur and Enlarge (lib/Deblur.php): on this PC (NAFNet, Real-ESRGAN) or with Google's Gemini ----
         case 'deblur_setup_status':
             require_once __DIR__ . '/lib/Deblur.php';
@@ -606,8 +627,10 @@ try {
                 case 'deblur_status':
                     pf_json(Deblur::status($id));
                 case 'deblur_image': {
-                    $f = Deblur::jobFile($id, $kind, 'jpg');
-                    if ((Deblur::jobStatus($id, $kind)['state'] ?? '') !== 'done' || !is_file($f)) { http_response_code(404); exit; }
+                    // The job's own picture, or the copy it saved (next to the photo, so inside the folders too).
+                    $f = (Deblur::jobStatus($id, $kind)['state'] ?? '') === 'done' ? Deblur::resultFile($id, $kind) : '';
+                    if ($f === '' || !(str_starts_with(pf_norm_path($f), pf_norm_path(Deblur::dir()))
+                            || pf_path_inside_roots($f, pf_load_settings()['photo_dirs'] ?? []))) { http_response_code(404); exit; }
                     header('Content-Type: image/jpeg');
                     header('Cache-Control: no-store');
                     readfile($f);

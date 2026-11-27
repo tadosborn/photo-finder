@@ -12,6 +12,7 @@ if (PHP_SAPI !== 'cli' || $argc !== 4 || !preg_match('/^[a-f0-9]{40}$/', $argv[1
     exit(2);
 }
 if (is_dir($argv[2])) putenv('PHOTOFINDER_DATA=' . $argv[2]);   // before util.php fixes PF_DATA
+@proc_nice(19);   // idle priority (Windows: IDLE_PRIORITY_CLASS), inherited by what it starts: the app stays responsive
 require_once __DIR__ . '/lib/Deblur.php';
 set_time_limit(0);
 Deblur::runJob($argv[1], $argv[3]);

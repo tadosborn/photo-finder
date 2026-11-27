@@ -404,6 +404,37 @@ $apiKeySet = $settings['api_key'] !== '';
   .db-which button { border: none; border-radius: 0; background: transparent; }
   .db-which button[aria-pressed="true"] { background: var(--primary-bg); color: #fff; }
   .db-row button[hidden] { display: none; }
+  /* Queue, and Clean up's batch window */
+  dialog.queue, dialog.batch { padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
+  dialog.queue { width: min(900px, 96vw); max-height: 90vh; }
+  dialog.queue[open] { display: flex; flex-direction: column; }
+  dialog.queue::backdrop, dialog.batch::backdrop { background: rgba(0,0,0,0.6); }
+  .q-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .q-head h2 { margin: 0; font-size: 16px; }
+  .q-sub { flex: 1; color: var(--mute); font-size: 13px; }
+  .q-body { overflow-y: auto; padding: 4px 16px 16px; }
+  .q-sec h3 { font-size: 14px; margin: 14px 0 6px; }
+  .q-sec[hidden] { display: none; }
+  .q-line { font-size: 13px; margin: 4px 0; }
+  .q-mute { color: var(--mute); }
+  .q-sec progress { width: 100%; height: 8px; }
+  .q-sec progress[hidden] { display: none; }
+  .q-actions { margin: 6px 0 8px; }
+  .q-actions button[hidden] { display: none; }
+  .q-list { display: flex; flex-direction: column; gap: 3px; }
+  .q-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 10px; align-items: center; padding: 5px 8px; border-radius: 6px; background: var(--panel2); font-size: 13px; }
+  .q-row .q-name, .q-row .q-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-row .q-what { color: var(--mute); }
+  .q-row.err .q-what { color: var(--err-text); }
+  .q-row button { font-size: 12px; padding: 3px 10px; }
+  .q-badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--primary-bg); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+  .q-badge[hidden] { display: none; }
+  dialog.batch { width: min(560px, 94vw); padding: 16px 18px; }
+  dialog.batch h2 { margin: 0 0 8px; font-size: 16px; }
+  dialog.batch p { font-size: 13px; margin: 8px 0; }
+  .b-opt { display: flex; gap: 8px; align-items: baseline; margin: 8px 0; font-size: 14px; }
+  .b-status { min-height: 18px; font-size: 13px; color: var(--err-text); }
+  .b-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
   .db-hint { font-size: 12px; color: var(--mute); }
   .cu-name { color: var(--text); word-break: break-all; }
   .cu-path { word-break: break-all; }
@@ -510,6 +541,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <button id="consolidateBtn" type="button" title="Search this PC for photos that are not in your library yet, and gather them into it">Find photos on this PC</button>
   <button id="stopBtn" style="display:none">Stop</button>
   <button id="cleanupBtn" title="Find blurry, badly exposed and duplicate photos and move them to the Recycle Bin">Clean up</button>
+  <button id="queueBtn" type="button" title="What Fix blur, Enlarge and batches are doing">Queue<span class="q-badge" id="queueBadge" hidden></span></button>
   <button id="logBtn" title="Show live worker log">Log</button>
   <button id="settingsBtn">Settings</button>
 </header>
@@ -867,6 +899,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <button type="button" id="cuSelExtra" hidden>Select all extra copies</button>
     <span class="cu-selcount" id="cuSelCount" role="status">0 selected</span>
     <span class="spacer"></span>
+    <button type="button" id="cuFixSelBtn" title="Fix the selected photos one after another on this PC; each gets a copy next to it">Fix selected…</button>
     <button type="button" id="cuKeepBtn" title="Hide the selected photos from Clean up for good. Nothing is deleted.">Keep (don't show again)</button>
     <button type="button" id="cuDeleteBtn" class="danger">Move selected to Recycle Bin</button>
     <button type="button" id="cuDeleteCancel" hidden>Cancel</button>
@@ -932,6 +965,11 @@ $apiKeySet = $settings['api_key'] !== '';
       <figcaption><span class="db-cap">Enlarged by cloud AI (redrawn)</span><button type="button" class="db-pick" data-kind="up_cloud" aria-pressed="false">Use this</button></figcaption>
       <div class="db-pane-note"></div>
     </figure>
+    <figure class="db-pane" data-kind="fixed" hidden>
+      <img alt="Fixed in a batch" hidden>
+      <figcaption><span class="db-cap">Batch result</span><button type="button" class="db-pick" data-kind="fixed" aria-pressed="false">Use this</button></figcaption>
+      <div class="db-pane-note"></div>
+    </figure>
   </div>
   <div class="db-compare" id="dbCompare" hidden>
     <img id="dbBefore" alt="Original photo">
@@ -957,6 +995,46 @@ $apiKeySet = $settings['api_key'] !== '';
   </div>
 </dialog>
 <!-- ---- end Fix blur and Enlarge ---- -->
+
+<!-- ---- Queue (lib/Deblur.php queue()): the batch, Fix blur / Enlarge jobs, describing ---- -->
+<dialog id="queueDlg" class="queue" aria-labelledby="qTitle">
+  <div class="q-head">
+    <h2 id="qTitle">Queue</h2>
+    <span class="q-sub" id="qSub" role="status"></span>
+    <button type="button" class="db-close" id="qClose" aria-label="Close Queue" title="Close (Esc). The work carries on.">×</button>
+  </div>
+  <div class="q-body">
+    <section class="q-sec" id="qBatch" hidden>
+      <h3>Batch</h3>
+      <div class="q-line" id="qBatchLine"></div>
+      <progress id="qBatchProg" max="100" value="0" aria-label="Batch progress"></progress>
+      <div class="q-line q-mute" id="qBatchCounts"></div>
+      <div class="q-actions"><button type="button" id="qStopBtn">Stop the batch</button></div>
+      <div class="q-list" id="qBatchList"></div>
+    </section>
+    <section class="q-sec">
+      <h3>Single photos (Fix blur, Enlarge)</h3>
+      <div class="q-list" id="qJobs"></div>
+    </section>
+    <section class="q-sec">
+      <h3>Describing photos</h3>
+      <div class="q-line" id="qIndex"></div>
+    </section>
+  </div>
+</dialog>
+
+<!-- ---- Clean up: fix the selected photos in a batch (Deblur::batchStart) ---- -->
+<dialog id="batchDlg" class="batch" aria-labelledby="bTitle">
+  <h2 id="bTitle">Fix selected photos</h2>
+  <p id="bCount"></p>
+  <label class="b-opt"><input type="checkbox" id="bDeblur"> <span>Remove blur <span class="q-mute">(best on camera shake; one to several minutes per photo)</span></span></label>
+  <label class="b-opt"><input type="checkbox" id="bColor"> <span>Correct colour and brightness <span class="q-mute">(Enhance's Auto; seconds per photo)</span></span></label>
+  <label class="b-opt"><input type="checkbox" id="bEnlarge"> <span>Enlarge small photos <span class="q-mute">(up to 2,400 px, 4× or 2×; seconds per photo)</span></span></label>
+  <p class="q-mute" id="bEstimate"></p>
+  <p class="q-mute">Everything runs on this PC (free; nothing is sent anywhere), one photo at a time at low priority, so you can keep using Photo Finder or close it. Each photo gets one new copy next to it ("(fixed)" when more than one fix is ticked); the originals are not changed. Queue shows the progress, and each result next to its original.</p>
+  <div class="b-status" id="bStatus" role="status"></div>
+  <div class="b-row"><button type="button" id="bCancel">Cancel</button><button type="button" class="primary" id="bStart">Start</button></div>
+</dialog>
 <!-- ==== Enhance view (opened from the lightbox; lib/Enhance.php saves the full-size photo) ==== -->
 <dialog id="enhanceDlg" class="enhance" aria-labelledby="enhTitle">
   <div class="enh-wrap">
@@ -3466,6 +3544,8 @@ function cuUpdateSelBar() {
   const n = cu.sel[cu.tab].size;
   $('#cuSelCount').textContent = n.toLocaleString() + ' selected';
   $('#cuKeepBtn').disabled = !n || cu.busy;
+  $('#cuFixSelBtn').hidden = cu.tab === 'duplicates';
+  $('#cuFixSelBtn').disabled = !n || cu.busy;
   $('#cuDeleteBtn').disabled = !n || cu.busy;
   const all = cu.tab === 'duplicates' ? cuSelectable('all').length : cu.view[cu.tab].length;
   $('#cuSelAll').textContent = cu.tab === 'duplicates' ? `Select all but the best copies (${all.toLocaleString()})` : `Select all (${all.toLocaleString()})`;
@@ -3673,6 +3753,7 @@ const DB_KIND = {
   chain:    { op: 'deblur',  label: 'On this PC, then cloud AI',      who: 'the two-step result', cloud: true },
   up_local: { op: 'enlarge', label: 'Enlarged on this PC',            who: 'the enlargement from this PC' },
   up_cloud: { op: 'enlarge', label: 'Enlarged by cloud AI (redrawn)', who: 'the cloud AI enlargement', cloud: true },
+  fixed:    { op: '',        label: 'Batch result',                   who: 'the batch result' },   // shown in either window when there is one
 };
 const DB_OP = {
   deblur: { title: 'Fix blur', local: 'local', cloud: 'cloud', chain: 'chain', verb: 'Fixing',
@@ -3683,7 +3764,7 @@ const DB_OP = {
 const DB_ENLARGE_MAX = <?= (int)Deblur::ENLARGE_MAX_SIDE ?>;   // Deblur::enlargeInfo() decides; this only hides the viewer's button
 const db = { op: 'deblur', row: null, show: '', showing: '', timer: null, s: null, wantLocal: false, armed: '', pending: new Set(),
              shown: '', replaceArmed: false, finished: '', view: 'grid', zoom: 1 };
-const dbKinds = () => Object.keys(DB_KIND).filter(k => DB_KIND[k].op === db.op);
+const dbKinds = () => Object.keys(DB_KIND).filter(k => DB_KIND[k].op === db.op || (k === 'fixed' && db.s && db.s.fixed && db.s.fixed.state !== 'none'));
 const dbPane = k => document.querySelector('#dbGrid .db-pane[data-kind="' + k + '"]');
 
 function dbFmtSecs(s) {
@@ -3735,6 +3816,7 @@ function dbOpen(row, op = 'deblur') {
   dbSetView(db.view);
   dbStatus('');
   ['#dbLocalBtn', '#dbCloudBtn', '#dbChainBtn', '#dbSaveBtn', '#dbReplaceBtn'].forEach(b => { $(b).disabled = true; });
+  $('#dbSaveBtn').hidden = true;
   $('#deblurDlg').showModal();
   dbRefresh(true);
 }
@@ -3830,15 +3912,15 @@ function dbRenderPanes(s) {
   const shown = kinds.filter(k => s[k].state !== 'none');
   const n = 1 + shown.length;
   // Up to three side by side; four as two rows of two, so each stays big enough to judge.
-  $('#dbGrid').style.gridTemplateColumns = `repeat(${n === 4 ? 2 : n}, minmax(0, 1fr))`;
-  $('#dbGrid').style.gridTemplateRows = n === 4 ? 'repeat(2, minmax(0, 1fr))' : '';
+  $('#dbGrid').style.gridTemplateColumns = `repeat(${n <= 3 ? n : n === 4 ? 2 : 3}, minmax(0, 1fr))`;
+  $('#dbGrid').style.gridTemplateRows = n > 3 ? 'repeat(2, minmax(0, 1fr))' : '';
   for (const k of kinds) {
     const j = s[k], pane = dbPane(k);
     const img = pane.querySelector('img'), note = pane.querySelector('.db-pane-note'), pick = pane.querySelector('.db-pick');
     pane.hidden = j.state === 'none';
     if (j.state === 'done') {
       const src = dbResultUrl(k, String(j.updated || ''));
-      if (img.dataset.src !== src) { dbCaption(img, DB_KIND[k].label); img.src = src; img.dataset.src = src; }
+      if (img.dataset.src !== src) { dbCaption(img, j.label || DB_KIND[k].label); img.src = src; img.dataset.src = src; }
       img.hidden = false;
       note.textContent = j.saved ? '✓ Saved as “' + j.saved + '”' : j.save_error ? 'Not saved: ' + j.save_error : j.autosave ? 'Saving a copy…' : '';
     } else {
@@ -3882,7 +3964,8 @@ async function dbRefresh(auto = false) {
 
   // Start on this PC straight away when it is set up and nothing has been tried yet (or when a
   // setup the user started from here has just finished).
-  if (ready && localOk && L.state === 'none' && !running.length && (auto || db.wantLocal)) {
+  // Only when this photo has no results at all here (not when there is a batch result to compare).
+  if (ready && localOk && L.state === 'none' && !running.length && (db.wantLocal || (auto && kinds.every(k => s[k].state === 'none')))) {
     db.wantLocal = false;
     return dbStart(o.local);
   }
@@ -4104,6 +4187,217 @@ $('#dbClose').addEventListener('click', () => $('#deblurDlg').close());
 // Keys belong to this window while it is open (not to the photo view or Clean up behind it).
 $('#deblurDlg').addEventListener('keydown', e => e.stopPropagation());
 $('#deblurDlg').addEventListener('close', () => { clearTimeout(db.timer); });
+
+// ---- Queue (lib/Deblur.php queue()): the batch, every Fix blur / Enlarge job, and describing ----
+// The header button shows how many things are in progress (checked every 10 s; every 2 s while
+// the Queue is open). Everything listed runs on the server and carries on with the page closed.
+const QJ_KIND = { local: 'Fix blur on this PC', cloud: 'Fix blur with cloud AI', chain: 'Fix blur on this PC, then cloud AI',
+                  up_local: 'Enlarge on this PC', up_cloud: 'Enlarge with cloud AI' };
+const QB_STEP = { deblur: 'remove blur', color: 'correct colour', enlarge: 'enlarge small photos' };
+const qs = { timer: null, stopArmed: false, lastBatch: '' };
+
+function qRow(name, title, what, err, btnText, onClick) {
+  const row = document.createElement('div');
+  row.className = 'q-row' + (err ? ' err' : '');
+  const a = document.createElement('span');
+  a.className = 'q-name';
+  a.textContent = name;
+  a.title = title || name;
+  const b = document.createElement('span');
+  b.className = 'q-what';
+  b.textContent = what;
+  b.title = what;
+  row.append(a, b);
+  if (btnText) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = btnText;
+    btn.setAttribute('aria-label', btnText + ': ' + name);
+    btn.addEventListener('click', onClick);
+    row.appendChild(btn);
+  } else {
+    row.appendChild(document.createElement('span'));
+  }
+  return row;
+}
+
+function qJobText(j) {
+  const cloud = j.kind === 'cloud' || j.kind === 'chain' || j.kind === 'up_cloud';
+  const what = QJ_KIND[j.kind] || j.kind;
+  if (j.state === 'running') {
+    return what + ': ' + (cloud ? 'Google Gemini is working…' : j.total ? `part ${j.done} of ${j.total}` + (j.done ? `, about ${dbFmtSecs(j.eta || 0)} left` : '') : 'starting…');
+  }
+  if (j.saved) return what + ': saved as “' + j.saved + '”';
+  if (j.error) return what + ': failed: ' + j.error;
+  if (j.active) return what + ': saving a copy…';
+  return what + ': done';
+}
+
+function qBatchText(b) {
+  const items = b.items || [];
+  const c = { done: 0, skipped: 0, error: 0, cancelled: 0, queued: 0, running: 0 };
+  items.forEach(i => { c[i.state] = (c[i.state] || 0) + 1; });
+  const total = items.length, finished = c.done + c.skipped + c.error;
+  const steps = (b.steps || []).map(s => QB_STEP[s] || s).join(', ');
+  const cur = items.find(i => i.state === 'running');
+  let line;
+  if (b.state === 'running') {
+    // Time left: the average of the photos finished so far, times those still to do.
+    const secs = items.filter(i => ['done', 'skipped', 'error'].includes(i.state)).map(i => i.seconds || 0);
+    const left = secs.length ? Math.round(secs.reduce((x, y) => x + y, 0) / secs.length * (c.queued + c.running)) : 0;
+    line = b.cancelling ? 'Stopping…'
+      : `Photo ${Math.min(finished + 1, total)} of ${total} (${steps})` + (cur ? `: ${cur.name}, ${cur.step || 'starting'}`
+        + (cur.total ? ` (part ${cur.done} of ${cur.total})` : '') : '') + (left ? `. About ${dbFmtSecs(left)} left for the batch.` : '.');
+  } else if (b.state === 'done') {
+    line = `Finished (${steps}): ${c.done.toLocaleString()} fixed` + (c.skipped ? `, ${c.skipped} needed no change` : '') + (c.error ? `, ${c.error} failed` : '') + '.';
+  } else {
+    line = (b.note ? b.note + ' ' : '') + `Stopped (${steps}): ${c.done.toLocaleString()} fixed, ${(c.cancelled + c.queued).toLocaleString()} not done.`;
+  }
+  return { line, c, total, finished };
+}
+
+function qRender(d) {
+  qBadge(d.active || 0);
+  $('#qSub').textContent = d.active ? `${d.active} in progress` : 'Nothing in progress';
+  const b = d.batch;
+  $('#qBatch').hidden = !b;
+  if (b) {
+    const t = qBatchText(b);
+    $('#qBatchLine').textContent = t.line;
+    $('#qBatchProg').hidden = b.state !== 'running';
+    $('#qBatchProg').value = t.total ? Math.round(100 * t.finished / t.total) : 0;
+    $('#qBatchCounts').textContent = `${t.c.done.toLocaleString()} fixed · ${t.c.skipped} unchanged · ${t.c.error} failed · ${t.c.queued.toLocaleString()} waiting`
+      + (b.already ? ` · ${b.already} left out (already fixed this way)` : '')
+      + '. Each fixed photo is saved as one copy next to the original: "Compare" shows it beside the original, where you can also replace the original with it.';
+    const stop = $('#qStopBtn');
+    stop.hidden = b.state !== 'running' || !!b.cancelling;
+    if (stop.hidden) qs.stopArmed = false;
+    stop.textContent = qs.stopArmed ? 'Click again to stop' : 'Stop the batch';
+    const op = (b.steps || []).includes('deblur') || !(b.steps || []).includes('enlarge') ? 'deblur' : 'enlarge';
+    const list = $('#qBatchList');
+    list.textContent = '';
+    const order = { running: 0, error: 1, done: 2, skipped: 3, cancelled: 4, queued: 5 };
+    const shown = (b.items || []).map((it, i) => ({ it, i })).filter(x => x.it.state !== 'queued')
+      .sort((x, y) => (order[x.it.state] - order[y.it.state]) || (y.i - x.i)).slice(0, 200);
+    shown.forEach(({ it }) => {
+      const what = it.state === 'running' ? 'Working: ' + (it.step || 'starting') + (it.total ? ` (part ${it.done} of ${it.total})` : '')
+        : it.state === 'done' ? (it.note || 'Fixed') + ' Saved as “' + it.saved + '”.'
+        : it.state === 'skipped' ? 'Unchanged: ' + (it.note || '')
+        : it.state === 'error' ? 'Failed: ' + (it.error || '')
+        : 'Not done (stopped)';
+      list.appendChild(qRow(it.name, it.path, what, it.state === 'error', it.state === 'done' ? 'Compare' : '',
+        () => dbOpen({ id: it.id, path: it.path }, op)));
+    });
+    if (t.c.queued) {
+      const more = document.createElement('div');
+      more.className = 'q-line q-mute';
+      more.textContent = `${t.c.queued.toLocaleString()} more waiting.`;
+      list.appendChild(more);
+    }
+  }
+  const jobs = $('#qJobs');
+  jobs.textContent = '';
+  (d.jobs || []).forEach(j => jobs.appendChild(qRow(j.name, j.path, qJobText(j), !!j.error && !j.saved, j.path ? 'Open' : '',
+    () => dbOpen({ id: j.id, path: j.path }, j.kind.startsWith('up_') ? 'enlarge' : 'deblur'))));
+  if (!jobs.childNodes.length) {
+    jobs.innerHTML = '<div class="q-line q-mute"></div>';
+    jobs.firstChild.textContent = 'Nothing in the last day. Fix blur and Enlarge (photo view, or Clean up) show up here while they work.';
+  }
+  const ix = d.indexing || {};
+  $('#qIndex').textContent = ix.pending
+    ? `${Number(ix.pending).toLocaleString()} photos waiting to be described` + (ix.running ? ' (in progress).' : ' (not running now).')
+    : 'Nothing waiting: every photo is described.';
+}
+
+function qBadge(n) {
+  const el = $('#queueBadge');
+  el.hidden = !n;
+  el.textContent = n ? String(n) : '';
+  $('#queueBtn').setAttribute('aria-label', n ? `Queue, ${n} in progress` : 'Queue');
+}
+
+async function qTick() {
+  clearTimeout(qs.timer);
+  const open = $('#queueDlg').open;
+  try {
+    const d = await api('queue_status');
+    if (open) qRender(d); else qBadge(d.active || 0);
+    // Say when a batch finishes while the page is open.
+    const b = d.batch, key = b ? b.id + '|' + b.state : '';
+    if (b && qs.lastBatch === b.id + '|running' && b.state !== 'running') toast('Batch ' + (b.state === 'done' ? 'finished' : 'stopped') + ': ' + qBatchText(b).line);
+    qs.lastBatch = key;
+  } catch (e) { if (open) $('#qSub').textContent = e.message; }
+  qs.timer = setTimeout(qTick, open ? 2000 : 10000);
+}
+function qOpen() {
+  if (!$('#queueDlg').open) $('#queueDlg').showModal();
+  qTick();
+}
+$('#queueBtn').addEventListener('click', qOpen);
+$('#qClose').addEventListener('click', () => $('#queueDlg').close());
+$('#queueDlg').addEventListener('keydown', e => e.stopPropagation());
+$('#queueDlg').addEventListener('close', () => { qs.stopArmed = false; qTick(); });
+$('#qStopBtn').addEventListener('click', async () => {
+  if (!qs.stopArmed) { qs.stopArmed = true; $('#qStopBtn').textContent = 'Click again to stop'; return; }
+  qs.stopArmed = false;
+  try { await api('batch_cancel', { body: {} }); } catch (e) { toast(e.message, 'err'); }
+  qTick();
+});
+setTimeout(qTick, 1500);
+
+// ---- Clean up: fix the selected photos in a batch ----
+const B_DEFAULT = { blurry: ['deblur'], exposure: ['color'], small: ['enlarge'] };
+function bSelected() {
+  const ids = [...cu.sel[cu.tab]];
+  const rows = new Map((cu.lists[cu.tab] || []).map(r => [r.id, r]));
+  return { ids, rows: ids.map(id => rows.get(id)).filter(Boolean) };
+}
+// A rough time from each photo's size: on this PC a blur fix takes about 6 s per 448 px tile,
+// an enlargement about 0.25 s per 112 px tile, colour a few seconds.
+function bEstimate() {
+  const { ids, rows } = bSelected();
+  let s = 0;
+  rows.forEach(r => {
+    const w = r.width || 1600, h = r.height || 1200;
+    if ($('#bDeblur').checked) s += Math.ceil(w / 448) * Math.ceil(h / 448) * 6;
+    if ($('#bColor').checked) s += 3;
+    if ($('#bEnlarge').checked && Math.max(w, h) <= DB_ENLARGE_MAX) s += Math.ceil(w / 112) * Math.ceil(h / 112) * 0.25;
+  });
+  s += (ids.length - rows.length) * 30;
+  const any = $('#bDeblur').checked || $('#bColor').checked || $('#bEnlarge').checked;
+  $('#bEstimate').textContent = any ? 'Rough time on this PC: ' + (s < 90 ? 'about a minute.' : s < 5400 ? `about ${Math.round(s / 60)} minutes.` : `about ${(s / 3600).toFixed(1)} hours.`) : 'Tick at least one fix.';
+  $('#bStart').disabled = !any;
+}
+function bOpen() {
+  const { ids } = bSelected();
+  if (!ids.length) return;
+  const def = B_DEFAULT[cu.tab] || [];
+  $('#bDeblur').checked = def.includes('deblur');
+  $('#bColor').checked = def.includes('color');
+  $('#bEnlarge').checked = def.includes('enlarge');
+  $('#bCount').textContent = `${ids.length.toLocaleString()} ${ids.length === 1 ? 'photo' : 'photos'} selected. Fixes to make, in this order:`;
+  $('#bStatus').textContent = '';
+  $('#bStart').disabled = false;
+  bEstimate();
+  $('#batchDlg').showModal();
+}
+['#bDeblur', '#bColor', '#bEnlarge'].forEach(s => $(s).addEventListener('change', bEstimate));
+$('#cuFixSelBtn').addEventListener('click', bOpen);
+$('#bCancel').addEventListener('click', () => $('#batchDlg').close());
+$('#batchDlg').addEventListener('keydown', e => e.stopPropagation());
+$('#bStart').addEventListener('click', async () => {
+  const steps = [['#bDeblur', 'deblur'], ['#bColor', 'color'], ['#bEnlarge', 'enlarge']].filter(([s]) => $(s).checked).map(([, k]) => k);
+  $('#bStart').disabled = true;
+  $('#bStatus').textContent = '';
+  try {
+    await api('batch_start', { body: { ids: bSelected().ids, steps } });
+    $('#batchDlg').close();
+    qOpen();
+  } catch (e) {
+    $('#bStatus').textContent = e.message;
+    $('#bStart').disabled = false;
+  }
+});
 
 // ---- Rotate (lib/Rotate.php): a quarter turn, lossless (only the EXIF Orientation tag changes) ----
 let lbRotating = false;

@@ -18,7 +18,8 @@ you can search instantly.
 - **Embed metadata.** Optionally write the descriptions and tags into the photo files (XMP /
   IPTC / EXIF) so Windows Explorer, Lightroom, Bridge and others can search them too.
 - **Clean up.** Finds blurry, badly exposed, duplicate and small photos for you to review; the
-  ones you pick go to the Recycle Bin.
+  ones you pick go to the Recycle Bin, or can be fixed in a batch on your PC (remove blur,
+  correct colour, enlarge: one new copy each). **Queue** shows what is in progress.
 - **Fix blur and Enlarge.** Makes a sharper version of a blurred photo, or a larger one of a small
   photo, with AI models that run on your PC (free; downloaded once, about 137 MB; Fix blur is best
   on camera shake), or optionally with Google Gemini and your own key (redraws the photo; a few
