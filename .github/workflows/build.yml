@@ -37,31 +37,12 @@ jobs:
         shell: pwsh
         run: ./build.ps1
 
-      - name: Upload unsigned installer
-        id: upload
+      - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
           name: installer
           path: dist/PhotoFinderSetup-*.exe
           if-no-files-found: error
-
-      # Authenticode signing by SignPath (free for open source; see "Code signing policy" in
-      # README.md). Runs on version tags once the SignPath project exists: set the repository
-      # variable SIGNPATH_ORGANIZATION_ID and the secret SIGNPATH_API_TOKEN. Every signing
-      # request still waits for manual approval in SignPath.
-      - name: Sign with SignPath
-        if: startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
-        uses: signpath/github-action-submit-signing-request@v2
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: photo-finder
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: installer
-          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
-          wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 7200   # time for you to approve the request in SignPath
-          output-artifact-directory: dist/signed
 
       - name: Draft release (version tags)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -69,15 +50,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $signed = @(Get-ChildItem dist/signed -Filter 'PhotoFinderSetup-*.exe' -ErrorAction SilentlyContinue)
-          $files = @(if ($signed) { $signed.FullName } else { (Get-ChildItem dist -Filter 'PhotoFinderSetup-*.exe').FullName })
+          $files = @((Get-ChildItem dist -Filter 'PhotoFinderSetup-*.exe').FullName)
           if (-not $files) { throw 'no installer to release' }
           $assets = @()
           foreach ($f in $files) {
             (Get-FileHash $f -Algorithm SHA256).Hash.ToLower() + '  ' + (Split-Path -Leaf $f) | Set-Content "$f.sha256" -NoNewline
             $assets += $f, "$f.sha256"
           }
-          $sig = if ($signed) { 'Signed by SignPath Foundation.' } else { 'Unsigned build: code signing through SignPath Foundation is pending.' }
           $base = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/blob/main/README.md"
-          $notes = "Photo Finder searches your Windows photo library by what is in the photos. See the [README]($base) for features and requirements.`n`n$sig`n`n[Code signing policy]($base#code-signing-policy) | [Privacy]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/blob/main/PRIVACY.md)"
+          $sig = "The installer is not code-signed, so Windows may warn that it doesn't know the publisher: see [Windows warnings when installing]($base#windows-warnings-when-installing)."
+          $notes = "Photo Finder searches your Windows photo library by what is in the photos. See the [README]($base) for features and requirements.`n`n$sig`n`n[Privacy]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/blob/main/PRIVACY.md)"
           gh release create $env:GITHUB_REF_NAME --draft --title "Photo Finder $($env:GITHUB_REF_NAME.TrimStart('v'))" --notes $notes $assets

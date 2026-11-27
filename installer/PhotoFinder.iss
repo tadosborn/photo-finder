@@ -25,7 +25,7 @@ AppPublisher=InfiNet Computer Solutions, Inc.
 AppPublisherURL=https://infinetinc.com
 AppSupportURL=https://github.com/tadosborn/photo-finder
 AppUpdatesURL=https://github.com/tadosborn/photo-finder/releases
-; Version metadata (SignPath requires product name and version on every signed binary).
+; Version metadata, shown in the installer's Properties > Details.
 VersionInfoVersion={#AppVersion}
 VersionInfoProductName=Photo Finder
 VersionInfoProductVersion={#AppVersion}
@@ -54,7 +54,7 @@ RestartApplications=no
 SetupLogging=yes
 #ifdef SignTool
 ; Optional Authenticode signing during compile (setup and uninstaller): build.ps1 -SignCommand
-; passes the command to ISCC as /Spfsign=... Official releases are signed afterwards by SignPath.
+; passes the command to ISCC as /Spfsign=... Official releases are not code-signed.
 SignTool=pfsign
 SignedUninstaller=yes
 #endif

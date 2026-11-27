@@ -26,7 +26,8 @@ you can search instantly.
 ## Download and install
 
 Download `PhotoFinderSetup-<version>.exe` from the [Releases](../../releases) page and run it.
-Requirements: Windows 10 or 11 (64-bit). Photos are described by an AI model, one of:
+Windows may warn that it doesn't know the publisher; see
+[Windows warnings when installing](#windows-warnings-when-installing). Requirements: Windows 10 or 11 (64-bit). Photos are described by an AI model, one of:
 
 - **Free, on your PC (the default):** [Ollama](https://ollama.com) (free) with a vision model.
   Settings checks your PC, links to Ollama and downloads a recommended model with one click.
@@ -52,18 +53,23 @@ option), and the app can check GitHub for updates. Nothing else leaves your PC.
 Details and how to turn things off: [PRIVACY.md](PRIVACY.md). Bundled components and their
 licenses: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-## Code signing policy
+## Windows warnings when installing
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
+The installer is not code-signed, so Windows cannot name its publisher:
 
-- Committers and reviewers: [@tadosborn](https://github.com/tadosborn)
-- Approvers: [@tadosborn](https://github.com/tadosborn)
-- Privacy policy: [PRIVACY.md](PRIVACY.md)
+- If you downloaded it, Windows may show **Windows protected your PC**. Click **More info**,
+  then **Run anyway**.
+- The permission prompt says **Unknown publisher**. Click **Yes**.
+- Some antivirus programs (Avast, for example) run an unsigned installer in a sandbox first.
+  Setup still completes.
+
+To confirm your copy is the published one, run `Get-FileHash PhotoFinderSetup-<version>.exe`
+in PowerShell and compare the result with the `.sha256` file on the release page. Updates
+installed from inside the app don't rely on this check: Photo Finder installs an update only
+after verifying the maintainer's Ed25519 signature on it.
 
 Release installers are built from this repository by GitHub Actions
-([.github/workflows/build.yml](.github/workflows/build.yml)) and signed only after manual
-approval of each release.
+([.github/workflows/build.yml](.github/workflows/build.yml)).
 
 ## Building from source
 

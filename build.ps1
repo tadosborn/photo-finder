@@ -4,8 +4,8 @@
 #
 # Output: dist\PhotoFinderSetup-<version>.exe and its .sha256. The version comes from
 # lib/version.php (PF_VERSION). GitHub Actions runs exactly this (.github/workflows/build.yml);
-# official releases are then Authenticode-signed by SignPath and published with an Ed25519-signed
-# update feed by the maintainer (the update signing key is never in this repository).
+# official releases are then published with an Ed25519-signed update manifest by the maintainer
+# (the update signing key is never in this repository).
 #
 # Everything bundled is downloaded from its publisher and verified before use:
 #   PHP 8.3 thread-safe x64 (windows.php.net sha256; thread-safe because Apache loads it as a
