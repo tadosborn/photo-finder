@@ -31,6 +31,23 @@ never reads keys from anywhere else.
 
 To stop sending photos, stop indexing, remove the folders, or switch to the local option.
 
+## Fix blur
+
+**On this PC** (the default): the photo never leaves your PC. The first time you use Fix blur
+(or click **Set up now** in Settings > Fix blur), Photo Finder downloads about 133 MB, once:
+Python from `python.org`, three Python packages from PyPI (`files.pythonhosted.org`) and the
+deblurring model from Hugging Face (`huggingface.co`). Those are ordinary downloads that send
+nothing about you or your photos, and each file is checked against a fixed SHA-256 before use.
+
+**Cloud AI** (optional; only when you click **Try cloud AI** and confirm): the photo (reduced to
+at most 3072 pixels on the long side) is sent to Google's Gemini API with your own Google API
+key, set in Settings > Fix blur. Google's privacy policy and Gemini API terms apply
+(<https://policies.google.com/privacy>). Google marks its results with an invisible SynthID
+watermark. Nothing is sent to Google unless you use this button.
+
+Either way, the result is saved only when you click **Save as a copy**, as a new file next to
+the original; the original is never changed.
+
 ## Update checks (GitHub)
 
 When it opens, Photo Finder can ask GitHub
@@ -53,9 +70,11 @@ If your PC lacks the Microsoft Visual C++ Runtime, Setup downloads it from Micro
 
 The search index, thumbnails, settings and logs are stored in `%LOCALAPPDATA%\Photo Finder`.
 Photo Finder's web interface listens on `127.0.0.1` only and refuses requests from other
-websites. It changes your photo files only when you use **Embed metadata** (writes the
-descriptions and tags into the files) or delete photos from the app (they go to the Recycle
-Bin).
+websites. It changes your photo files only when you ask it to: **Embed metadata** writes the
+descriptions and tags into the files; **Enhance** saves a copy (or, if you choose, replaces the
+original, which goes to the Recycle Bin first); **Fix blur** saves a copy; **Find photos on this
+PC** moves the photos you tick into your photo folder; deleting photos, including from **Clean
+up**, moves them to the Recycle Bin.
 
 Uninstalling (Windows Settings > Apps) removes the program and asks whether to delete the
 index, thumbnails and settings as well.

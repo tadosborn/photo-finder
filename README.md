@@ -17,6 +17,14 @@ you can search instantly.
   described each photo and can re-describe the rest.
 - **Embed metadata.** Optionally write the descriptions and tags into the photo files (XMP /
   IPTC / EXIF) so Windows Explorer, Lightroom, Bridge and others can search them too.
+- **Clean up.** Finds blurry, badly exposed and duplicate photos for you to review; the ones you
+  pick go to the Recycle Bin.
+- **Fix blur.** Makes a sharper copy of a blurred photo with an AI model that runs on your PC
+  (free; downloaded once, about 133 MB; best on camera shake), or optionally with Google Gemini
+  and your own key (redraws the photo; a few cents each). Always saved as a copy.
+- **Enhance.** Colour, brightness and sharpness fixes from the photo view.
+- **Find photos on this PC.** Searches your user folders for pictures outside your photo
+  folders and offers to move them in, with undo.
 - **Self-contained.** One installer with its own web server (Apache), PHP, SQLite and ExifTool;
   nothing else to install. Runs in the background and opens in your browser at
   `http://127.0.0.1:8765`, reachable from this PC only.

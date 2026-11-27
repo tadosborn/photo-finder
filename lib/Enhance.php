@@ -708,8 +708,9 @@ final class Enhance {
     }
 
     /** Index the copy the way a scan would, carrying over the original's description, tags,
-     *  people, text, date and place so no AI call is needed. Returns the new id. */
-    private static function indexCopy(array $orig, string $dest): string {
+     *  people, text, date and place so no AI call is needed. Returns the new id.
+     *  (Also used by Deblur for its "(deblurred)" / "(restored)" copies.) */
+    public static function indexCopy(array $orig, string $dest): string {
         $id = pf_path_id($dest);
         clearstatcache(true, $dest);
         Db::upsertPending($id, $dest, (int)filesize($dest), (int)filemtime($dest));

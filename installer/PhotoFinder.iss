@@ -76,6 +76,7 @@ Type: files; Name: "{app}\*.ps1"
 Type: files; Name: "{app}\*.vbs"
 Type: files; Name: "{app}\*.bat"
 Type: files; Name: "{app}\*.md"
+Type: files; Name: "{app}\*.py"
 
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -258,6 +259,8 @@ begin
     'You can instead choose Anthropic''s Claude or another AI service with your own API key (each photo is ' +
     'then sent to that service, and its privacy policy applies). Nothing is sent to a cloud service unless ' +
     'you choose one, and you choose which folders are indexed.' + #13#10#13#10 +
+    'Fix blur: runs on this PC by default (a one-time download of about 133 MB when first used; photos never leave the PC). ' +
+    'Its optional "Try cloud AI" button sends that one photo to Google Gemini with your own Google key.' + #13#10#13#10 +
     'Update checks: when it opens, Photo Finder can ask GitHub (github.com) whether a newer version has been released. ' +
     'Only the version number is involved; nothing about you or your photos is sent. You can turn this ' +
     'off below or later in Settings.' + #13#10#13#10 +

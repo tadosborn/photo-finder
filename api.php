@@ -98,12 +98,17 @@ try {
         case 'settings_get': {
             $s = pf_load_settings();
             // Keys never leave the server side: the page only learns whether one is set.
-            foreach (['api_key', 'openai_api_key'] as $k) {
+            foreach (['api_key', 'openai_api_key', 'gemini_api_key'] as $k) {
                 $s[$k . '_set'] = trim((string)($s[$k] ?? '')) !== '';
                 unset($s[$k]);
             }
             $s['backend'] = Describer::backendOf($s);
             $s['anthropic_models'] = Claude::MODELS;
+            require_once __DIR__ . '/lib/Deblur.php';
+            $s['gemini_models'] = Deblur::GEMINI_MODELS;
+            $s['gemini_model'] = Deblur::cloudModel();
+            $s['deblur_ready'] = Deblur::isReady();
+            $s['deblur_download_mb'] = (int)round(Deblur::packBytes() / 1048576);
             if (($s['exiftool_path'] ?? '') === '') {
                 $s['exiftool_path_suggested'] = Exporter::autoDetect() ?? '';
             }
@@ -251,6 +256,15 @@ try {
             }
             if (isset($in['export_batch_size'])) {
                 $current['export_batch_size'] = max(1, min(100, (int)$in['export_batch_size']));
+            }
+            // Fix blur's cloud option (lib/Deblur.php): a blank key field keeps the saved key.
+            if (isset($in['gemini_api_key']) && is_string($in['gemini_api_key']) && trim($in['gemini_api_key']) !== '') {
+                $current['gemini_api_key'] = trim($in['gemini_api_key']);
+            }
+            if (!empty($in['gemini_api_key_clear'])) unset($current['gemini_api_key']);
+            if (isset($in['gemini_model']) && is_string($in['gemini_model'])) {
+                require_once __DIR__ . '/lib/Deblur.php';
+                if (isset(Deblur::GEMINI_MODELS[$in['gemini_model']])) $current['gemini_model'] = $in['gemini_model'];
             }
             foreach (['export_description', 'export_tags', 'export_ocr_text',
                      'export_replace_description', 'export_overwrite_original', 'update_check'] as $k) {
@@ -544,6 +558,56 @@ try {
             pf_json(Enhance::save($row, $params, $mode));
         }
         // ---- end Enhance ----
+
+        // ---- Fix blur (lib/Deblur.php): on this PC (NAFNet) or with Google's Gemini ----
+        case 'deblur_setup_status':
+            require_once __DIR__ . '/lib/Deblur.php';
+            pf_json(['ready' => Deblur::isReady(), 'setup' => Deblur::setupStatus(), 'download_mb' => (int)round(Deblur::packBytes() / 1048576)]);
+        case 'deblur_status':
+        case 'deblur_setup':
+        case 'deblur_start':
+        case 'deblur_image':
+        case 'deblur_save':
+        case 'deblur_discard': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            $isPost = in_array($action, ['deblur_setup', 'deblur_start', 'deblur_save', 'deblur_discard'], true);
+            if ($isPost && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            if ($action === 'deblur_setup') {
+                Deblur::startSetup();
+                pf_json(['ok' => true, 'setup' => Deblur::setupStatus(), 'ready' => Deblur::isReady()]);
+            }
+            $in = $isPost ? pf_input_json() : $_GET;
+            $id = preg_replace('/[^a-f0-9]/i', '', (string)($in['id'] ?? ''));
+            $kind = in_array($in['kind'] ?? '', Deblur::KINDS, true) ? (string)$in['kind'] : 'local';
+            $row = $id !== '' ? Db::getById($id) : null;
+            if (!$row) pf_json(['error' => 'not found in index'], 404);
+            // Same guard as Enhance, delete_files and file.php: only photos inside the configured folders.
+            if (!pf_path_inside_roots((string)$row['path'], pf_load_settings()['photo_dirs'] ?? [])) {
+                pf_json(['error' => 'outside configured photo folders'], 403);
+            }
+            switch ($action) {
+                case 'deblur_status':
+                    pf_json(Deblur::status($id));
+                case 'deblur_image': {
+                    $f = Deblur::jobFile($id, $kind, 'jpg');
+                    if ((Deblur::jobStatus($id, $kind)['state'] ?? '') !== 'done' || !is_file($f)) { http_response_code(404); exit; }
+                    header('Content-Type: image/jpeg');
+                    header('Cache-Control: no-store');
+                    readfile($f);
+                    exit;
+                }
+                case 'deblur_start':
+                    if (!is_file((string)$row['path'])) pf_json(['error' => 'The photo is no longer on disk.'], 404);
+                    Deblur::start($row, $kind);
+                    pf_json(['ok' => true] + Deblur::status($id));
+                case 'deblur_save':
+                    pf_json(Deblur::save($row, $kind));
+                case 'deblur_discard':
+                    Deblur::discard($id);
+                    pf_json(['ok' => true]);
+            }
+        }
+        // ---- end Fix blur ----
         default:
             pf_json(['error' => 'unknown action', 'action' => $action], 400);
     }

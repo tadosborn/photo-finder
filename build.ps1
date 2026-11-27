@@ -109,6 +109,7 @@ $app = Join-Path $stage 'app'
 New-Item -ItemType Directory -Force -Path $app, (Join-Path $app 'lib'), (Join-Path $app 'bin') | Out-Null
 
 $appFiles = 'index.php', 'api.php', 'file.php', 'thumb.php', 'worker.php', 'guard.php', 'configure.php', 'pull-model.php', 'pf-helper.ps1',
+            'deblur.py', 'deblur-setup.php', 'deblur-cloud.php',
             'install.ps1', 'uninstall.ps1', 'install.bat', 'uninstall.bat',
             'start.bat', 'worker.bat', 'silent-worker.vbs', 'silent-server.vbs', 'launch.vbs',
             'LICENSE', 'PRIVACY.md', 'THIRD-PARTY-NOTICES.md'
@@ -145,6 +146,7 @@ extension=mbstring
 extension=openssl
 extension=pdo_sqlite
 extension=sodium
+extension=zip
 
 [Date]
 date.timezone = "UTC"
@@ -198,7 +200,7 @@ if ($LASTEXITCODE -ne 0) { throw 'icon generation failed' }
 
 # ---- 3. prove the staged runtime works from an unrelated working directory ----
 Write-Host '[3/4] Checking the bundled runtime'
-$probe = 'foreach ([''pdo_sqlite'',''gd'',''exif'',''mbstring'',''curl'',''sodium'',''simplexml'',''openssl''] as $e) if (!extension_loaded($e)) echo ''missing:'', $e, '' ''; $p = new PDO(''sqlite::memory:''); $p->exec(''create virtual table t using fts5(x)''); echo ''ok php '', PHP_VERSION, '' sqlite '', $p->query(''select sqlite_version()'')->fetchColumn();'
+$probe = 'foreach ([''pdo_sqlite'',''gd'',''exif'',''mbstring'',''curl'',''sodium'',''simplexml'',''openssl'',''zip''] as $e) if (!extension_loaded($e)) echo ''missing:'', $e, '' ''; $p = new PDO(''sqlite::memory:''); $p->exec(''create virtual table t using fts5(x)''); echo ''ok php '', PHP_VERSION, '' sqlite '', $p->query(''select sqlite_version()'')->fetchColumn();'
 Push-Location $env:SystemRoot
 try { $out = (& $php -r $probe 2>&1) -join ' ' } finally { Pop-Location }
 if ($LASTEXITCODE -ne 0 -or $out -notmatch '^ok php' -or $out -match 'missing:|Warning') { throw "bundled PHP check failed: $out" }

@@ -150,6 +150,9 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox .lb-enh-btn { position: absolute; top: 16px; right: 268px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-enh-btn:hover { background: rgba(0,0,0,0.92); }
   dialog.lightbox .lb-enh-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.lightbox .lb-fix-btn { position: absolute; top: 16px; right: 394px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-fix-btn:hover { background: rgba(0,0,0,0.92); }
+  dialog.lightbox .lb-fix-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
   dialog.enhance { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #0b0d11; color: var(--text); }
   dialog.enhance[open] { display: flex; }
   dialog.enhance::backdrop { background: rgba(0,0,0,0.9); }
@@ -340,6 +343,35 @@ $apiKeySet = $settings['api_key'] !== '';
   .cu-chip.ai { border-color: #6b5bd6; color: #d4ccff; }
   .cu-chip.best { border-color: var(--ok); color: var(--ok); font-weight: 600; }
   .cu-chip.kept { border-color: var(--warn); color: #fcd34d; }
+  .cu-fix { align-self: flex-start; font-size: 12px; padding: 4px 10px; }
+  /* Fix blur */
+  dialog.deblur { width: min(1100px, 96vw); height: min(840px, 94vh); max-width: none; max-height: none; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); overflow: hidden; }
+  dialog.deblur[open] { display: flex; flex-direction: column; }
+  dialog.deblur::backdrop { background: rgba(0,0,0,0.75); }
+  .db-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .db-head h2 { margin: 0; font-size: 16px; }
+  .db-name { flex: 1; min-width: 0; color: var(--mute); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .db-close { background: transparent; border: none; color: var(--text); font-size: 22px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; padding: 0; }
+  .db-close:hover { background: var(--panel2); }
+  .db-compare { position: relative; flex: 1; min-height: 0; background: #0a0c10; overflow: hidden; user-select: none; }
+  .db-compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .db-after { clip-path: inset(0 0 0 50%); }
+  .db-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.9); pointer-events: none; }
+  .db-tag { position: absolute; top: 10px; background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; padding: 3px 9px; border-radius: 10px; }
+  .db-tag.l { left: 10px; }
+  .db-tag.r { right: 10px; }
+  .db-slider { position: absolute; left: 20px; right: 20px; bottom: 12px; width: calc(100% - 40px); margin: 0; accent-color: #fff; }
+  .db-bar { padding: 10px 14px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .db-status { font-size: 13px; min-height: 18px; }
+  .db-status.err { color: var(--err-text); }
+  .db-bar progress { width: 100%; height: 8px; }
+  .db-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .db-row .spacer { flex: 1; }
+  .db-which { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .db-which[hidden] { display: none; }
+  .db-which button { border: none; border-radius: 0; background: transparent; }
+  .db-which button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .db-hint { font-size: 12px; color: var(--mute); }
   .cu-name { color: var(--text); word-break: break-all; }
   .cu-path { word-break: break-all; }
   .cu-empty { text-align: center; color: var(--mute); padding: 50px 20px; font-size: 14px; }
@@ -493,6 +525,7 @@ $apiKeySet = $settings['api_key'] !== '';
       <button type="button" role="tab" id="setTab-describe" aria-controls="setPane-describe" aria-selected="false" tabindex="-1">How photos are described</button>
       <button type="button" role="tab" id="setTab-embed" aria-controls="setPane-embed" aria-selected="false" tabindex="-1">Embed metadata</button>
       <button type="button" role="tab" id="setTab-updates" aria-controls="setPane-updates" aria-selected="false" tabindex="-1">Updates</button>
+      <button type="button" role="tab" id="setTab-fixblur" aria-controls="setPane-fixblur" aria-selected="false" tabindex="-1">Fix blur</button>
       <button type="button" role="tab" id="setTab-advanced" aria-controls="setPane-advanced" aria-selected="false" tabindex="-1">Advanced</button>
     </div>
     <div class="dlg-body">
@@ -638,6 +671,26 @@ $apiKeySet = $settings['api_key'] !== '';
         </div>
       </div>
 
+      <div class="set-pane" role="tabpanel" id="setPane-fixblur" aria-labelledby="setTab-fixblur" hidden>
+        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper copy of a blurred photo and saves it next to the original. The original is never changed.</div>
+        <label>On this PC (free)</label>
+        <div class="set-row">
+          <span id="fbLocalState" class="hint" style="flex:1; margin:0;">Checking…</span>
+          <button type="button" id="fbSetupBtn" style="display:none">Set up now</button>
+        </div>
+        <progress id="fbSetupProg" max="100" value="0" style="display:none; width:100%"></progress>
+        <div class="hint">An AI model (NAFNet) runs on this PC, so photos never leave it. Best on camera shake and motion blur; it cannot rescue a photo that is out of focus. About 2 minutes per photo.</div>
+        <label for="geminiKey">Cloud AI (optional): Google Gemini API key</label>
+        <input id="geminiKey" type="password" autocomplete="off">
+        <div class="hint">Create a key in Google AI Studio (aistudio.google.com). Leave blank to keep the saved key.</div>
+        <label for="geminiModel">Gemini model</label>
+        <select id="geminiModel"></select>
+        <div class="provider-note">
+          <strong>Cost:</strong> <span id="geminiCost">billed by Google to your account</span>, only when you click "Try cloud AI".<br>
+          <strong>Privacy and results:</strong> the photo is sent to Google. The AI redraws the photo, so faces and text can come out different; Google marks its results with an invisible SynthID watermark.
+        </div>
+      </div>
+
       <div class="set-pane" role="tabpanel" id="setPane-advanced" aria-labelledby="setTab-advanced" hidden>
         <label for="maxDim" class="first">Largest image size sent to the AI (pixels)</label>
         <input id="maxDim" type="number" min="256" max="2000" step="64" class="narrow">
@@ -696,6 +749,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <button class="lb-edit-btn" id="lbEditBtn" title="Edit metadata (E)">✎ Edit</button>
   <button class="lb-del-btn" id="lbDelBtn" title="Delete photo — moves file to Recycle Bin (Del)">🗑 Delete</button>
   <button class="lb-enh-btn" id="lbEnhBtn" type="button" title="Fix colour, brightness and contrast; sharpen slightly soft photos">✨ Enhance</button>
+  <button class="lb-fix-btn" id="lbFixBtn" type="button" title="Make a sharper copy of a blurred photo with AI">Fix blur</button>
   <button class="lb-close" id="lbClose" title="Close (Esc)">×</button>
   <div class="lb-meta">
     <div class="desc" id="lbDesc"></div>
@@ -785,6 +839,39 @@ $apiKeySet = $settings['api_key'] !== '';
   </div>
 </dialog>
 <!-- ---- end Clean up ---- -->
+
+<!-- ---- Fix blur (lib/Deblur.php): original and result on top of each other, a slider between ---- -->
+<dialog id="deblurDlg" class="deblur" aria-labelledby="dbTitle">
+  <div class="db-head">
+    <h2 id="dbTitle">Fix blur</h2>
+    <span class="db-name" id="dbName"></span>
+    <button type="button" class="db-close" id="dbClose" aria-label="Close Fix blur" title="Close (Esc). A fix in progress carries on.">×</button>
+  </div>
+  <div class="db-compare" id="dbCompare">
+    <img id="dbBefore" alt="Original photo">
+    <img id="dbAfter" class="db-after" alt="Fixed photo" hidden>
+    <div class="db-line" id="dbLine" hidden></div>
+    <span class="db-tag l">Original</span>
+    <span class="db-tag r" id="dbTagR" hidden>Fixed on this PC</span>
+    <input type="range" class="db-slider" id="dbSlider" min="0" max="100" value="50" aria-label="Compare: drag to show more of the original or of the fixed photo" hidden>
+  </div>
+  <div class="db-bar">
+    <div class="db-status" id="dbStatus" role="status" aria-live="polite"></div>
+    <progress id="dbProg" max="100" value="0" hidden></progress>
+    <div class="db-row">
+      <span class="db-which" id="dbWhich" hidden>
+        <button type="button" id="dbShowLocal" aria-pressed="true">On this PC</button>
+        <button type="button" id="dbShowCloud" aria-pressed="false">Cloud AI</button>
+      </span>
+      <button type="button" id="dbLocalBtn">Fix on this PC</button>
+      <button type="button" id="dbCloudBtn">Try cloud AI</button>
+      <span class="spacer"></span>
+      <button type="button" class="primary" id="dbSaveBtn" disabled>Save as a copy</button>
+    </div>
+    <div class="db-hint">On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. The original is never changed.</div>
+  </div>
+</dialog>
+<!-- ---- end Fix blur ---- -->
 <!-- ==== Enhance view (opened from the lightbox; lib/Enhance.php saves the full-size photo) ==== -->
 <dialog id="enhanceDlg" class="enhance" aria-labelledby="enhTitle">
   <div class="enh-wrap">
@@ -2082,6 +2169,17 @@ $('#settingsBtn').addEventListener('click', async () => {
   $('#expOverwriteOrig').checked = s.export_overwrite_original;
   $('#updateAuto').checked = s.update_check !== false;
   $('#expBatchSize').value = s.export_batch_size;
+  // Fix blur
+  const gm = $('#geminiModel');
+  gm.textContent = '';
+  Object.entries(s.gemini_models || {}).forEach(([id, m]) => {
+    const o = document.createElement('option'); o.value = id; o.textContent = m.label; o.dataset.cost = m.cost; gm.appendChild(o);
+  });
+  gm.value = s.gemini_model;
+  fbShowCost();
+  $('#geminiKey').value = '';
+  $('#geminiKey').placeholder = s.gemini_api_key_set ? '(saved; leave blank to keep)' : '';
+  fbSetupShow({ ready: s.deblur_ready, setup: null, download_mb: s.deblur_download_mb });
   updateBackendVisibility();
   showSettingsTab(settingsTab);
   settingsTab = 'folders';
@@ -2133,12 +2231,46 @@ $('#saveSettingsBtn').addEventListener('click', async () => {
   body.export_overwrite_original = $('#expOverwriteOrig').checked;
   body.update_check = $('#updateAuto').checked;
   body.export_batch_size = parseInt($('#expBatchSize').value, 10);
+  if ($('#geminiKey').value.trim()) body.gemini_api_key = $('#geminiKey').value.trim();
+  if ($('#geminiModel').value) body.gemini_model = $('#geminiModel').value;
   try {
     await api('settings_save', { body });
     toast('Settings saved');
     $('#settingsDlg').close();
     checkProviderSetup();
   } catch (e) { toast(e.message, 'err'); }
+});
+
+// ---- Settings > Fix blur: the on-PC runtime's state and its one-time download ----
+function fbShowCost() {
+  const o = $('#geminiModel').selectedOptions[0];
+  $('#geminiCost').textContent = o ? o.dataset.cost + ', billed by Google to your account' : 'billed by Google to your account';
+}
+$('#geminiModel').addEventListener('change', fbShowCost);
+let fbTimer = null;
+function fbSetupShow(s) {
+  const st = s.setup, btn = $('#fbSetupBtn'), prog = $('#fbSetupProg');
+  clearTimeout(fbTimer);
+  if (s.ready) {
+    $('#fbLocalState').textContent = '✓ Set up and ready.';
+    btn.style.display = 'none'; prog.style.display = 'none';
+    return;
+  }
+  if (st && !st.done && !st.error) {
+    const pct = st.total ? Math.floor(100 * st.got / st.total) : 0;
+    $('#fbLocalState').textContent = st.status === 'installing' ? 'Installing…' : `Downloading ${st.file || ''}… ${pct}%`;
+    prog.style.display = ''; prog.value = pct;
+    btn.style.display = 'none';
+    fbTimer = setTimeout(async () => { try { fbSetupShow(await api('deblur_setup_status')); } catch (e) {} }, 1500);
+    return;
+  }
+  prog.style.display = 'none';
+  $('#fbLocalState').textContent = (st && st.error ? 'Setup failed: ' + st.error + ' ' : '')
+    + `Not set up yet: a one-time download of about ${s.download_mb} MB (the model and the program that runs it), when you first use Fix blur or now.`;
+  btn.style.display = ''; btn.textContent = st && st.error ? 'Try again' : 'Set up now';
+}
+$('#fbSetupBtn').addEventListener('click', async () => {
+  try { fbSetupShow(await api('deblur_setup', { body: {} })); } catch (e) { toast(e.message, 'err', 6000); }
 });
 
 $('#resetErrorsBtn').addEventListener('click', async () => {
@@ -3138,6 +3270,15 @@ function cuCard(r, kind, pageItems, idx) {
   folder.textContent = cuFolder(r.path);
   folder.title = r.path;
   meta.append(pick, chips, nm, sub, folder);
+  if (kind === 'blurry') {
+    const fix = document.createElement('button');
+    fix.type = 'button';
+    fix.className = 'cu-fix';
+    fix.textContent = 'Fix blur…';
+    fix.setAttribute('aria-label', 'Fix blur: make a sharper copy of ' + name);
+    fix.addEventListener('click', () => dbOpen(r));
+    meta.appendChild(fix);
+  }
   card.append(thumb, meta);
   return card;
 }
@@ -3386,6 +3527,195 @@ $('#lightbox').addEventListener('close', () => {
 window.addEventListener('keydown', e => {
   if (cu.lbSaved && $('#lightbox').open && e.key === 'Delete') { e.preventDefault(); e.stopPropagation(); }
 }, true);
+
+// ---- Fix blur (lib/Deblur.php) ----
+// One photo at a time. The work runs in the background on the server (a fix keeps going when this
+// window is closed); the window polls deblur_status while something is running. Results are only
+// previews until "Save as a copy" writes "<name> (deblurred).jpg" / "(restored).jpg".
+const db = { row: null, show: 'local', showing: '', timer: null, s: null, wantLocal: false, cloudArmed: false, shown: '' };
+
+function dbFmtSecs(s) {
+  s = Math.max(0, Math.round(s));
+  return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min' + (s % 60 >= 30 ? ' 30 s' : '');
+}
+function dbStatus(text, err = false) {
+  const el = $('#dbStatus');
+  el.textContent = text;
+  el.classList.toggle('err', err);
+}
+function dbOpen(row) {
+  if (!row || !row.id) return;
+  db.row = row;
+  db.show = 'local';
+  db.wantLocal = false;
+  db.cloudArmed = false;
+  db.shown = '';
+  $('#dbName').textContent = cuBase(row.path);
+  $('#dbName').title = row.path || '';
+  $('#dbBefore').src = 'file.php?id=' + encodeURIComponent(row.id) + (row.v ? '&v=' + row.v : '');
+  dbSetAfter(null);
+  $('#dbSlider').value = 50;
+  dbSlide();
+  dbStatus('');
+  $('#deblurDlg').showModal();
+  dbRefresh(true);
+}
+function dbSetAfter(kind, stamp = '') {
+  const img = $('#dbAfter');
+  const on = !!kind;
+  ['#dbAfter', '#dbLine', '#dbTagR', '#dbSlider'].forEach(s => { $(s).hidden = !on; });
+  if (!on) { img.removeAttribute('src'); db.shown = ''; return; }
+  const key = kind + '|' + stamp;
+  if (db.shown === key) return;
+  db.shown = key;
+  $('#dbTagR').textContent = kind === 'cloud' ? 'Cloud AI (redrawn)' : 'Fixed on this PC';
+  img.src = 'api.php?action=deblur_image&id=' + encodeURIComponent(db.row.id) + '&kind=' + kind + '&t=' + encodeURIComponent(stamp);
+}
+function dbSlide() {
+  const v = +$('#dbSlider').value;
+  $('#dbAfter').style.clipPath = `inset(0 0 0 ${v}%)`;
+  $('#dbLine').style.left = v + '%';
+}
+$('#dbSlider').addEventListener('input', dbSlide);
+
+async function dbRefresh(auto = false) {
+  clearTimeout(db.timer);
+  if (!$('#deblurDlg').open || !db.row) return;
+  let s;
+  try { s = await api('deblur_status', { qs: 'id=' + encodeURIComponent(db.row.id) }); }
+  catch (e) { dbStatus(e.message, true); return; }
+  db.s = s;
+  const L = s.local, C = s.cloud, st = s.setup;
+  const settingUp = !s.ready && st && !st.done && !st.error;
+  const busy = settingUp || L.state === 'running' || C.state === 'running';
+
+  // Start on this PC straight away when it is set up and nothing has been tried yet (or when a
+  // setup the user started from here has just finished).
+  if (s.ready && L.state === 'none' && C.state !== 'running' && (auto || db.wantLocal)) {
+    db.wantLocal = false;
+    return dbStart('local');
+  }
+
+  // Which result to show: the one picked (db.show, which stays picked while it is still being
+  // made), else whichever has finished.
+  const done = ['local', 'cloud'].filter(k => s[k].state === 'done');
+  db.showing = done.includes(db.show) ? db.show : (done[done.length - 1] || '');
+  if (db.showing) dbSetAfter(db.showing, String(s[db.showing].updated || ''));
+  else dbSetAfter(null);
+  $('#dbWhich').hidden = done.length < 2;
+  $('#dbShowLocal').setAttribute('aria-pressed', db.showing === 'local' ? 'true' : 'false');
+  $('#dbShowCloud').setAttribute('aria-pressed', db.showing === 'cloud' ? 'true' : 'false');
+
+  // Status line and progress bar.
+  const prog = $('#dbProg');
+  prog.hidden = true;
+  if (settingUp) {
+    const pct = st.total ? Math.floor(100 * st.got / st.total) : 0;
+    dbStatus(st.status === 'installing' ? 'Setting up Fix blur: installing…'
+      : `Setting up Fix blur (one-time download of about ${s.download_mb} MB): ${st.file || ''} ${pct}%`);
+    prog.hidden = false; prog.value = pct;
+  } else if (L.state === 'running') {
+    const pct = L.total ? Math.floor(100 * L.done / L.total) : 0;
+    dbStatus(L.total ? `Fixing on this PC: part ${L.done} of ${L.total}` + (L.done ? `, about ${dbFmtSecs(L.eta || 0)} left` : '') + '. You can close this window; it carries on.'
+      : 'Fixing on this PC: starting…');
+    prog.hidden = false; prog.value = pct;
+  } else if (C.state === 'running') {
+    dbStatus('Sending the photo to Google Gemini: usually 10–40 seconds…');
+  } else if (!s.ready && st && st.error) {
+    dbStatus('Setting up Fix blur failed: ' + st.error, true);
+  } else if (db.show === 'local' && L.state === 'error') {
+    dbStatus('On this PC: ' + L.error, true);
+  } else if (db.show === 'cloud' && C.state === 'error') {
+    dbStatus('Cloud AI: ' + C.error, true);
+  } else if (db.showing) {
+    const j = s[db.showing];
+    dbStatus((db.showing === 'cloud'
+      ? `Redrawn by Google Gemini in ${dbFmtSecs(j.seconds || 0)}. Check faces and text before saving.`
+      : `Fixed on this PC in ${dbFmtSecs(j.seconds || 0)}.`) + ' Drag the slider to compare. Nothing is saved until you click "Save as a copy".');
+  } else if (!s.ready) {
+    dbStatus(`Fixing on this PC needs a one-time download of about ${s.download_mb} MB (the AI model and the program that runs it). Photos never leave this PC.`);
+  }
+
+  // Buttons.
+  const lb = $('#dbLocalBtn'), cb = $('#dbCloudBtn');
+  lb.disabled = busy;
+  lb.textContent = !s.ready ? (settingUp ? 'Setting up…' : `Set up on this PC (${s.download_mb} MB)`)
+    : L.state === 'running' ? 'Fixing…' : (L.state === 'done' || L.state === 'error') ? 'Fix again on this PC' : 'Fix on this PC';
+  cb.disabled = C.state === 'running';
+  cb.textContent = C.state === 'running' ? 'Cloud AI working…' : db.cloudArmed ? 'Send to Google' : `Try cloud AI (${s.cloud_cost})`;
+  $('#dbSaveBtn').disabled = !db.showing;
+
+  if (busy) db.timer = setTimeout(() => dbRefresh(), 1500);
+}
+
+async function dbStart(kind) {
+  const btn = kind === 'cloud' ? $('#dbCloudBtn') : $('#dbLocalBtn');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';   // starting the background job takes a second
+  try {
+    await api('deblur_start', { body: { id: db.row.id, kind } });
+    db.show = kind;
+  } catch (e) { dbStatus(e.message, true); }
+  dbRefresh();
+}
+
+$('#dbLocalBtn').addEventListener('click', async () => {
+  const s = db.s;
+  if (!s) return;
+  if (!s.ready) {
+    db.wantLocal = true;
+    try { await api('deblur_setup', { body: {} }); } catch (e) { dbStatus(e.message, true); return; }
+    return dbRefresh();
+  }
+  dbStart('local');
+});
+$('#dbCloudBtn').addEventListener('click', () => {
+  const s = db.s;
+  if (!s) return;
+  if (!s.cloud_key) {
+    dbStatus('Cloud AI needs your Google Gemini API key: add it in Settings > Fix blur.', true);
+    return;
+  }
+  if (!db.cloudArmed) {   // two clicks: it sends the photo to Google and costs money
+    db.cloudArmed = true;
+    dbStatus(`This sends the photo to Google and costs ${s.cloud_cost} (${s.cloud_model}). Click "Send to Google" to go ahead.`);
+    $('#dbCloudBtn').textContent = 'Send to Google';
+    return;
+  }
+  db.cloudArmed = false;
+  dbStart('cloud');
+});
+$('#dbShowLocal').addEventListener('click', () => { db.show = 'local'; dbRefresh(); });
+$('#dbShowCloud').addEventListener('click', () => { db.show = 'cloud'; dbRefresh(); });
+$('#dbSaveBtn').addEventListener('click', async () => {
+  const id = db.row.id, kind = db.showing;
+  if (!kind) return;
+  $('#dbSaveBtn').disabled = true;
+  try {
+    const res = await api('deblur_save', { body: { id, kind } });
+    const row = res.image;
+    // Into the grid next to the original, as Enhance does.
+    if (lastResults.some(x => x.id === id) && !cu.lbSaved) {
+      lastResults = lastResults.filter(x => x.id !== row.id);
+      lastResults.splice(lastResults.findIndex(x => x.id === id) + 1, 0, row);
+      if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults);
+    }
+    setStats(res.stats);
+    toast('Saved “' + res.name + '” next to the original.');
+    dbStatus('Saved as “' + res.name + '” next to the original.');
+  } catch (e) {
+    dbStatus(e.message, true);
+    $('#dbSaveBtn').disabled = false;
+  }
+});
+$('#dbClose').addEventListener('click', () => $('#deblurDlg').close());
+// Keys belong to this window while it is open (not to the photo view or Clean up behind it).
+$('#deblurDlg').addEventListener('keydown', e => e.stopPropagation());
+$('#deblurDlg').addEventListener('close', () => { clearTimeout(db.timer); });
+$('#lbFixBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  if (lbIndex >= 0 && lastResults[lbIndex]) dbOpen(lastResults[lbIndex]);
+});
 
 $('#cleanupBtn').addEventListener('click', cuOpen);
 $('#cuClose').addEventListener('click', () => $('#cleanupDlg').close());

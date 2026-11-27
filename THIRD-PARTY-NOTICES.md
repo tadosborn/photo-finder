@@ -24,3 +24,12 @@ folder (normally `C:\Program Files\Photo Finder`).
 - **AI models and services.** Photo Finder contains no AI model and no API keys. Anthropic,
   other AI services and local model servers (Ollama, LM Studio) are used through the user's own
   accounts or installations, under their own terms.
+- **Fix blur's on-PC runtime.** Downloaded only when Fix blur is first used (into
+  `%LOCALAPPDATA%\Photo Finder\deblur`), each file checked against a SHA-256 pinned in
+  `lib\Deblur.php`: Python 3.13 embeddable (Python Software Foundation, PSF License, from
+  python.org), ONNX Runtime (Microsoft, MIT), NumPy (NumPy developers, BSD 3-Clause) and Pillow
+  (Jeffrey A. Clark and contributors, MIT-CMU), from PyPI, and the NAFNet deblurring model
+  (megvii-model, MIT; ONNX export from OpenCV's model zoo on Hugging Face). Each package's license
+  text is inside its folder there.
+- **Google Gemini** (Fix blur's optional cloud AI) is used through the user's own Google API key,
+  under Google's terms.
