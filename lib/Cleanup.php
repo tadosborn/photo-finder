@@ -66,6 +66,9 @@ final class Cleanup {
     public const DUP_SIMILAR = 6;  // also near-identical shots (bursts)
     public const DUP_MAX     = 6;  // beyond this unrelated photos start to match, and it gets slow
 
+    /** Small photos: under this many px on the long side (old phone and camera pictures). */
+    public const SMALL_SIDE = 1600;
+
     // ------------------------------------------------------------------ measuring
 
     /** Measure one image file (a thumbnail). Returns null when it cannot be decoded. */
@@ -477,6 +480,48 @@ final class Cleanup {
         return $out;
     }
 
+    /** Small photos (under SMALL_SIDE px on the long side), smallest first: candidates for
+     *  Enlarge (lib/Deblur.php). The page narrows the list further by size. Needs no analysis. */
+    public static function small(): array {
+        self::correctCappedSizes();
+        // The limit is a number in the SQL itself: bound through execute() it would be text, and
+        // SQLite orders every number before any text, so every photo would count as small.
+        $rows = Db::get()->query(
+            'SELECT ' . self::ROW_COLS . " FROM images
+             WHERE status = 'ok' AND width > 0 AND height > 0 AND MAX(width, height) < " . (int)self::SMALL_SIDE . "
+               AND COALESCE(cleanup_keep, 0) = 0
+             ORDER BY width * height ASC, path"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return array_map([self::class, 'rowOut'], $rows);
+    }
+
+    /** Before 1.0.8 the index recorded the size of the copy the describing AI was sent (its long
+     *  side cut to max_image_dim, 1568 by default), not the photo's own, and Fix blur's copies
+     *  took their original's size (a cloud result is larger). Those rows are re-measured from the
+     *  file's header (about 1.5 ms each; a corrected row no longer matches, so later calls only
+     *  re-check the few photos that really are that size, and Fix blur's copies). */
+    private static function correctCappedSizes(): void {
+        $caps = array_values(array_unique([1568, (int)(pf_load_settings()['max_image_dim'] ?? 1568)]));
+        $pdo = Db::get();
+        $rows = $pdo->query("SELECT id, path, width, height FROM images
+                             WHERE status = 'ok' AND (MAX(width, height) IN (" . implode(',', array_map('intval', $caps)) . ")
+                                OR path LIKE '% (restored%).jpg' OR path LIKE '% (deblurred%).jpg')")
+                    ->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) return;
+        $upd = $pdo->prepare('UPDATE images SET width = :w, height = :h WHERE id = :id');
+        $pdo->beginTransaction();
+        try {
+            foreach ($rows as $r) {
+                $s = pf_image_size((string)$r['path']);
+                if ($s && $s !== [(int)$r['width'], (int)$r['height']]) $upd->execute([':w' => $s[0], ':h' => $s[1], ':id' => $r['id']]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
     // ------------------------------------------------------------------ duplicates
 
     /** Groups of copies and near-copies, best copy first in each group.
@@ -493,6 +538,7 @@ final class Cleanup {
      *  Blank frames (which all hash alike) are left to the exposure tab. */
     public static function duplicates(int $maxDist): array {
         $maxDist = max(0, min(self::DUP_MAX, $maxDist));
+        self::correctCappedSizes();   // the best copy is the one with the most pixels
         $rows = Db::get()->query(
             'SELECT ' . self::ROW_COLS . " FROM images
              WHERE status = 'ok' AND dhash IS NOT NULL ORDER BY rowid"

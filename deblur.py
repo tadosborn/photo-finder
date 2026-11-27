@@ -4,8 +4,9 @@
 
 Runs the NAFNet deblurring model (ONNX Runtime, CPU) over the photo in overlapping 512 px tiles
 (the model needs at least 384 px each way), blends the tiles so no seams show, and writes the
-result as a JPEG. The pixels stay in the file's stored orientation, so the original's EXIF
-Orientation (copied on save) stays right; the colour profile is kept. Progress goes to
+result as a JPEG. The pixels stay in the file's stored orientation and the result carries the
+original's EXIF Orientation, so it shows the right way up (and the tag, copied on save, stays right);
+the colour profile is kept. Progress goes to
 progress.json after every tile: {"state": "running", "done": n, "total": n, "eta": s, ...},
 then {"state": "done"} or {"state": "error", "error": "..."}.
 """
@@ -57,6 +58,7 @@ def run(model, src, dst, progress):
     started = int(time.time())
     im = Image.open(src)
     icc = im.info.get("icc_profile")
+    orient = im.getexif().get(0x0112, 1)  # EXIF Orientation: the result keeps it, so it shows the right way up
     im = im.convert("RGB")
     a = np.asarray(im, dtype=np.float32) / 255.0
     h, w, _ = a.shape
@@ -98,6 +100,10 @@ def run(model, src, dst, progress):
     kw = {"quality": 95, "subsampling": 0}
     if icc:
         kw["icc_profile"] = icc
+    if orient in (2, 3, 4, 5, 6, 7, 8):
+        exif = Image.Exif()
+        exif[0x0112] = orient
+        kw["exif"] = exif
     res.save(dst + ".part.jpg", "JPEG", **kw)
     os.replace(dst + ".part.jpg", dst)
     write_state(progress, {"state": "done", "started": started, "seconds": int(time.time()) - started,

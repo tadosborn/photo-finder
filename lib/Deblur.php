@@ -10,27 +10,36 @@ require_once __DIR__ . '/Thumb.php';
 require_once __DIR__ . '/Enhance.php';
 
 /**
- * Fix blur: makes a sharper copy of a blurred photo, on this PC or with Google's Gemini.
+ * Fix blur and Enlarge: a sharper, or a larger, version of a photo, on this PC or with Google's Gemini.
  *
- * On this PC: the NAFNet deblurring model (MIT licence, from OpenCV's model zoo) on ONNX Runtime,
- * run by deblur.py under its own Python. That runtime (Python embeddable, onnxruntime, numpy,
- * Pillow and the model, about 139 MB) is downloaded on first use into data/deblur, each file
- * checked against the SHA-256 pinned in PACK. Good on camera shake and motion blur; it cannot
- * bring back a photo that is out of focus. About 2 minutes per 3 MP photo on a typical processor.
+ * Kinds of result (KINDS), each a background job of its own:
+ *   local     Fix blur on this PC: the NAFNet deblurring model (MIT licence, from OpenCV's model
+ *             zoo) on ONNX Runtime, run by deblur.py under its own Python. Good on camera shake
+ *             and motion blur; it cannot bring back a photo that is out of focus. About 2 minutes
+ *             per 3 MP photo on a typical processor.
+ *   cloud     Fix blur with Gemini image editing (Interactions API) and the user's own Google AI
+ *             key. The model redraws the photo, so faces and text can come out different. It
+ *             sends the photo to Google and costs a few cents (billed by Google).
+ *   chain     Two steps: Gemini works on the 'local' result instead of the original.
+ *   up_local  Enlarge on this PC, 4x (2x for photos over ENLARGE_X4_SIDE): Real-ESRGAN General
+ *             x4v3 (BSD-3-Clause) on the same runtime, run by enlarge.py. Seconds per photo.
+ *   up_cloud  Enlarge with Gemini, redrawn at 2K.
  *
- * Cloud: Gemini image editing (Interactions API) with the user's own Google AI key. The model
- * redraws the photo, so faces and text can come out different. It is offered as a second try,
- * sends the photo to Google, and costs a few cents per photo (billed by Google).
+ * The on-PC runtime (Python embeddable, onnxruntime, numpy, Pillow and the NAFNet model, about
+ * 139 MB) is downloaded on first use into data/deblur; the enlarging model (UPSCALE, 4 MB) when
+ * Enlarge is first used. Every file is checked against the SHA-256 pinned here.
  *
- * Both run as background jobs, started through ShellExecute (pf-helper "launch", as
- * pull-model.php is) so they inherit none of the web server's handles. Each writes its state to
- * data/deblur/jobs/<id>-<kind>.json and its result to <id>-<kind>.jpg; the page polls status()
- * and shows the result before anything is written next to the photo. save() then writes
- * "<name> (deblurred).jpg" or "<name> (restored).jpg" beside the original, with the original's
- * metadata, and indexes it like an Enhance copy. The original is never changed.
+ * Jobs start through ShellExecute (pf-helper "launch", as pull-model.php does) so they inherit
+ * none of the web server's handles. Each writes its state to data/deblur/jobs/<id>-<kind>.json
+ * and its result to <id>-<kind>.jpg; the page polls status() and shows every result side by
+ * side before anything is written. save() then writes "<name> (<SUFFIX>).jpg" beside the
+ * original with the original's metadata and indexes it like an Enhance copy, or replaces the
+ * original (which goes to the Recycle Bin).
  *
- * Pixels stay in the file's stored orientation (no EXIF rotation is applied), so the original's
- * Orientation tag, copied along, stays right for the new file.
+ * On this PC the pixels stay in the file's stored orientation (no EXIF rotation is applied) and
+ * the result carries the original's Orientation tag, so it shows the right way up and the tag,
+ * copied along on save, stays right. Gemini is sent the photo upright and its result is saved
+ * with Orientation 1.
  */
 final class Deblur {
     public const PACK_VERSION = 1;
@@ -52,8 +61,22 @@ final class Deblur {
          'url' => 'https://huggingface.co/opencv/deblurring_nafnet/resolve/main/deblurring_nafnet_2025may.onnx',
          'sha256' => '07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587'],
     ];
-    public const KINDS = ['local', 'cloud'];
-    public const SUFFIX = ['local' => 'deblurred', 'cloud' => 'restored'];
+    /** The enlarging model (Qualcomm AI Hub's ONNX export of Real-ESRGAN General x4v3): a zip
+     *  holding the .onnx and its weights (.data), which must stay side by side. */
+    public const UPSCALE = ['name' => 'Real-ESRGAN enlarging model', 'kind' => 'upscale', 'file' => 'real_esrgan_general_x4v3-onnx-float.zip', 'size' => 4541448,
+        'url' => 'https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_general_x4v3/releases/v0.67.0/real_esrgan_general_x4v3-onnx-float.zip',
+        'sha256' => '4f3619c89eb0727ff9170b977578d160fa4d696680a0cac4c7f870b52973033b'];
+    public const KINDS = ['local', 'cloud', 'chain', 'up_local', 'up_cloud'];
+    private const CLOUD_KINDS = ['cloud', 'chain', 'up_cloud'];
+    public const SUFFIX = ['local' => 'deblurred', 'cloud' => 'restored', 'chain' => 'deblurred, restored',
+                           'up_local' => 'enlarged', 'up_cloud' => 'AI enlarged'];
+    /** Enlarge takes photos up to ENLARGE_MAX_SIDE px on the long side: 4x up to ENLARGE_X4_SIDE,
+     *  2x above it, so a result is at most 4800 px (and the job's memory stays near 300 MB). */
+    public const ENLARGE_MAX_SIDE = 2400;
+    public const ENLARGE_X4_SIDE = 1200;
+    /** Gemini draws "2K" pictures (2048 px for a square one; 2400 × 1792 for 4:3, as it returned
+     *  for real photos): only photos under 2048 px on the long side gain from its enlargement. */
+    public const CLOUD_ENLARGE_SIDE = 2048;
 
     /** Gemini image-editing models offered in Settings (prices from Google's pricing page, Nov 2026). */
     public const GEMINI_MODELS = [
@@ -64,10 +87,18 @@ final class Deblur {
     public const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
     private const GEMINI_RATIOS = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
     private const CLOUD_MAX_SIDE = 3072;
-    private const PROMPT = 'Restore this photo: remove the blur from camera shake, motion or focus so it looks sharp and '
-        . 'natural, as if the picture had been taken correctly. Keep everything else exactly the same: the same '
-        . 'people, faces, expressions, poses, clothing, objects, text, colours, lighting, framing and composition. '
-        . 'Do not add, remove or restyle anything.';
+    private const KEEP = 'Keep everything else exactly the same: the same people, faces, expressions, poses, clothing, '
+        . 'objects, text, colours, lighting, framing and composition. Do not add, remove or restyle anything.';
+    private const PROMPTS = [
+        'cloud' => 'Restore this photo: remove the blur from camera shake, motion or focus so it looks sharp and '
+            . 'natural, as if the picture had been taken correctly. ' . self::KEEP,
+        'chain' => 'This photo has already been partly deblurred. Finish restoring it: remove any blur that remains '
+            . 'and any halos, ringing or smeared texture left by the earlier sharpening, so it looks sharp and '
+            . 'natural, as if the picture had been taken correctly. ' . self::KEEP,
+        'up_cloud' => 'This is a small, low-resolution photo. Redraw it at a higher resolution: sharp and natural, '
+            . 'with fine detail in faces, hair, fabric and textures, and without blur, noise, pixelation or JPEG '
+            . 'compression blocks. ' . self::KEEP,
+    ];
 
     // ---- Paths ----
 
@@ -81,12 +112,36 @@ final class Deblur {
         return self::jobsDir() . '/' . $id . '-' . $kind . '.' . $ext;
     }
     public static function packBytes(): int { return array_sum(array_column(self::PACK, 'size')); }
+    private static function upscaleDir(): string { return self::packDir() . '/upscale'; }
+    public static function upscaleModel(): string {
+        return self::upscaleDir() . '/real_esrgan_general_x4v3-onnx-float/real_esrgan_general_x4v3_onnx/real_esrgan_general_x4v3.onnx';
+    }
 
     // ---- The on-PC runtime ----
 
     public static function isReady(): bool {
         $r = json_decode((string)@file_get_contents(self::packDir() . '/ready.json'), true);
         return is_array($r) && ($r['version'] ?? 0) === self::PACK_VERSION && is_file(self::python()) && is_file(self::model());
+    }
+
+    private static function upscaleInstalled(): bool {
+        $r = json_decode((string)@file_get_contents(self::upscaleDir() . '/ready.json'), true);
+        return is_array($r) && ($r['sha256'] ?? '') === self::UPSCALE['sha256'] && is_file(self::upscaleModel());
+    }
+
+    /** Enlarge on this PC: the runtime and the enlarging model. */
+    public static function isUpscaleReady(): bool { return self::isReady() && self::upscaleInstalled(); }
+
+    /** What a setup for 'deblur' (the runtime) or 'enlarge' (the runtime and the enlarging model)
+     *  still has to download. */
+    private static function setupItems(string $which): array {
+        $items = self::isReady() ? [] : self::PACK;
+        if ($which === 'enlarge' && !self::upscaleInstalled()) $items[] = self::UPSCALE;
+        return $items;
+    }
+
+    public static function setupBytes(string $which): int {
+        return array_sum(array_column(self::setupItems($which), 'size'));
     }
 
     public static function setupStatus(): ?array {
@@ -98,25 +153,29 @@ final class Deblur {
         return $s;
     }
 
-    public static function startSetup(): void {
-        if (self::isReady()) return;
+    /** $which: 'deblur' (the runtime) or 'enlarge' (the runtime, if missing, and the enlarging model). */
+    public static function startSetup(string $which = 'deblur'): void {
+        if (!in_array($which, ['deblur', 'enlarge'], true)) throw new InvalidArgumentException('Unknown setup.');
+        $bytes = self::setupBytes($which);
+        if ($bytes === 0) return;
         $st = self::setupStatus();
         if ($st && empty($st['done']) && empty($st['error'])) throw new RuntimeException('The download is already running.');
-        self::writeJson(self::setupFile(), ['status' => 'starting', 'done' => false, 'error' => '', 'got' => 0, 'total' => self::packBytes(), 'updated' => time()]);
-        self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-setup.php'), self::win(PF_DATA)]);
+        self::writeJson(self::setupFile(), ['status' => 'starting', 'which' => $which, 'done' => false, 'error' => '', 'got' => 0, 'total' => $bytes, 'updated' => time()]);
+        self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-setup.php'), self::win(PF_DATA), $which]);
     }
 
-    /** Runs in deblur-setup.php: download, check and unpack the runtime. A file already in
+    /** Runs in deblur-setup.php: download, check and unpack what $which needs. A file already in
      *  PF_DEBLUR_CACHE (a folder) with the right SHA-256 is copied instead of downloaded. */
-    public static function runSetup(): void {
-        $total = self::packBytes();
-        $state = ['status' => 'downloading', 'done' => false, 'error' => '', 'got' => 0, 'total' => $total, 'file' => '', 'updated' => time()];
+    public static function runSetup(string $which = 'deblur'): void {
+        $items = self::setupItems($which);
+        $total = array_sum(array_column($items, 'size'));
+        $state = ['status' => 'downloading', 'which' => $which, 'done' => false, 'error' => '', 'got' => 0, 'total' => $total, 'file' => '', 'updated' => time()];
         $save = function () use (&$state): void { $state['updated'] = time(); self::writeJson(self::setupFile(), $state); };
         $dl = self::dir() . '/download';
         try {
             foreach ([$dl, self::packDir()] as $d) if (!is_dir($d) && !@mkdir($d, 0777, true)) throw new RuntimeException("Cannot create $d");
             $before = 0;
-            foreach (self::PACK as $f) {
+            foreach ($items as $f) {
                 $state['file'] = $f['name'];
                 $dest = $dl . '/' . $f['file'];
                 if (!(is_file($dest) && hash_file('sha256', $dest) === $f['sha256'])) {
@@ -142,20 +201,29 @@ final class Deblur {
             $state['status'] = 'installing';
             $save();
             $rt = self::packDir();
-            if (is_dir($rt . '/python')) self::rmTree($rt . '/python');
-            @mkdir($rt . '/model', 0777, true);
-            foreach (self::PACK as $f) {
-                $src = $dl . '/' . $f['file'];
-                if ($f['kind'] === 'python') self::unzip($src, $rt . '/python');
-                elseif ($f['kind'] === 'wheel') self::unzip($src, $rt . '/python/Lib/site-packages');
-                elseif (!copy($src, self::model())) throw new RuntimeException('Could not install the model.');
+            $kinds = array_column($items, 'kind');
+            if (in_array('python', $kinds, true)) {
+                if (is_dir($rt . '/python')) self::rmTree($rt . '/python');
+                @mkdir($rt . '/model', 0777, true);
+                foreach (self::PACK as $f) {
+                    $src = $dl . '/' . $f['file'];
+                    if ($f['kind'] === 'python') self::unzip($src, $rt . '/python');
+                    elseif ($f['kind'] === 'wheel') self::unzip($src, $rt . '/python/Lib/site-packages');
+                    elseif (!copy($src, self::model())) throw new RuntimeException('Could not install the model.');
+                }
+                // The embeddable Python only searches the folders its ._pth file lists.
+                $pth = glob($rt . '/python/python3*._pth')[0] ?? null;
+                if (!$pth) throw new RuntimeException('Python did not unpack correctly.');
+                if (!str_contains((string)file_get_contents($pth), 'Lib\\site-packages')) file_put_contents($pth, "Lib\\site-packages\n", FILE_APPEND);
+                self::writeJson($rt . '/ready.json', ['version' => self::PACK_VERSION, 'installed' => time()]);
             }
-            // The embeddable Python only searches the folders its ._pth file lists.
-            $pth = glob($rt . '/python/python3*._pth')[0] ?? null;
-            if (!$pth) throw new RuntimeException('Python did not unpack correctly.');
-            if (!str_contains((string)file_get_contents($pth), 'Lib\\site-packages')) file_put_contents($pth, "Lib\\site-packages\n", FILE_APPEND);
-            self::writeJson($rt . '/ready.json', ['version' => self::PACK_VERSION, 'installed' => time()]);
-            foreach (self::PACK as $f) @unlink($dl . '/' . $f['file']);   // unpacked; the downloads are no longer needed
+            if (in_array('upscale', $kinds, true)) {
+                if (is_dir(self::upscaleDir())) self::rmTree(self::upscaleDir());
+                self::unzip($dl . '/' . self::UPSCALE['file'], self::upscaleDir());
+                if (!is_file(self::upscaleModel())) throw new RuntimeException('The enlarging model did not unpack correctly.');
+                self::writeJson(self::upscaleDir() . '/ready.json', ['sha256' => self::UPSCALE['sha256'], 'installed' => time()]);
+            }
+            foreach ($items as $f) @unlink($dl . '/' . $f['file']);   // unpacked; the downloads are no longer needed
             $state['status'] = 'done';
             $state['done'] = true;
             $save();
@@ -210,15 +278,46 @@ final class Deblur {
         return isset(self::GEMINI_MODELS[$m]) ? $m : self::GEMINI_DEFAULT;
     }
 
-    /** Start fixing photo $row on this PC ('local') or with Gemini ('cloud'). */
+    /** Enlarging uses a 2K model: the chosen one if it draws at 2K, else the default. */
+    public static function upCloudModel(): string {
+        $m = self::cloudModel();
+        return self::GEMINI_MODELS[$m]['size'] === '2K' ? $m : self::GEMINI_DEFAULT;
+    }
+
+    /** Whether, and how much, photo $row can be enlarged; width/height are its own size as shown,
+     *  read from the file (the index may hold an older, smaller figure; see Cleanup). */
+    public static function enlargeInfo(array $row): array {
+        [$w, $h] = pf_image_size((string)$row['path']) ?? [(int)($row['width'] ?? 0), (int)($row['height'] ?? 0)];
+        $long = max($w, $h);
+        $scale = $long <= self::ENLARGE_X4_SIDE ? 4 : 2;
+        return ['ok' => $long > 0 && $long <= self::ENLARGE_MAX_SIDE, 'cloud_ok' => $long > 0 && $long < self::CLOUD_ENLARGE_SIDE,
+                'scale' => $scale, 'width' => $w, 'height' => $h, 'max_side' => self::ENLARGE_MAX_SIDE];
+    }
+
+    /** Start a job of $kind (see KINDS) for photo $row. */
     public static function start(array $row, string $kind): void {
         if (!in_array($kind, self::KINDS, true)) throw new InvalidArgumentException('Unknown kind.');
         $id = (string)$row['id'];
         $st = self::jobStatus($id, $kind);
         if (($st['state'] ?? '') === 'running') throw new RuntimeException('Already working on this photo.');
         // Check everything before recording a job, so a refusal leaves no "running" state behind.
+        $cloud = in_array($kind, self::CLOUD_KINDS, true);
         if ($kind === 'local' && !self::isReady()) throw new RuntimeException('Fix blur is not set up on this PC yet.');
-        if ($kind === 'cloud' && !self::hasCloudKey()) throw new RuntimeException('Add a Google Gemini API key in Settings > Fix blur first.');
+        if ($kind === 'up_local' && !self::isUpscaleReady()) throw new RuntimeException('Enlarging is not set up on this PC yet.');
+        if ($cloud && !self::hasCloudKey()) throw new RuntimeException('Add a Google Gemini API key in Settings > Fix blur first.');
+        if ($kind === 'chain' && (self::jobStatus($id, 'local')['state'] ?? '') !== 'done') {
+            throw new RuntimeException('Fix it on this PC first: the cloud AI then works on that result.');
+        }
+        $scale = 0;
+        if ($kind === 'up_local' || $kind === 'up_cloud') {
+            $e = self::enlargeInfo($row);
+            $limit = $kind === 'up_local' ? self::ENLARGE_MAX_SIDE : self::CLOUD_ENLARGE_SIDE - 1;
+            if (!($kind === 'up_local' ? $e['ok'] : $e['cloud_ok'])) {
+                throw new RuntimeException("This photo is already {$e['width']}×{$e['height']}: " . ($kind === 'up_local' ? 'enlarging on this PC' : 'the cloud AI')
+                    . ' is for photos up to ' . number_format($limit) . ' px on the long side.');
+            }
+            $scale = $e['scale'];
+        }
         if (!is_dir(self::jobsDir())) @mkdir(self::jobsDir(), 0777, true);
         $jf = self::jobFile($id, $kind, 'json');
         @unlink(self::jobFile($id, $kind, 'jpg'));
@@ -227,8 +326,11 @@ final class Deblur {
             if ($kind === 'local') {
                 self::launch(self::win(self::python()), ['-I', self::win(PF_ROOT . '/deblur.py'), self::win(self::model()),
                     self::win((string)$row['path']), self::win(self::jobFile($id, $kind, 'jpg')), self::win($jf)]);
+            } elseif ($kind === 'up_local') {
+                self::launch(self::win(self::python()), ['-I', self::win(PF_ROOT . '/enlarge.py'), self::win(self::upscaleModel()),
+                    self::win((string)$row['path']), self::win(self::jobFile($id, $kind, 'jpg')), self::win($jf), (string)$scale]);
             } else {
-                self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-cloud.php'), $id, self::win(PF_DATA)]);
+                self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-cloud.php'), $id, self::win(PF_DATA), $kind]);
             }
         } catch (Throwable $e) {
             self::writeJson($jf, ['state' => 'error', 'error' => $e->getMessage(), 'updated' => time()]);
@@ -239,7 +341,10 @@ final class Deblur {
     public static function jobStatus(string $id, string $kind): array {
         $j = json_decode((string)@file_get_contents(self::jobFile($id, $kind, 'json')), true);
         if (!is_array($j)) return ['state' => 'none'];
-        if (($j['state'] ?? '') === 'running' && ($j['updated'] ?? 0) < time() - 180) {
+        // On this PC the job writes progress after every tile; a cloud job writes only when Google
+        // answers, which may take up to its 240 s time-out.
+        $quiet = in_array($kind, self::CLOUD_KINDS, true) ? 300 : 180;
+        if (($j['state'] ?? '') === 'running' && ($j['updated'] ?? 0) < time() - $quiet) {
             $j['state'] = 'error';
             $j['error'] = 'It stopped without finishing. Try again.';
         }
@@ -247,19 +352,26 @@ final class Deblur {
         return $j;
     }
 
-    /** Everything the Fix blur panel shows for one photo. */
+    /** Everything the Fix blur / Enlarge window shows for one photo. */
     public static function status(string $id): array {
         $m = self::cloudModel();
-        return [
+        $um = self::upCloudModel();
+        $row = Db::getById($id);
+        $out = [
             'ready' => self::isReady(),
+            'up_ready' => self::isUpscaleReady(),
             'setup' => self::setupStatus(),
             'download_mb' => (int)round(self::packBytes() / 1048576),
+            'up_download_mb' => max(1, (int)round(self::setupBytes('enlarge') / 1048576)),
             'cloud_key' => self::hasCloudKey(),
             'cloud_model' => self::GEMINI_MODELS[$m]['label'],
             'cloud_cost' => self::GEMINI_MODELS[$m]['cost'],
-            'local' => self::jobStatus($id, 'local'),
-            'cloud' => self::jobStatus($id, 'cloud'),
+            'up_cloud_model' => self::GEMINI_MODELS[$um]['label'],
+            'up_cloud_cost' => self::GEMINI_MODELS[$um]['cost'],
+            'enlarge' => $row ? self::enlargeInfo($row) : null,
         ];
+        foreach (self::KINDS as $k) $out[$k] = self::jobStatus($id, $k);
+        return $out;
     }
 
     public static function discard(string $id): void {
@@ -272,22 +384,30 @@ final class Deblur {
 
     // ---- Cloud: Gemini image editing ----
 
-    /** Runs in deblur-cloud.php. */
-    public static function runCloud(string $id): void {
-        $jf = self::jobFile($id, 'cloud', 'json');
+    /** Runs in deblur-cloud.php: a 'cloud', 'chain' or 'up_cloud' job. */
+    public static function runCloud(string $id, string $kind = 'cloud'): void {
+        if (!in_array($kind, self::CLOUD_KINDS, true)) throw new InvalidArgumentException('Unknown kind.');
+        $jf = self::jobFile($id, $kind, 'json');
         $state = ['state' => 'running', 'started' => time(), 'updated' => time()];
         try {
             $row = Db::getById($id);
             if (!$row || !is_file((string)$row['path'])) throw new RuntimeException('The photo is no longer on disk.');
+            $src = (string)$row['path'];
+            if ($kind === 'chain') {   // the second step works on the first step's result
+                $src = self::jobFile($id, 'local', 'jpg');
+                if ((self::jobStatus($id, 'local')['state'] ?? '') !== 'done' || !is_file($src)) {
+                    throw new RuntimeException('The result from this PC is gone. Fix it on this PC again first.');
+                }
+            }
             $s = pf_load_settings();
             $key = trim((string)($s['gemini_api_key'] ?? ''));
             if ($key === '') throw new RuntimeException('No Google Gemini API key is set.');
-            $model = self::cloudModel();
-            [$jpeg, $w, $h] = self::cloudInput((string)$row['path']);
+            $model = $kind === 'up_cloud' ? self::upCloudModel() : self::cloudModel();
+            [$jpeg, $w, $h] = self::cloudInput($src);
             $body = [
                 'model' => $model,
                 'input' => [
-                    ['type' => 'text', 'text' => self::PROMPT],
+                    ['type' => 'text', 'text' => self::PROMPTS[$kind]],
                     ['type' => 'image', 'mime_type' => 'image/jpeg', 'data' => base64_encode($jpeg)],
                 ],
                 'response_format' => ['type' => 'image', 'mime_type' => 'image/jpeg', 'aspect_ratio' => self::nearestRatio($w, $h),
@@ -318,7 +438,7 @@ final class Deblur {
             }
             $bin = base64_decode($img, true);
             if ($bin === false || !@getimagesizefromstring($bin)) throw new RuntimeException('Google returned something that is not a picture.');
-            $out = self::jobFile($id, 'cloud', 'jpg');
+            $out = self::jobFile($id, $kind, 'jpg');
             $info = getimagesizefromstring($bin);
             if (($info[2] ?? 0) !== IMAGETYPE_JPEG) {          // asked for JPEG; convert if it sent PNG
                 $gd = imagecreatefromstring($bin);
@@ -345,20 +465,29 @@ final class Deblur {
         throw new RuntimeException('gemini_url must be https.');
     }
 
-    /** The photo as a JPEG of at most CLOUD_MAX_SIDE px, in its stored orientation. */
+    /** The photo as a JPEG of at most CLOUD_MAX_SIDE px, turned the way it is shown (its EXIF
+     *  Orientation applied), so the AI sees it upright and draws it upright; save() then marks
+     *  the result Orientation 1. */
     private static function cloudInput(string $path): array {
         $info = @getimagesize($path);
         if (!$info) throw new RuntimeException('This photo cannot be read.');
         [$w, $h] = $info;
-        if ($info[2] === IMAGETYPE_JPEG && max($w, $h) <= self::CLOUD_MAX_SIDE && filesize($path) < 12_000_000) {
+        $o = self::orientation($path);
+        if ($o === 1 && $info[2] === IMAGETYPE_JPEG && max($w, $h) <= self::CLOUD_MAX_SIDE && filesize($path) < 12_000_000) {
             return [(string)file_get_contents($path), $w, $h];
         }
         $src = @imagecreatefromstring((string)file_get_contents($path));
         if (!$src) throw new RuntimeException('This photo cannot be read.');
-        $im = Enhance::fit($src, self::CLOUD_MAX_SIDE);
+        $im = Enhance::orient(Enhance::fit($src, self::CLOUD_MAX_SIDE), $o);
         ob_start();
         imagejpeg($im, null, 92);
         return [(string)ob_get_clean(), imagesx($im), imagesy($im)];
+    }
+
+    /** EXIF Orientation 1..8 of a JPEG (1 for anything else). */
+    private static function orientation(string $path): int {
+        $o = function_exists('exif_read_data') ? (int)(@exif_read_data($path)['Orientation'] ?? 1) : 1;
+        return $o >= 1 && $o <= 8 ? $o : 1;
     }
 
     private static function nearestRatio(int $w, int $h): string {
@@ -393,11 +522,13 @@ final class Deblur {
 
     // ---- Saving ----
 
-    /** "<name> (deblurred).jpg" / "<name> (restored).jpg" beside the original, never an existing file. */
+    /** "<name> (<SUFFIX>).jpg" beside the original, never an existing file. The same suffix is not
+     *  repeated ("X (enlarged).jpg" enlarged again is "X (enlarged 2).jpg"); a different one is
+     *  added ("X (deblurred).jpg" enlarged is "X (deblurred) (enlarged).jpg"). */
     public static function copyPath(string $path, string $kind): string {
         $suffix = self::SUFFIX[$kind];
         $dir = pf_norm_path(dirname($path));
-        $stem = (string)preg_replace('/ \((?:deblurred|restored)(?: \d+)?\)$/i', '', pathinfo($path, PATHINFO_FILENAME));
+        $stem = (string)preg_replace('/ \(' . preg_quote($suffix, '/') . '(?: \d+)?\)$/i', '', pathinfo($path, PATHINFO_FILENAME));
         for ($n = 1; $n < 1000; $n++) {
             $cand = $dir . '/' . $stem . ($n === 1 ? " ({$suffix})" : " ({$suffix} {$n})") . '.jpg';
             if (!file_exists($cand)) return $cand;
@@ -429,10 +560,12 @@ final class Deblur {
         $argFile = self::jobFile($id, $kind, 'args.txt');
         // As Enhance does: everything from the original, minus its (blurry) thumbnail and preview
         // and the HDR/motion-photo descriptions whose extra data the new file does not have.
+        // Cloud results come back upright (cloudInput turned the photo), so they are marked so.
         $args = ['-n', '-TagsFromFile', pf_norm_path($path), '-all:all', '-unsafe', '-ICC_Profile', '-IPTC:CodedCharacterSet',
                  '--XMP-hdrgm:all', '--XMP-GContainer:all', '--XMP-GCamera:all', '--ThumbnailImage', '--PreviewImage',
-                 '-ExifIFD:ExifImageWidth=' . $w, '-ExifIFD:ExifImageHeight=' . $h,
-                 '-m', '-overwrite_original', pf_norm_path($tmp)];
+                 '-ExifIFD:ExifImageWidth=' . $w, '-ExifIFD:ExifImageHeight=' . $h];
+        if (in_array($kind, self::CLOUD_KINDS, true)) $args[] = '-IFD0:Orientation=1';
+        array_push($args, '-m', '-overwrite_original', pf_norm_path($tmp));
         file_put_contents($argFile, implode("\n", $args) . "\n");
         [$exit, $stdout, $stderr] = pf_run_cmd([$tool, '-charset', 'filename=UTF8', '-@', $argFile]);
         @unlink($argFile);
@@ -453,9 +586,6 @@ final class Deblur {
             $dest = $path;
             clearstatcache(true, $path);
             Db::upsertPending($newId, $path, (int)filesize($path), (int)filemtime($path));
-            // New pixels: its size, and Clean up's measurements, change.
-            Db::get()->prepare('UPDATE images SET width = :w, height = :h, analyzed_at = NULL WHERE id = :id')
-                ->execute([':w' => $w, ':h' => $h, ':id' => $newId]);
             @unlink(PF_THUMBS . '/' . $newId . '.jpg');
         } else {
             $dest = self::copyPath($path, $kind);
@@ -463,8 +593,13 @@ final class Deblur {
                 if (!@copy($tmp, $dest)) { @unlink($tmp); throw new RuntimeException('Could not write ' . $dest); }
                 @unlink($tmp);
             }
-            $newId = Enhance::indexCopy($row, $dest);
+            $newId = Enhance::indexCopy($row, $dest);   // copies the original's row, size included
         }
+        // New pixels: the photo's own size (a cloud result is 2K, an enlargement larger), and for
+        // a replaced photo Clean up's measurements, change.
+        [$sw, $sh] = pf_image_size($dest) ?? [$w, $h];
+        Db::get()->prepare('UPDATE images SET width = :w, height = :h' . ($mode === 'replace' ? ', analyzed_at = NULL' : '') . ' WHERE id = :id')
+            ->execute([':w' => $sw, ':h' => $sh, ':id' => $newId]);
         Thumb::ensureThumb($newId, $dest);
         if ($mode === 'replace') {
             // Every result was made from the old original: clear them all.

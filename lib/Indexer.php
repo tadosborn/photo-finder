@@ -202,7 +202,9 @@ final class Indexer {
                 if (trim((string)($analysis['description'] ?? '')) === '') {
                     throw new RuntimeException('The AI returned an empty description.');
                 }
-                Db::markIndexed($id, $analysis, $prepped['width'], $prepped['height'], $label);
+                // The photo's own size, not the (smaller) copy the AI was sent: Clean up's Small
+                // list, its best-copy choice and Enlarge go by it.
+                Db::markIndexed($id, $analysis, $prepped['full_width'], $prepped['full_height'], $label);
                 $e = Exif::extractBatch([$path])[$path] ?? null;
                 if ($e) Db::updateExif($id, $e['lat'], $e['lon'], $e['alt'], $e['taken_at']);
                 Thumb::ensureThumb($id, $path);

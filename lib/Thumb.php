@@ -13,6 +13,7 @@ final class Thumb {
 
         $im = self::applyOrientation($im, $absPath);
         [$w, $h] = [imagesx($im), imagesy($im)];
+        [$fullW, $fullH] = [$w, $h];   // the photo's own size, as shown (the index records this)
 
         if (max($w, $h) > $maxDim) {
             $ratio = $maxDim / max($w, $h);
@@ -31,7 +32,7 @@ final class Thumb {
         $bytes = ob_get_clean();
         imagedestroy($im);
         if ($bytes === false || $bytes === '') throw new RuntimeException('JPEG encode failed');
-        return ['bytes' => $bytes, 'width' => $w, 'height' => $h];
+        return ['bytes' => $bytes, 'width' => $w, 'height' => $h, 'full_width' => $fullW, 'full_height' => $fullH];
     }
 
     public static function ensureThumb(string $id, string $absPath, int $size = 280): ?string {

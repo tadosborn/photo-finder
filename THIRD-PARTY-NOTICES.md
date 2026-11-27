@@ -31,5 +31,8 @@ folder (normally `C:\Program Files\Photo Finder`).
   (Jeffrey A. Clark and contributors, MIT-CMU), from PyPI, and the NAFNet deblurring model
   (megvii-model, MIT; ONNX export from OpenCV's model zoo on Hugging Face). Each package's license
   text is inside its folder there.
-- **Google Gemini** (Fix blur's optional cloud AI) is used through the user's own Google API key,
-  under Google's terms.
+- **Enlarge's on-PC model.** Downloaded only when Enlarge is first used (into the same folder),
+  checked against a SHA-256 pinned in `lib\Deblur.php`: Real-ESRGAN General x4v3 (Xintao Wang and
+  contributors, BSD 3-Clause), as exported to ONNX by Qualcomm AI Hub Models (BSD 3-Clause).
+- **Google Gemini** (the optional cloud AI of Fix blur and Enlarge) is used through the user's own
+  Google API key, under Google's terms.

@@ -79,6 +79,15 @@ function pf_path_id(string $absPath): string {
     return sha1(strtolower(pf_norm_path($absPath)));
 }
 
+/** A photo's own size as it is shown: [width, height] from the file's header, swapped when its
+ *  EXIF Orientation turns it a quarter (5..8). Null when the file cannot be read. */
+function pf_image_size(string $path): ?array {
+    $i = @getimagesize($path);
+    if (!$i || $i[0] <= 0 || $i[1] <= 0) return null;
+    $o = ($i[2] ?? 0) === IMAGETYPE_JPEG && function_exists('exif_read_data') ? (int)(@exif_read_data($path)['Orientation'] ?? 1) : 1;
+    return $o >= 5 && $o <= 8 ? [(int)$i[1], (int)$i[0]] : [(int)$i[0], (int)$i[1]];
+}
+
 function pf_is_image_file(string $path): bool {
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
     return in_array($ext, PF_IMAGE_EXTS, true);

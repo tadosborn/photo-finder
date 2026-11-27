@@ -480,7 +480,7 @@ try {
             pf_json(['ok' => true, 'image' => Db::getById($id)]);
         }
 
-        // ---- Clean up (lib/Cleanup.php): blurry, badly exposed and duplicate photos ----
+        // ---- Clean up (lib/Cleanup.php): blurry, badly exposed, duplicate and small photos ----
         // Analysis is local (thumbnails only, no AI). Deleting goes through delete_files above.
         case 'cleanup_status':
         case 'cleanup_list':
@@ -512,13 +512,16 @@ try {
                     if ($kind === 'exposure') {
                         pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::exposure()), 'status' => Cleanup::status()]);
                     }
+                    if ($kind === 'small') {
+                        pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::small()), 'status' => Cleanup::status()]);
+                    }
                     if ($kind === 'duplicates') {
                         $d = Cleanup::duplicates((int)($_GET['dist'] ?? Cleanup::DUP_DEFAULT));
                         foreach ($d['groups'] as &$g) $g['members'] = array_map($slim, $g['members']);
                         unset($g);
                         pf_json(['kind' => $kind] + $d + ['status' => Cleanup::status()]);
                     }
-                    pf_json(['error' => 'kind must be blurry, exposure or duplicates'], 400);
+                    pf_json(['error' => 'kind must be blurry, exposure, duplicates or small'], 400);
                 }
                 case 'cleanup_keep': {
                     $in = pf_input_json();
@@ -573,10 +576,10 @@ try {
             pf_json(['ok' => true, 'image' => Rotate::rotate($row, ($in['dir'] ?? '') === 'ccw' ? 'ccw' : 'cw')]);
         }
 
-        // ---- Fix blur (lib/Deblur.php): on this PC (NAFNet) or with Google's Gemini ----
+        // ---- Fix blur and Enlarge (lib/Deblur.php): on this PC (NAFNet, Real-ESRGAN) or with Google's Gemini ----
         case 'deblur_setup_status':
             require_once __DIR__ . '/lib/Deblur.php';
-            pf_json(['ready' => Deblur::isReady(), 'setup' => Deblur::setupStatus(), 'download_mb' => (int)round(Deblur::packBytes() / 1048576)]);
+            pf_json(['ready' => Deblur::isReady(), 'up_ready' => Deblur::isUpscaleReady(), 'setup' => Deblur::setupStatus(), 'download_mb' => (int)round(Deblur::packBytes() / 1048576)]);
         case 'deblur_status':
         case 'deblur_setup':
         case 'deblur_start':
@@ -587,8 +590,8 @@ try {
             $isPost = in_array($action, ['deblur_setup', 'deblur_start', 'deblur_save', 'deblur_discard'], true);
             if ($isPost && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
             if ($action === 'deblur_setup') {
-                Deblur::startSetup();
-                pf_json(['ok' => true, 'setup' => Deblur::setupStatus(), 'ready' => Deblur::isReady()]);
+                Deblur::startSetup((pf_input_json()['which'] ?? '') === 'enlarge' ? 'enlarge' : 'deblur');
+                pf_json(['ok' => true, 'setup' => Deblur::setupStatus(), 'ready' => Deblur::isReady(), 'up_ready' => Deblur::isUpscaleReady()]);
             }
             $in = $isPost ? pf_input_json() : $_GET;
             $id = preg_replace('/[^a-f0-9]/i', '', (string)($in['id'] ?? ''));
@@ -621,7 +624,7 @@ try {
                     pf_json(['ok' => true]);
             }
         }
-        // ---- end Fix blur ----
+        // ---- end Fix blur and Enlarge ----
         default:
             pf_json(['error' => 'unknown action', 'action' => $action], 400);
     }
