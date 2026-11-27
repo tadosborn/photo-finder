@@ -69,11 +69,15 @@ final class Deblur {
     public const UPSCALE = ['name' => 'Real-ESRGAN enlarging model', 'kind' => 'upscale', 'file' => 'real_esrgan_general_x4v3-onnx-float.zip', 'size' => 4541448,
         'url' => 'https://qaihub-public-assets.s3.us-west-2.amazonaws.com/qai-hub-models/models/real_esrgan_general_x4v3/releases/v0.67.0/real_esrgan_general_x4v3-onnx-float.zip',
         'sha256' => '4f3619c89eb0727ff9170b977578d160fa4d696680a0cac4c7f870b52973033b'];
-    /** 'fixed' is a batch's result (runBatch): made only by a batch, never started on its own. */
-    public const KINDS = ['local', 'cloud', 'chain', 'up_local', 'up_cloud', 'fixed'];
+    /** 'color' and 'fixed' come only from a batch (runBatch): a batch's colour correction and its
+     *  "all fixes" version. A batch's blur removal and enlargement are 'local' and 'up_local'. */
+    public const KINDS = ['local', 'cloud', 'chain', 'up_local', 'up_cloud', 'color', 'up_local_2x', 'fixed', 'fixed_2x'];
+    /** The kinds a batch makes ('_2x': the 2x size of a 4x enlargement, for the AI to choose between). */
+    public const BATCH_KINDS = ['local', 'color', 'up_local_2x', 'up_local', 'fixed_2x', 'fixed'];
     private const CLOUD_KINDS = ['cloud', 'chain', 'up_cloud'];
     public const SUFFIX = ['local' => 'deblurred', 'cloud' => 'restored', 'chain' => 'deblurred, restored',
-                           'up_local' => 'enlarged', 'up_cloud' => 'AI enlarged', 'fixed' => 'fixed'];
+                           'up_local' => 'enlarged', 'up_cloud' => 'AI enlarged', 'color' => 'enhanced', 'up_local_2x' => 'enlarged 2x',
+                           'fixed' => 'fixed', 'fixed_2x' => 'fixed 2x'];
     /** Enlarge takes photos up to ENLARGE_MAX_SIDE px on the long side: 4x up to ENLARGE_X4_SIDE,
      *  2x above it, so a result is at most 4800 px (and the job's memory stays near 300 MB). */
     public const ENLARGE_MAX_SIDE = 2400;
@@ -300,7 +304,7 @@ final class Deblur {
 
     /** Start a job of $kind (see KINDS) for photo $row. */
     public static function start(array $row, string $kind): void {
-        if (!in_array($kind, self::KINDS, true) || $kind === 'fixed') throw new InvalidArgumentException('Unknown kind.');
+        if (!in_array($kind, ['local', 'cloud', 'chain', 'up_local', 'up_cloud'], true)) throw new InvalidArgumentException('Unknown kind.');   // the rest come from batches
         $id = (string)$row['id'];
         $st = self::jobStatus($id, $kind);
         if (($st['state'] ?? '') === 'running') throw new RuntimeException('Already working on this photo.');
@@ -432,6 +436,8 @@ final class Deblur {
             'enlarge' => $row ? self::enlargeInfo($row) : null,
         ];
         foreach (self::KINDS as $k) $out[$k] = self::jobStatus($id, $k);
+        $pick = json_decode((string)@file_get_contents(self::jobFile($id, 'ai', 'json')), true);
+        $out['ai_pick'] = is_array($pick) && isset($pick['kind']) ? $pick : null;
         return $out;
     }
 
@@ -442,6 +448,7 @@ final class Deblur {
             @unlink(self::jobFile($id, $k, 'json'));
             @unlink(self::jobFile($id, $k, 'auto'));
         }
+        @unlink(self::jobFile($id, 'ai', 'json'));
     }
 
     // ---- Cloud: Gemini image editing ----
@@ -456,8 +463,8 @@ final class Deblur {
             if (!$row || !is_file((string)$row['path'])) throw new RuntimeException('The photo is no longer on disk.');
             $src = (string)$row['path'];
             if ($kind === 'chain') {   // the second step works on the first step's result
-                $src = self::jobFile($id, 'local', 'jpg');
-                if ((self::jobStatus($id, 'local')['state'] ?? '') !== 'done' || !is_file($src)) {
+                $src = self::resultFile($id, 'local');   // its own file, or (from a batch) its saved copy
+                if ((self::jobStatus($id, 'local')['state'] ?? '') !== 'done' || $src === '') {
                     throw new RuntimeException('The result from this PC is gone. Fix it on this PC again first.');
                 }
             }
@@ -697,14 +704,13 @@ final class Deblur {
     //
     // Clean up starts it for the photos selected there (batchStart). deblur-batch.php works
     // through them one at a time at idle priority (runBatch): for each photo the chosen steps run
-    // in turn on the previous step's output (remove blur, correct colour, enlarge a small photo),
-    // and the result is saved as ONE copy next to the original: "(fixed)", or the single step's
-    // own suffix. It is also kept as the photo's 'fixed' job, so the Fix blur / Enlarge window
-    // shows it beside the original and can put it in the original's place. State goes to
-    // data/deblur/batch.json; a Stop request is the file batch.cancel.
+    // each on the original on its own and, when more than one applies, all in turn (remove blur,
+    // correct colour, enlarge a small photo); every version is saved as a copy next to the
+    // original and kept as the photo's version of its kind (batchOne), so the Compare window and
+    // the review page (batchReview, batchReplace) show them all beside the original. State goes
+    // to data/deblur/batch.json; a Stop request is the file batch.cancel.
 
     public const BATCH_STEPS = ['deblur', 'color', 'enlarge'];
-    private const BATCH_STEP_SUFFIX = ['deblur' => 'deblurred', 'color' => 'enhanced', 'enlarge' => 'enlarged'];
     private static function batchFile(): string { return self::dir() . '/batch.json'; }
     private static function batchCancelFile(): string { return self::dir() . '/batch.cancel'; }
     private static function batchWorkDir(): string { return self::dir() . '/batch-work'; }
@@ -724,7 +730,7 @@ final class Deblur {
 
     /** Queue $ids for the $steps (BATCH_STEPS) and start the runner. Photos outside the photo
      *  folders are left out; so are photos already fixed by an earlier batch with the same steps. */
-    public static function batchStart(array $ids, array $steps): array {
+    public static function batchStart(array $ids, array $steps, bool $ai = false): array {
         $steps = array_values(array_intersect(self::BATCH_STEPS, $steps));
         if (!$steps) throw new RuntimeException('Choose at least one fix.');
         $b = self::batchStatus();
@@ -735,6 +741,9 @@ final class Deblur {
         if (in_array('enlarge', $steps, true) && !self::isUpscaleReady()) {
             throw new RuntimeException('Enlarging on this PC is not set up yet: open "Enlarge" on any one small photo first (a one-time download).');
         }
+        if ($ai && !self::aiAvailable()) {
+            throw new RuntimeException('The AI pick uses Claude, the AI that describes your photos: choose Claude and enter its API key in Settings, or untick the AI pick.');
+        }
         $roots = pf_load_settings()['photo_dirs'] ?? [];
         $items = [];
         $already = 0;
@@ -742,15 +751,14 @@ final class Deblur {
             $id = (string)preg_replace('/[^a-f0-9]/', '', $id);
             $row = $id !== '' ? Db::getById($id) : null;
             if (!$row || !pf_path_inside_roots((string)$row['path'], $roots)) continue;
-            $f = self::jobStatus($id, 'fixed');
-            if (($f['state'] ?? '') === 'done' && !empty($f['saved']) && ($f['steps'] ?? []) === $steps) { $already++; continue; }
+            if (self::batchAlreadyDone($id, $steps)) { $already++; continue; }
             $items[] = ['id' => $id, 'name' => basename((string)$row['path']), 'path' => (string)$row['path'], 'state' => 'queued'];
         }
         if (!$items) {
             throw new RuntimeException($already ? 'Every selected photo was already fixed this way by an earlier batch.' : 'None of the selected photos can be fixed.');
         }
         @unlink(self::batchCancelFile());
-        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'state' => 'running', 'items' => $items, 'already' => $already,
+        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'ai' => $ai, 'state' => 'running', 'items' => $items, 'already' => $already,
               'current' => -1, 'started' => time(), 'updated' => time()];
         self::writeJson(self::batchFile(), $b);
         try {
@@ -797,7 +805,7 @@ final class Deblur {
                 return !is_file(self::batchCancelFile());
             };
             try {
-                $b['items'][$i] = array_merge($b['items'][$i], self::batchOne((string)$b['items'][$i]['id'], $b['steps'], $tick));
+                $b['items'][$i] = array_merge($b['items'][$i], self::batchOne((string)$b['items'][$i]['id'], $b['steps'], (string)$b['id'], !empty($b['ai']), $tick));
             } catch (DeblurCancelled $e) {
                 $b['items'][$i]['state'] = 'cancelled';
                 $cancelled = true;
@@ -821,59 +829,308 @@ final class Deblur {
         @unlink(self::batchCancelFile());
     }
 
-    /** One photo through the batch's steps; its result saved as one copy. */
-    private static function batchOne(string $id, array $steps, callable $tick): array {
+    /** One photo through the batch. Each chosen fix is applied to the original on its own and
+     *  kept as that photo's version of the matching kind ('local' blur removed, 'color' colour
+     *  corrected, 'up_local' enlarged); when more than one applies, they are also applied in
+     *  turn (blur, then colour, then enlarge) as its 'fixed' version. Every version is saved as a
+     *  copy next to the photo, so they can all be compared side by side and one put in place. */
+    private static function batchOne(string $id, array $steps, string $batchId, bool $ai, callable $tick): array {
         $row = Db::getById($id);
         if (!$row || !is_file((string)$row['path'])) throw new RuntimeException('The photo is no longer on disk.');
         $work = self::batchWorkDir();
         $prog = "$work/$id-progress.json";
-        $cur = (string)$row['path'];
-        $done = [];
-        $notes = [];
+        $orig = (string)$row['path'];
         $t0 = time();
+        $out = [];     // kind => [file, label]
+        $notes = [];
+        $deblur = fn(string $in, string $to, string $step) => self::runPython(
+            [self::python(), '-I', PF_ROOT . '/deblur.py', self::model(), $in, $to, $prog], $prog, $step, $tick);
+        $enlarge = fn(string $in, string $to, int $scale, string $step) => self::runPython(
+            [self::python(), '-I', PF_ROOT . '/enlarge.py', self::upscaleModel(), $in, $to, $prog, (string)$scale], $prog, $step, $tick);
+
+        // Each fix on its own.
         if (in_array('deblur', $steps, true)) {
-            $out = "$work/$id-1.jpg";
-            self::runPython([self::python(), '-I', PF_ROOT . '/deblur.py', self::model(), $cur, $out, $prog], $prog, 'removing blur', $tick);
-            $cur = $out;
-            $done['deblur'] = 'blur removed';
+            $deblur($orig, "$work/$id-d.jpg", 'removing blur');
+            $out['local'] = ["$work/$id-d.jpg", 'blur removed'];
         }
         if (in_array('color', $steps, true)) {
             if (!$tick('correcting colour')) throw new DeblurCancelled();
-            $out = "$work/$id-2.jpg";
-            if (self::autoColour($cur, $out)) { $cur = $out; $done['color'] = 'colour corrected'; }
+            if (self::autoColour($orig, "$work/$id-c.jpg")) $out['color'] = ["$work/$id-c.jpg", 'colour corrected'];
             else $notes[] = 'colour already fine';
         }
         if (in_array('enlarge', $steps, true)) {
-            $e = self::enlargeInfo(['path' => $cur]);
+            $e = self::enlargeInfo(['path' => $orig]);
             if ($e['ok']) {
-                $out = "$work/$id-3.jpg";
-                self::runPython([self::python(), '-I', PF_ROOT . '/enlarge.py', self::upscaleModel(), $cur, $out, $prog, (string)$e['scale']],
-                    $prog, 'enlarging', $tick);
-                $cur = $out;
-                $done['enlarge'] = 'enlarged ' . $e['scale'] . '×';
+                $enlarge($orig, "$work/$id-e.jpg", $e['scale'], 'enlarging');
+                $out['up_local'] = ["$work/$id-e.jpg", 'enlarged ' . $e['scale'] . '×'];
             } else {
                 $notes[] = 'already large, not enlarged';
             }
         }
-        if (!$done) return ['state' => 'skipped', 'note' => ucfirst(implode('; ', $notes) ?: 'nothing to change') . '.'];
-        if (!$tick('saving')) throw new DeblurCancelled();
-        $jpg = self::jobFile($id, 'fixed', 'jpg');
-        if (!is_dir(self::jobsDir())) @mkdir(self::jobsDir(), 0777, true);
-        if (!copy($cur, $jpg)) throw new RuntimeException('Could not keep the result.');
-        [$w, $h] = getimagesize($jpg) ?: [0, 0];
-        self::writeJson(self::jobFile($id, 'fixed', 'json'), [
-            'state' => 'done', 'started' => $t0, 'seconds' => time() - $t0, 'width' => (int)$w, 'height' => (int)$h, 'updated' => time(),
-            'steps' => $steps, 'label' => 'Batch: ' . implode(', ', $done),
-            'suffix' => count($done) > 1 ? 'fixed' : self::BATCH_STEP_SUFFIX[array_key_first($done)],
-        ]);
-        @unlink(self::jobFile($id, 'fixed', 'auto'));
-        try {
-            $res = self::save($row, 'fixed', 'copy');
-        } finally {
-            @unlink($jpg);   // the saved copy stands for the result from here on (resultFile)
+        if (!$out) return ['state' => 'skipped', 'note' => ucfirst(implode('; ', $notes) ?: 'nothing to change') . '.'];
+
+        // All of them in turn, when more than one applies.
+        if (count($out) > 1) {
+            $cur = $out['local'][0] ?? '';
+            $parts = $cur !== '' ? ['blur removed'] : [];
+            if (isset($out['color'])) {
+                if ($cur === '') {
+                    $cur = $out['color'][0];
+                    $parts[] = 'colour corrected';
+                } else {
+                    if (!$tick('all fixes: correcting colour')) throw new DeblurCancelled();
+                    if (self::autoColour($cur, "$work/$id-dc.jpg")) { $cur = "$work/$id-dc.jpg"; $parts[] = 'colour corrected'; }
+                }
+            }
+            if (isset($out['up_local']) && $cur !== '') {
+                $enlarge($cur, "$work/$id-f.jpg", self::enlargeInfo(['path' => $cur])['scale'], 'all fixes: enlarging');
+                $cur = "$work/$id-f.jpg";
+                $parts[] = $out['up_local'][1];
+            }
+            if (count($parts) > 1) $out['fixed'] = [$cur, implode(', ', $parts)];
         }
-        return ['state' => 'done', 'saved' => $res['name'], 'saved_id' => (string)($res['image']['id'] ?? ''),
-                'note' => ucfirst(implode(', ', $done)) . ($notes ? '; ' . implode('; ', $notes) : '') . '.'];
+
+        // Best size: a 4x enlargement also gets its 2x size (made from the 4x), to choose between.
+        if (str_ends_with($out['up_local'][1] ?? '', '4×')) {
+            foreach (['up_local' => 'up_local_2x', 'fixed' => 'fixed_2x'] as $k4 => $k2) {
+                if (!isset($out[$k4]) || !str_ends_with($out[$k4][1], '4×')) continue;
+                self::halfSize($out[$k4][0], "$work/$id-$k2.jpg");
+                $out[$k2] = ["$work/$id-$k2.jpg", substr($out[$k4][1], 0, -strlen('4×')) . '2×'];
+            }
+        }
+        $out = array_filter(array_merge(array_fill_keys(self::BATCH_KINDS, null), $out));
+
+        // Save every version as a copy, and keep it as the photo's version of its kind.
+        if (!$tick('saving')) throw new DeblurCancelled();
+        if (!is_dir(self::jobsDir())) @mkdir(self::jobsDir(), 0777, true);
+        $versions = [];
+        foreach ($out as $kind => [$file, $label]) {
+            $jpg = self::jobFile($id, $kind, 'jpg');
+            if (!copy($file, $jpg)) throw new RuntimeException('Could not keep the result.');
+            [$w, $h] = getimagesize($jpg) ?: [0, 0];
+            @unlink(self::jobFile($id, $kind, 'auto'));
+            $title = str_starts_with($kind, 'fixed') ? 'All fixes: ' . $label : ucfirst($label);
+            self::writeJson(self::jobFile($id, $kind, 'json'), [
+                'state' => 'done', 'started' => $t0, 'seconds' => time() - $t0, 'width' => (int)$w, 'height' => (int)$h, 'updated' => time(),
+                'batch' => $batchId, 'batch_steps' => $steps, 'label' => 'Batch: ' . $title,
+            ]);
+            try {
+                $res = self::save($row, $kind, 'copy');
+            } finally {
+                @unlink($jpg);   // the saved copy stands for the version from here on (resultFile)
+            }
+            $versions[] = ['kind' => $kind, 'label' => $title, 'name' => $res['name'], 'saved_id' => (string)($res['image']['id'] ?? ''),
+                           'width' => (int)$w, 'height' => (int)$h];
+        }
+        $n = count($versions);
+        $res = ['state' => 'done', 'versions' => $versions, 'saved' => $versions[$n - 1]['name'],
+                'note' => ($n > 1 ? "$n versions saved: " : 'Saved: ') . implode('; ', array_column($versions, 'label'))
+                    . ($notes ? ' (' . implode('; ', $notes) . ')' : '') . '.'];
+        // The AI's pick, for the review page and the Compare window (a failed pick is only a note).
+        if ($ai) {
+            if (!$tick('AI comparing the versions')) throw new DeblurCancelled();
+            try {
+                $res['ai'] = self::aiPick($row, $versions) + ['batch' => $batchId];
+                self::writeJson(self::jobFile($id, 'ai', 'json'), $res['ai']);
+            } catch (DeblurCancelled $e) {
+                throw $e;
+            } catch (Throwable $e) {
+                $res['ai'] = ['error' => $e->getMessage()];
+            }
+        }
+        return $res;
+    }
+
+    /** The 2x size of a 4x enlargement: halved with GD's area-averaging resampler. */
+    private static function halfSize(string $in, string $to): void {
+        $src = @imagecreatefromjpeg($in);
+        if (!$src) throw new RuntimeException('Could not read the enlargement.');
+        $w = intdiv(imagesx($src), 2);
+        $h = intdiv(imagesy($src), 2);
+        $dst = imagecreatetruecolor($w, $h);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, imagesx($src), imagesy($src));
+        if (!imagejpeg($dst, $to, 95)) throw new RuntimeException('Could not write the 2× version.');
+    }
+
+    /** Whether photo $id already has a version from a batch with these $steps. */
+    private static function batchAlreadyDone(string $id, array $steps): bool {
+        foreach (self::BATCH_KINDS as $k) {
+            $j = self::jobStatus($id, $k);
+            if (($j['state'] ?? '') === 'done' && !empty($j['saved']) && ($j['batch_steps'] ?? null) === $steps) return true;
+        }
+        return false;
+    }
+
+    // ---- AI pick (batch): which version to keep, judged by Claude with the describing key ----
+
+    private const JUDGE_SYSTEM = 'You compare versions of one family photo made by automatic repair steps (blur removal, '
+        . 'colour correction, AI enlargement) and choose the one the owner should keep in place of the original. '
+        . 'Judge in this order. 1. Faces: every face must still look natural and like the same person. Reject any '
+        . 'version where a face is distorted, smeared, waxy or plastic-looking, or has changed eyes, teeth, mouth, '
+        . 'skin or expression. 2. No new artifacts: halos, ringing, painted or oil-paint texture, blotches, '
+        . 'over-sharpening, colour casts. 3. Then prefer more real detail and better, natural colour. Bigger is '
+        . 'not better by itself: choose an enlarged version only if its close-ups look natural, and between the '
+        . '2x and 4x sizes of the same version choose 4x only if it looks as natural as 2x. Choose the original '
+        . 'when no version is clearly better.';
+
+    private static function judge(): ?Claude {
+        $s = pf_load_settings();
+        if (Describer::backendOf($s) !== 'anthropic' || trim((string)($s['api_key'] ?? '')) === '') return null;
+        return new Claude(trim((string)$s['api_key']), (string)($s['model'] ?? Claude::DEFAULT_MODEL));
+    }
+
+    /** Whether a batch can have the AI pick (Claude is the describing AI and has its key). */
+    public static function aiAvailable(): bool {
+        require_once __DIR__ . '/Describer.php';
+        require_once __DIR__ . '/Claude.php';
+        return self::judge() !== null;
+    }
+
+    private static function imageBlock(string $jpeg): array {
+        return ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/jpeg', 'data' => base64_encode($jpeg)]];
+    }
+
+    /** Close-ups of $boxes (fractions of the upright picture), each 40% larger than the box, at the
+     *  picture's own resolution (at most $max px), so faces and enlargement show as they really are. */
+    private static function closeUps(string $path, array $boxes, int $max = 512): array {
+        [$im, $o] = Enhance::load($path);
+        $im = Enhance::orient($im, $o);
+        $W = imagesx($im);
+        $H = imagesy($im);
+        $out = [];
+        foreach ($boxes as $b) {
+            $bw = (float)$b['w'] * 1.4;
+            $bh = (float)$b['h'] * 1.4;
+            $x0 = (int)max(0, ((float)$b['x'] + (float)$b['w'] / 2 - $bw / 2) * $W);
+            $y0 = (int)max(0, ((float)$b['y'] + (float)$b['h'] / 2 - $bh / 2) * $H);
+            $cw = (int)max(8, min($W - $x0, $bw * $W));
+            $ch = (int)max(8, min($H - $y0, $bh * $H));
+            $crop = imagecrop($im, ['x' => $x0, 'y' => $y0, 'width' => $cw, 'height' => $ch]);
+            if (!$crop) continue;
+            if (max($cw, $ch) > $max) $crop = Enhance::fit($crop, $max);
+            ob_start();
+            imagejpeg($crop, null, 90);
+            $out[] = (string)ob_get_clean();
+        }
+        return $out;
+    }
+
+    /** Ask Claude which of the photo's $versions to keep. It sees each one whole and in close-ups
+     *  of the faces (or of the centre) at its own resolution. Returns [kind ('original' or a
+     *  version's kind), reason, distorted kinds, faces seen]. */
+    private static function aiPick(array $row, array $versions): array {
+        require_once __DIR__ . '/Describer.php';
+        require_once __DIR__ . '/Claude.php';
+        $c = self::judge();
+        if (!$c) throw new RuntimeException('it needs Claude as the describing AI, with its API key');
+        $orig = (string)$row['path'];
+        $view = fn(string $p) => self::imageBlock(Thumb::prepareForApi($p, 1024)['bytes']);
+        $box = ['type' => 'object', 'additionalProperties' => false, 'required' => ['x', 'y', 'w', 'h'],
+                'properties' => ['x' => ['type' => 'number'], 'y' => ['type' => 'number'], 'w' => ['type' => 'number'], 'h' => ['type' => 'number']]];
+        $f = $c->structured('You locate human faces in photos.', [$view($orig), ['type' => 'text', 'text' =>
+            'List up to 3 of the largest human faces in this photo, each as a box with x, y, w and h given as fractions (0 to 1) of the '
+            . "picture's width and height, measured from its top-left corner. Return an empty list if there are no faces."]],
+            ['type' => 'object', 'additionalProperties' => false, 'required' => ['faces'], 'properties' => ['faces' => ['type' => 'array', 'items' => $box]]], 'low', 2000);
+        $boxes = [];
+        foreach ((array)($f['faces'] ?? []) as $b) {
+            if (!is_array($b)) continue;
+            $x = max(0.0, min(1.0, (float)($b['x'] ?? 0))); $y = max(0.0, min(1.0, (float)($b['y'] ?? 0)));
+            $w = min(1.0 - $x, (float)($b['w'] ?? 0)); $h = min(1.0 - $y, (float)($b['h'] ?? 0));
+            if ($w > 0.005 && $h > 0.005) $boxes[] = ['x' => $x, 'y' => $y, 'w' => $w, 'h' => $h];
+        }
+        $boxes = array_slice($boxes, 0, 3);
+        $faces = (bool)$boxes;
+        if (!$faces) $boxes = [['x' => 0.3, 'y' => 0.3, 'w' => 0.4, 'h' => 0.4]];
+        $cands = [['id' => 'O', 'kind' => 'original', 'label' => 'Original', 'path' => $orig]];
+        foreach ($versions as $i => $v) {
+            $vr = ($v['saved_id'] ?? '') !== '' ? Db::getById((string)$v['saved_id']) : null;
+            if ($vr && is_file((string)$vr['path'])) $cands[] = ['id' => 'V' . ($i + 1), 'kind' => $v['kind'], 'label' => $v['label'], 'path' => (string)$vr['path']];
+        }
+        if (count($cands) < 2) throw new RuntimeException('there are no versions to compare');
+        $content = [['type' => 'text', 'text' => 'Candidates for one photo follow: the original (O) and ' . (count($cands) - 1)
+            . ' repaired versions. For each: the whole picture, then ' . ($faces ? 'close-ups of the faces' : 'a close-up of the centre')
+            . " at that version's own resolution (an enlarged version's close-ups are larger and show its real detail)."]];
+        foreach ($cands as $cd) {
+            [$w, $h] = pf_image_size($cd['path']) ?? [0, 0];
+            $content[] = ['type' => 'text', 'text' => "Candidate {$cd['id']}: {$cd['label']}, {$w}×{$h} px. Whole picture:"];
+            $content[] = $view($cd['path']);
+            $content[] = ['type' => 'text', 'text' => "Candidate {$cd['id']} close-ups:"];
+            foreach (self::closeUps($cd['path'], $boxes) as $jpg) $content[] = self::imageBlock($jpg);
+        }
+        $content[] = ['type' => 'text', 'text' => 'Which candidate should be kept? Answer with its letter-number (O, V1, V2...), '
+            . 'the candidates whose faces look distorted (empty list if none), and one short plain-English sentence saying why.'];
+        $ids = array_column($cands, 'id');
+        $r = $c->structured(self::JUDGE_SYSTEM, $content, ['type' => 'object', 'additionalProperties' => false, 'required' => ['best', 'distorted', 'reason'],
+            'properties' => ['best' => ['type' => 'string', 'enum' => $ids], 'distorted' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => $ids]],
+                             'reason' => ['type' => 'string']]], 'medium', 8000);
+        $byId = array_column($cands, 'kind', 'id');
+        $best = $byId[(string)($r['best'] ?? '')] ?? 'original';
+        $distorted = array_values(array_filter(array_map(fn($x) => $byId[(string)$x] ?? null, (array)($r['distorted'] ?? []))));
+        if (in_array($best, $distorted, true)) $best = 'original';   // never keep a version it says distorts a face
+        return ['kind' => $best, 'reason' => trim((string)($r['reason'] ?? '')), 'distorted' => $distorted, 'faces' => $faces];
+    }
+
+    // ---- Reviewing a batch: every photo with its versions, and replacing the chosen originals ----
+
+    private static function batchReplacedFile(): string { return self::dir() . '/batch-replaced.json'; }
+
+    /** Photos of batch $batchId already replaced from the review page: id => [kind, name, at]. */
+    private static function batchReplaced(string $batchId): array {
+        $r = json_decode((string)@file_get_contents(self::batchReplacedFile()), true);
+        return is_array($r) && ($r['batch'] ?? '') === $batchId && is_array($r['items'] ?? null) ? $r['items'] : [];
+    }
+
+    /** The finished photos of the current batch, $per at a time, each with its versions. */
+    public static function batchReview(int $page, int $per = 40): array {
+        $b = self::batchStatus();
+        if (!$b) return ['items' => [], 'total' => 0, 'page' => 0, 'per' => $per];
+        $replaced = self::batchReplaced((string)$b['id']);
+        $done = array_values(array_filter($b['items'] ?? [], fn($i) => ($i['state'] ?? '') === 'done' && !empty($i['versions'])));
+        $page = max(0, min($page, intdiv(max(0, count($done) - 1), $per)));
+        $items = [];
+        foreach (array_slice($done, $page * $per, $per) as $it) {
+            $row = Db::getById((string)$it['id']);
+            $vs = [];
+            foreach ($it['versions'] as $v) {
+                $vr = $v['saved_id'] !== '' ? Db::getById($v['saved_id']) : null;
+                $v['exists'] = $vr && is_file((string)$vr['path']);
+                $v['v'] = $vr ? (int)$vr['mtime'] : 0;
+                $vs[] = $v;
+            }
+            $items[] = ['id' => (string)$it['id'], 'name' => (string)$it['name'], 'path' => (string)$it['path'],
+                        'exists' => $row && is_file((string)$row['path']), 'v' => $row ? (int)$row['mtime'] : 0,
+                        'width' => $row ? (int)$row['width'] : 0, 'height' => $row ? (int)$row['height'] : 0,
+                        'versions' => $vs, 'ai' => $it['ai'] ?? null, 'replaced' => $replaced[(string)$it['id']] ?? null];
+        }
+        return ['batch' => ['id' => $b['id'], 'steps' => $b['steps'], 'state' => $b['state']], 'items' => $items,
+                'total' => count($done), 'page' => $page, 'per' => $per, 'replaced' => count($replaced)];
+    }
+
+    /** Replace each chosen original ([['id' => .., 'kind' => ..], ...]) with that version, as
+     *  "Replace the original" does for one photo. Returns one result per choice. */
+    public static function batchReplace(array $choices): array {
+        $b = self::batchStatus();
+        if (!$b) throw new RuntimeException('There is no batch to review.');
+        $roots = pf_load_settings()['photo_dirs'] ?? [];
+        $rep = self::batchReplaced((string)$b['id']);
+        $results = [];
+        foreach (array_slice($choices, 0, 50) as $c) {
+            $id = (string)preg_replace('/[^a-f0-9]/', '', (string)($c['id'] ?? ''));
+            $kind = (string)($c['kind'] ?? '');
+            try {
+                if (!in_array($kind, self::BATCH_KINDS, true)) throw new RuntimeException('Unknown version.');
+                $row = $id !== '' ? Db::getById($id) : null;
+                if (!$row) throw new RuntimeException('The photo is no longer in the index.');
+                if (!pf_path_inside_roots((string)$row['path'], $roots)) throw new RuntimeException('The photo is outside the photo folders.');
+                $res = self::save($row, $kind, 'replace');
+                $rep[$id] = ['kind' => $kind, 'name' => $res['name'], 'at' => time()];
+                $results[] = ['id' => $id, 'ok' => true, 'image' => $res['image'], 'removed_copy' => $res['removed_copy']];
+            } catch (Throwable $e) {
+                $results[] = ['id' => $id, 'ok' => false, 'error' => $e->getMessage()];
+            }
+        }
+        self::writeJson(self::batchReplacedFile(), ['batch' => $b['id'], 'items' => $rep]);
+        return ['results' => $results, 'stats' => Db::stats()];
     }
 
     /** deblur.py / enlarge.py for a batch: waits, passing its progress to $tick, and ends it
@@ -929,7 +1186,7 @@ final class Deblur {
             if (!preg_match('/^([a-f0-9]{40})-(local|cloud|chain|up_local|up_cloud)\.json$/', basename($f), $m)) continue;   // a batch's results are listed with the batch
             [, $id, $kind] = $m;
             $j = self::jobStatus($id, $kind);
-            if (($j['state'] ?? 'none') === 'none') continue;
+            if (($j['state'] ?? 'none') === 'none' || !empty($j['batch'])) continue;   // a batch's versions are listed with the batch
             $active = ($j['state'] ?? '') === 'running' || !empty($j['autosave']);
             $updated = (int)($j['updated'] ?? @filemtime($f));
             if (!$active && $updated < time() - 86400) continue;
@@ -952,8 +1209,15 @@ final class Deblur {
     private static function writeJson(string $file, array $data): void {
         $dir = dirname($file);
         if (!is_dir($dir)) @mkdir($dir, 0777, true);
-        @file_put_contents($file . '.tmp', json_encode($data));
-        @rename($file . '.tmp', $file);
+        $tmp = $file . '.' . getmypid() . '.tmp';   // its own name: two writers never share one
+        if (@file_put_contents($tmp, json_encode($data)) === false) return;
+        // Windows refuses to replace a file another process is reading at that instant (the page
+        // and Queue poll often): try again for up to 2 seconds rather than lose the write.
+        for ($i = 0; $i < 100; $i++) {
+            if (@rename($tmp, $file)) return;
+            usleep(20000);
+        }
+        @unlink($tmp);
     }
 
     private static function win(string $p): string { return str_replace('/', '\\', $p); }

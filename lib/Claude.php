@@ -85,6 +85,41 @@ final class Claude implements PhotoDescriber {
         return Describer::parse($text);
     }
 
+    /** One request with any content blocks (text and images), answered as JSON in $schema's shape
+     *  (structured output). Used by Fix blur / Enlarge's batch to judge a photo's versions. */
+    public function structured(string $system, array $content, array $schema, string $effort = 'low', int $maxTokens = 4000): array {
+        $payload = [
+            'model' => $this->model,
+            'max_tokens' => $maxTokens,
+            'system' => $system,
+            'output_config' => ['effort' => $effort, 'format' => ['type' => 'json_schema', 'schema' => $schema]],
+            'messages' => [['role' => 'user', 'content' => $content]],
+        ];
+        $headers = [];
+        if (str_starts_with($this->model, 'claude-sonnet-5-5') || str_starts_with($this->model, 'claude-opus-5-5')) {
+            $payload['fallbacks'] = 'default';
+            $headers[] = 'anthropic-beta: server-side-fallback-2026-07-01';
+        }
+        [$status, $body] = $this->postJson($payload, $headers);
+        $decoded = json_decode($body, true);
+        if ($status !== 200) {
+            $msg = is_array($decoded) && isset($decoded['error']['message']) ? $decoded['error']['message'] : substr($body, 0, 300);
+            if ($status === 401) $msg = 'the Anthropic API key was rejected (check it in Settings)';
+            throw new RuntimeException("Anthropic API HTTP {$status}: {$msg}");
+        }
+        if (!is_array($decoded)) throw new RuntimeException('Anthropic API returned an unreadable response.');
+        $stop = (string)($decoded['stop_reason'] ?? '');
+        if ($stop === 'refusal') throw new RuntimeException('Claude declined this request.');
+        if ($stop === 'max_tokens') throw new RuntimeException('Claude\'s answer was cut off (max_tokens).');
+        $text = '';
+        foreach ((array)($decoded['content'] ?? []) as $block) {
+            if (($block['type'] ?? '') === 'text') $text .= (string)($block['text'] ?? '');
+        }
+        $out = json_decode(trim($text), true);
+        if (!is_array($out)) throw new RuntimeException('Claude returned an answer that is not JSON.');
+        return $out;
+    }
+
     /** @return array{0:int,1:string} */
     private function postJson(array $payload, array $extraHeaders): array {
         $ch = curl_init(self::endpoint());

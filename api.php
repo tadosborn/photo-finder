@@ -453,6 +453,17 @@ try {
                 'stats' => Db::stats(),
             ]);
         }
+        case 'photo_details': {
+            // The photo view's details: size, DPI, file, camera and exposure, read from the file.
+            $id = preg_replace('/[^a-f0-9]/i', '', (string)($_GET['id'] ?? ''));
+            $row = $id !== '' ? Db::getById($id) : null;
+            if (!$row) pf_json(['error' => 'not found'], 404);
+            if (!pf_path_inside_roots((string)$row['path'], pf_load_settings()['photo_dirs'] ?? [])) {
+                pf_json(['error' => 'outside configured photo folders'], 403);
+            }
+            require_once __DIR__ . '/lib/Exif.php';
+            pf_json(Exif::details((string)$row['path']) + ['alt' => isset($row['gps_alt']) && $row['gps_alt'] !== null ? (float)$row['gps_alt'] : null]);
+        }
         case 'image_info': {
             $id = (string)($_GET['id'] ?? '');
             $row = Db::getById($id);
@@ -588,7 +599,21 @@ try {
             require_once __DIR__ . '/lib/Deblur.php';
             if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
             $in = pf_input_json();
-            pf_json(['ok' => true, 'batch' => Deblur::batchStart(is_array($in['ids'] ?? null) ? $in['ids'] : [], is_array($in['steps'] ?? null) ? $in['steps'] : [])]);
+            pf_json(['ok' => true, 'batch' => Deblur::batchStart(is_array($in['ids'] ?? null) ? $in['ids'] : [], is_array($in['steps'] ?? null) ? $in['steps'] : [], !empty($in['ai']))]);
+        }
+        case 'batch_ai_available': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            pf_json(['available' => Deblur::aiAvailable()]);
+        }
+        case 'batch_review': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            pf_json(Deblur::batchReview((int)($_GET['page'] ?? 0)));
+        }
+        case 'batch_replace': {
+            require_once __DIR__ . '/lib/Deblur.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            pf_json(Deblur::batchReplace(is_array($in['choices'] ?? null) ? $in['choices'] : []));
         }
         case 'batch_cancel': {
             require_once __DIR__ . '/lib/Deblur.php';

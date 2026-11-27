@@ -20,10 +20,21 @@ TILE, OVERLAP, MIN_SIDE = 512, 64, 384
 
 def write_state(path, state):
     state["updated"] = int(time.time())
-    tmp = path + ".tmp"
+    tmp = path + ".py.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(state, f)
-    os.replace(tmp, path)
+    # Windows refuses to replace a file another program is reading at that instant (the page and
+    # Queue check progress every second or two): try again for up to 5 seconds. A progress update
+    # that still cannot be written is skipped; the result ("done" / "error") is never lost.
+    final = state.get("state") in ("done", "error")
+    for _ in range(100):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.05)
+    if final:
+        os.replace(tmp, path)
 
 
 def ramp(np, n, lo_edge, hi_edge):

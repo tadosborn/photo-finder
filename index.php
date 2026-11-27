@@ -126,6 +126,7 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox.no-meta .lb-meta { opacity: 0; pointer-events: none; }
   dialog.lightbox .lb-meta .desc { font-size: 15px; line-height: 1.4; max-width: 900px; }
   dialog.lightbox .lb-meta .tags { font-size: 12px; color: #bbb; margin-top: 6px; }
+  dialog.lightbox .lb-meta .lb-details { font-size: 12px; color: #ddd; margin-top: 6px; line-height: 1.5; }
   dialog.lightbox .lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 80px; background: rgba(0,0,0,0.45); color: #fff; border: none; cursor: pointer; font-size: 28px; opacity: 0.6; transition: opacity 0.15s; user-select: none; }
   dialog.lightbox .lb-nav:hover { opacity: 1; background: rgba(0,0,0,0.7); }
   dialog.lightbox .lb-prev { left: 0; border-radius: 0 6px 6px 0; }
@@ -204,12 +205,8 @@ $apiKeySet = $settings['api_key'] !== '';
   .enh-row .enh-ends { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 11px; color: #b3bbc8; }
   .enh-note, .enh-hint { font-size: 12px; color: #b3bbc8; line-height: 1.45; margin: 4px 0 10px; }
   .enh-hint.warn { color: #fbbf72; }
-  .enh-save fieldset { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0 18px; }
-  .enh-save legend { font-size: 14px; font-weight: 600; padding: 0; margin-bottom: 4px; }
-  .enh-save label.enh-radio { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text); margin: 4px 0; cursor: pointer; }
-  .enh-save label.enh-radio input { margin-top: 3px; accent-color: var(--accent); }
-  .enh-save label.enh-radio.disabled { color: #b3bbc8; cursor: not-allowed; }
-  .enh-save #enhSave { width: 100%; margin-top: 6px; padding: 10px 14px; font-size: 14px; }
+  .enh-save-row { display: flex; gap: 8px; margin-top: 6px; }
+  .enh-save-row button { flex: 1; padding: 10px 14px; font-size: 14px; }
   .enh-status { font-size: 13px; margin: 10px 0 0; color: var(--text); min-height: 1.4em; }
   .enh-status.err { color: var(--err-text); }
   @media (max-width: 820px) {
@@ -404,6 +401,10 @@ $apiKeySet = $settings['api_key'] !== '';
   .db-which button { border: none; border-radius: 0; background: transparent; }
   .db-which button[aria-pressed="true"] { background: var(--primary-bg); color: #fff; }
   .db-row button[hidden] { display: none; }
+  /* "Replace the original", everywhere: the first click turns the button red ("Confirm: replace
+     the original"), the second, within 8 seconds, replaces. (White on --err-bg is 5.6:1.) */
+  button.confirm-armed, .enh-panel button.confirm-armed { background: var(--err-bg); border-color: #f87171; color: #fff; }
+  button.confirm-armed:hover, .enh-panel button.confirm-armed:hover { background: #a82020; }
   /* Queue, and Clean up's batch window */
   dialog.queue, dialog.batch { padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); }
   dialog.queue { width: min(900px, 96vw); max-height: 90vh; }
@@ -433,6 +434,23 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.batch h2 { margin: 0 0 8px; font-size: 16px; }
   dialog.batch p { font-size: 13px; margin: 8px 0; }
   .b-opt { display: flex; gap: 8px; align-items: baseline; margin: 8px 0; font-size: 14px; }
+  .b-all { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  /* Batch review: every photo of a batch with its versions */
+  dialog.review { width: min(1240px, 97vw); height: min(880px, 95vh); max-height: none; }
+  dialog.review .q-body { flex: 1; min-height: 0; }
+  .rv-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .rv-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+  .rv-head .rv-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rv-head button { font-size: 12px; padding: 3px 10px; }
+  .rv-done { font-size: 13px; color: var(--ok); font-weight: 600; }
+  .rv-thumbs { display: flex; gap: 8px; overflow-x: auto; }
+  .rv-pick { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 190px; padding: 6px; border: 2px solid var(--line); border-radius: 8px; background: var(--panel2); color: var(--text); cursor: pointer; }
+  .rv-pick img { width: 176px; height: 132px; object-fit: contain; background: #000; border-radius: 4px; }
+  .rv-pick span { font-size: 12px; line-height: 1.3; text-align: center; }
+  .rv-pick[aria-pressed="true"] { border-color: var(--accent); background: #24324d; }
+  .rv-pick:disabled { cursor: default; }
+  .rv-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+  .rv-foot .spacer { flex: 1; }
   .b-status { min-height: 18px; font-size: 13px; color: var(--err-text); }
   .b-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
   .db-hint { font-size: 12px; color: var(--mute); }
@@ -550,6 +568,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <span class="sel-count" id="selCount">0 selected</span>
   <button type="button" id="selAllBtn">Select all</button>
   <button type="button" id="selClearBtn">Clear</button>
+  <button type="button" id="selFixBtn" title="Fix the selected photos one after another on this PC; each gets a copy next to it">Fix selected…</button>
   <span class="sel-spacer"></span>
   <button type="button" id="selDeleteBtn" class="danger">Delete selected</button>
 </div>
@@ -825,6 +844,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <div class="tags" id="lbTags"></div>
     <div class="tags" id="lbWhere"></div>
     <div class="tags" id="lbPath"></div>
+    <div class="lb-details" id="lbDetails"></div>
     <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · R / Shift+R: rotate · I: toggle info · E: edit · Esc: close</div>
   </div>
   <div class="lb-editor" id="lbEditor">
@@ -965,9 +985,24 @@ $apiKeySet = $settings['api_key'] !== '';
       <figcaption><span class="db-cap">Enlarged by cloud AI (redrawn)</span><button type="button" class="db-pick" data-kind="up_cloud" aria-pressed="false">Use this</button></figcaption>
       <div class="db-pane-note"></div>
     </figure>
+    <figure class="db-pane" data-kind="color" hidden>
+      <img alt="Colour corrected in a batch" hidden>
+      <figcaption><span class="db-cap">Colour corrected</span><button type="button" class="db-pick" data-kind="color" aria-pressed="false">Use this</button></figcaption>
+      <div class="db-pane-note"></div>
+    </figure>
+    <figure class="db-pane" data-kind="up_local_2x" hidden>
+      <img alt="Enlarged 2×, from a batch" hidden>
+      <figcaption><span class="db-cap">Enlarged 2×</span><button type="button" class="db-pick" data-kind="up_local_2x" aria-pressed="false">Use this</button></figcaption>
+      <div class="db-pane-note"></div>
+    </figure>
     <figure class="db-pane" data-kind="fixed" hidden>
-      <img alt="Fixed in a batch" hidden>
-      <figcaption><span class="db-cap">Batch result</span><button type="button" class="db-pick" data-kind="fixed" aria-pressed="false">Use this</button></figcaption>
+      <img alt="All fixes, from a batch" hidden>
+      <figcaption><span class="db-cap">All fixes</span><button type="button" class="db-pick" data-kind="fixed" aria-pressed="false">Use this</button></figcaption>
+      <div class="db-pane-note"></div>
+    </figure>
+    <figure class="db-pane" data-kind="fixed_2x" hidden>
+      <img alt="All fixes at 2×, from a batch" hidden>
+      <figcaption><span class="db-cap">All fixes, 2×</span><button type="button" class="db-pick" data-kind="fixed_2x" aria-pressed="false">Use this</button></figcaption>
       <div class="db-pane-note"></div>
     </figure>
   </div>
@@ -1009,7 +1044,7 @@ $apiKeySet = $settings['api_key'] !== '';
       <div class="q-line" id="qBatchLine"></div>
       <progress id="qBatchProg" max="100" value="0" aria-label="Batch progress"></progress>
       <div class="q-line q-mute" id="qBatchCounts"></div>
-      <div class="q-actions"><button type="button" id="qStopBtn">Stop the batch</button></div>
+      <div class="q-actions"><button type="button" id="qReviewBtn">Review all results</button> <button type="button" id="qStopBtn">Stop the batch</button></div>
       <div class="q-list" id="qBatchList"></div>
     </section>
     <section class="q-sec">
@@ -1023,15 +1058,36 @@ $apiKeySet = $settings['api_key'] !== '';
   </div>
 </dialog>
 
+<!-- ---- Batch review (Deblur::batchReview / batchReplace): every photo with its versions ---- -->
+<dialog id="reviewDlg" class="queue review" aria-labelledby="rvTitle">
+  <div class="q-head">
+    <h2 id="rvTitle">Review batch results</h2>
+    <span class="q-sub" id="rvSub" role="status"></span>
+    <button type="button" class="db-close" id="rvClose" aria-label="Close review" title="Close (Esc)">×</button>
+  </div>
+  <div class="q-body" id="rvBody"></div>
+  <div class="rv-foot">
+    <button type="button" id="rvPrev">‹ Previous</button>
+    <span class="q-mute" id="rvPage"></span>
+    <button type="button" id="rvNext">Next ›</button>
+    <span class="spacer"></span>
+    <span id="rvChosen" role="status"></span>
+    <button type="button" id="rvClear">Clear choices</button>
+    <button type="button" id="rvReplace" disabled>Replace the originals</button>
+  </div>
+</dialog>
+
 <!-- ---- Clean up: fix the selected photos in a batch (Deblur::batchStart) ---- -->
 <dialog id="batchDlg" class="batch" aria-labelledby="bTitle">
   <h2 id="bTitle">Fix selected photos</h2>
   <p id="bCount"></p>
+  <label class="b-opt b-all"><input type="checkbox" id="bAll"> <span><strong>All fixes</strong> <span class="q-mute">(remove blur, then correct colour, then enlarge the small ones)</span></span></label>
   <label class="b-opt"><input type="checkbox" id="bDeblur"> <span>Remove blur <span class="q-mute">(best on camera shake; one to several minutes per photo)</span></span></label>
   <label class="b-opt"><input type="checkbox" id="bColor"> <span>Correct colour and brightness <span class="q-mute">(Enhance's Auto; seconds per photo)</span></span></label>
-  <label class="b-opt"><input type="checkbox" id="bEnlarge"> <span>Enlarge small photos <span class="q-mute">(up to 2,400 px, 4× or 2×; seconds per photo)</span></span></label>
+  <label class="b-opt"><input type="checkbox" id="bEnlarge"> <span>Enlarge small photos <span class="q-mute">(up to 2,400 px; photos up to 1,200 px get both 4× and 2×; seconds per photo)</span></span></label>
+  <label class="b-opt b-all" style="border-bottom: none; border-top: 1px solid var(--line); padding: 8px 0 0;"><input type="checkbox" id="bAi"> <span><strong>Let AI pick the best version and size</strong> <span class="q-mute" id="bAiNote">(Claude compares every version, checking close-ups of faces for distortion; uses the Claude key that describes your photos)</span></span></label>
   <p class="q-mute" id="bEstimate"></p>
-  <p class="q-mute">Everything runs on this PC (free; nothing is sent anywhere), one photo at a time at low priority, so you can keep using Photo Finder or close it. Each photo gets one new copy next to it ("(fixed)" when more than one fix is ticked); the originals are not changed. Queue shows the progress, and each result next to its original.</p>
+  <p class="q-mute">Everything runs on this PC (free; nothing is sent anywhere), one photo at a time at low priority, so you can keep using Photo Finder or close it. Each fix is saved as its own copy next to the photo and, with more than one ticked, so is all of them together ("(fixed)"); the originals are not changed. Queue shows the progress; its "Review all results" shows every photo with its versions side by side, to choose which originals to replace.</p>
   <div class="b-status" id="bStatus" role="status"></div>
   <div class="b-row"><button type="button" id="bCancel">Cancel</button><button type="button" class="primary" id="bStart">Start</button></div>
 </dialog>
@@ -1085,13 +1141,11 @@ $apiKeySet = $settings['api_key'] !== '';
         <p class="enh-note" id="enhSharpenNote">Sharpen makes slightly soft photos look crisper. It cannot fix a photo that is badly out of focus or blurred by camera shake.</p>
       </div>
       <div class="enh-section enh-save">
-        <fieldset>
-          <legend>Save</legend>
-          <label class="enh-radio"><input type="radio" name="enhMode" value="copy" checked> <span>Save as a copy</span></label>
-          <label class="enh-radio" id="enhReplaceLabel"><input type="radio" name="enhMode" value="replace" id="enhReplaceRadio"> <span>Replace the original</span></label>
-        </fieldset>
         <p class="enh-hint" id="enhSaveHint" aria-live="polite"></p>
-        <button type="button" class="primary" id="enhSave">Save as a copy</button>
+        <div class="enh-save-row">
+          <button type="button" id="enhReplaceBtn">Replace the original</button>
+          <button type="button" class="primary" id="enhSave">Save as a copy</button>
+        </div>
         <p class="enh-status" id="enhStatus" role="status" aria-live="polite"></p>
       </div>
     </div>
@@ -1375,6 +1429,7 @@ function updateSelBar() {
   $('#selCount').textContent = n + ' selected';
   $('#selbar').classList.toggle('show', n > 0);
   $('#selDeleteBtn').textContent = n > 1 ? `Delete selected (${n})` : 'Delete selected';
+  $('#selFixBtn').textContent = n > 1 ? `Fix selected (${n})…` : 'Fix selected…';
 }
 
 function toggleSelect(id, on) {
@@ -1494,11 +1549,51 @@ function openLightbox(idx) {
   }
   $('#lbWhere').innerHTML = where.join(' · ');
   $('#lbPath').textContent = r.path;
+  lbLoadDetails(r);
   $('#lbCounter').textContent = (idx + 1) + ' / ' + lastResults.length;
   $('#lbPrev').style.visibility = idx > 0 ? 'visible' : 'hidden';
   $('#lbNext').style.visibility = idx < lastResults.length - 1 ? 'visible' : 'hidden';
   closeEditor();
   if (!$('#lightbox').open) $('#lightbox').showModal();
+}
+
+// The photo's own details, read from the file (api photo_details): size, DPI, print size, file
+// size and type, colour space; camera, lens and exposure; dates and rotation; GPS altitude.
+let lbDetSeq = 0;
+async function lbLoadDetails(r) {
+  const seq = ++lbDetSeq, el = $('#lbDetails');
+  el.textContent = '';
+  let d;
+  try { d = await api('photo_details', { qs: 'id=' + encodeURIComponent(r.id) }); } catch (e) { return; }
+  if (seq !== lbDetSeq) return;
+  if (!d.exists) { el.textContent = 'The file is not on disk (it was moved, or OneDrive is offline).'; return; }
+  const img = [], cam = [], file = [];
+  if (d.width && d.height) {
+    img.push(`${d.width.toLocaleString()} × ${d.height.toLocaleString()} px (${(d.width * d.height / 1e6).toFixed(1)} MP)`);
+    if (d.dpi) img.push(d.dpi + ' dpi');
+    img.push(`prints ${(d.width / 300).toFixed(1)} × ${(d.height / 300).toFixed(1)} in at 300 dpi`);
+  }
+  if (d.bytes) img.push(cuFmtSize(d.bytes));
+  if (d.type) img.push(d.type);
+  if (d.color) img.push(d.color === 'uncalibrated' ? 'colour space not set' : d.color);
+  if (d.camera) cam.push(d.camera);
+  if (d.lens) cam.push(d.lens);
+  if (d.aperture) cam.push(d.aperture);
+  if (d.shutter) cam.push(d.shutter);
+  if (d.iso) cam.push('ISO ' + d.iso);
+  if (d.focal) cam.push(d.focal + (d.focal35 ? ` (${d.focal35} in 35 mm terms)` : ''));
+  if (d.flash) cam.push('flash ' + d.flash);
+  if (d.taken) file.push('taken ' + d.taken.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
+  if (d.modified) file.push('file modified ' + new Date(d.modified * 1000).toLocaleString());
+  if (d.rotation) file.push('shown ' + d.rotation + ' (orientation tag)');
+  if (d.software) file.push('software: ' + d.software);
+  [['🖼 ', img], ['📷 ', cam], ['🗂 ', file]].forEach(([icon, parts]) => {
+    if (!parts.length) return;
+    const line = document.createElement('div');
+    line.textContent = icon + parts.join(' · ');
+    el.appendChild(line);
+  });
+  if (d.alt != null && r.lat != null) $('#lbWhere').append(` · ⛰ ${Math.round(d.alt).toLocaleString()} m altitude`);
 }
 
 async function openEditor() {
@@ -1719,30 +1814,24 @@ function enhStatus(text, isErr) { const s = $('#enhStatus'); s.textContent = tex
 function enhSetControls(on) {
   $$('#enhanceDlg .enh-panel input, #enhanceDlg .enh-panel button').forEach(el => {
     if (el.id === 'enhClose') return;
-    el.disabled = !on || (el.id === 'enhReplaceRadio' && !(enh.data && enh.data.can_replace));
+    el.disabled = !on;
   });
   if (on) enhSaveState();
 }
-function enhMode() { return document.querySelector('input[name=enhMode]:checked').value; }
+// Two buttons, as in Fix blur / Enlarge: "Save as a copy", and "Replace the original", whose
+// first click turns it red ("Confirm: replace the original") for 8 seconds.
 function enhSaveState() {
-  const btn = $('#enhSave'), hint = $('#enhSaveHint'), mode = enhMode(), d = enh.data;
+  const btn = $('#enhSave'), rb = $('#enhReplaceBtn'), hint = $('#enhSaveHint'), d = enh.data;
   const none = enhIsNeutral(enh.params);
   btn.disabled = none || enh.saving || !d;
-  btn.classList.toggle('danger', mode === 'replace' && !!enh.armed);
-  btn.classList.toggle('primary', !(mode === 'replace' && enh.armed));
-  hint.classList.toggle('warn', mode === 'replace' && !!enh.armed);
-  $('#enhReplaceLabel').classList.toggle('disabled', !(d && d.can_replace));
-  if (mode === 'copy') {
-    btn.textContent = 'Save as a copy';
-    hint.textContent = none ? 'No changes to save.' : 'Saves “' + (d ? d.copy_name : '') + '” next to the original, with the same date, place, description and people. The original is not changed.';
-  } else if (!enh.armed) {
-    btn.textContent = 'Replace the original…';
-    hint.textContent = none ? 'No changes to save.' : 'The original goes to the Recycle Bin (you can restore it from there) and the enhanced photo takes its name, date, place, description and people.';
-  } else {
-    btn.textContent = 'Click again to replace the original';
-    hint.textContent = 'Are you sure? Click the red button within 8 seconds to replace “' + (d ? d.name : '') + '”. The original goes to the Recycle Bin.';
-  }
-  if (d && !d.can_replace) $('#enhReplaceLabel').title = 'Replacing works for JPEG photos only. Save as a copy instead.';
+  rb.disabled = none || enh.saving || !d || !d.can_replace;
+  rb.title = d && !d.can_replace ? 'Replacing works for JPEG photos only. Save as a copy instead.' : '';
+  rb.classList.toggle('confirm-armed', !!enh.armed);
+  rb.textContent = enh.armed ? 'Confirm: replace the original' : 'Replace the original';
+  hint.classList.toggle('warn', !!enh.armed);
+  hint.textContent = none ? 'No changes to save.' : enh.armed
+    ? 'Click the red button within 8 seconds to replace “' + (d ? d.name : '') + '”: the original goes to the Recycle Bin (you can restore it from there) and the enhanced photo takes its name, date, place, description and people.'
+    : '“Save as a copy” saves “' + (d ? d.copy_name : '') + '” next to the original, with the same date, place, description and people; the original is not changed.';
 }
 function enhArm(on) {
   clearTimeout(enh.armTimer);
@@ -1789,7 +1878,7 @@ async function enhOpen() {
   $('#enhToggle').setAttribute('aria-pressed', 'false');
   $('#enhToggle').textContent = 'Show original';
   $('#enhFrame').classList.remove('show-before');
-  document.querySelector('input[name=enhMode][value=copy]').checked = true;
+
   enhSplit(50);
   enhStatus('');
   enhBusy('Preparing the preview…');
@@ -1835,9 +1924,8 @@ async function enhOpen() {
 
 function enhClose() { const dlg = $('#enhanceDlg'); if (dlg.open) dlg.close(); }
 
-async function enhSave() {
+async function enhSave(mode) {
   if (!enh.params || enh.saving || !enh.data || enhIsNeutral(enh.params)) return;
-  const mode = enhMode();
   if (mode === 'replace' && !enh.armed) { enhArm(true); return; }
   enh.saving = true;
   enhArm(false);
@@ -1883,7 +1971,8 @@ async function enhSave() {
 
 $('#lbEnhBtn').addEventListener('click', e => { e.stopPropagation(); enhOpen(); });
 $('#enhClose').addEventListener('click', enhClose);
-$('#enhSave').addEventListener('click', enhSave);
+$('#enhSave').addEventListener('click', () => enhSave('copy'));
+$('#enhReplaceBtn').addEventListener('click', () => enhSave('replace'));
 $('#enhAuto').addEventListener('click', () => { if (enh.data) { enhSetParams(enh.data.auto); enhStatus('Auto settings applied.'); } });
 $('#enhReset').addEventListener('click', () => { if (enh.data) { enhSetParams(enh.data.neutral); enhStatus('Reset: no changes.'); } });
 $('#enhToggle').addEventListener('click', () => {
@@ -1899,7 +1988,7 @@ $$('#enhSliders input[type=range]').forEach(el => el.addEventListener('input', (
   enhArm(false);
   enhSchedule();
 }));
-$$('input[name=enhMode]').forEach(el => el.addEventListener('change', () => enhArm(false)));
+
 $('#enhSplit').addEventListener('input', e => enhSplit(+e.target.value));
 (() => {
   const f = $('#enhFrame');
@@ -3753,18 +3842,29 @@ const DB_KIND = {
   chain:    { op: 'deblur',  label: 'On this PC, then cloud AI',      who: 'the two-step result', cloud: true },
   up_local: { op: 'enlarge', label: 'Enlarged on this PC',            who: 'the enlargement from this PC' },
   up_cloud: { op: 'enlarge', label: 'Enlarged by cloud AI (redrawn)', who: 'the cloud AI enlargement', cloud: true },
-  fixed:    { op: '',        label: 'Batch result',                   who: 'the batch result' },   // shown in either window when there is one
+  color:    { op: '',        label: 'Colour corrected',               who: 'the colour-corrected version' },   // from a batch
+  up_local_2x: { op: '',     label: 'Enlarged 2×',                    who: 'the 2× enlargement' },             // from a batch
+  fixed:    { op: '',        label: 'All fixes',                      who: 'the all-fixes version' },          // from a batch
+  fixed_2x: { op: '',        label: 'All fixes, 2×',                  who: 'the all-fixes version at 2×' },    // from a batch
 };
 const DB_OP = {
   deblur: { title: 'Fix blur', local: 'local', cloud: 'cloud', chain: 'chain', verb: 'Fixing',
     hint: 'On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. "Cloud AI on the on-PC result" lets the cloud AI finish what this PC started. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and moves the original to the Recycle Bin.' },
+  // Compare: every version the photo has (a batch's, or made one at a time), nothing to start.
+  review: { title: 'Compare', local: '', cloud: '', chain: '', verb: '',
+    hint: 'Every version of this photo, each saved as a copy next to the original. Zoom in (2×, 4×) to compare. Pick the best ("Use this") and click "Replace the original" to put it in the original\'s place; the original goes to the Recycle Bin.' },
   enlarge: { title: 'Enlarge', local: 'up_local', cloud: 'up_cloud', chain: '', verb: 'Enlarging',
     hint: 'On this PC sharpens edges as it enlarges and adds nothing that was not there; busy textures can look a little smooth. Cloud AI (Google Gemini) redraws the photo at 2K with more fine detail, so check faces and text. Zoom in (2×, 4×) to compare. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and moves the original to the Recycle Bin.' },
 };
 const DB_ENLARGE_MAX = <?= (int)Deblur::ENLARGE_MAX_SIDE ?>;   // Deblur::enlargeInfo() decides; this only hides the viewer's button
 const db = { op: 'deblur', row: null, show: '', showing: '', timer: null, s: null, wantLocal: false, armed: '', pending: new Set(),
              shown: '', replaceArmed: false, finished: '', view: 'grid', zoom: 1 };
-const dbKinds = () => Object.keys(DB_KIND).filter(k => DB_KIND[k].op === db.op || (k === 'fixed' && db.s && db.s.fixed && db.s.fixed.state !== 'none'));
+// The kinds a window shows: its own, plus a batch's colour and all-fixes versions when there are
+// any; Compare shows every kind that has a version.
+const dbKinds = () => Object.keys(DB_KIND).filter(k => {
+  const has = !!(db.s && db.s[k] && db.s[k].state !== 'none');
+  return db.op === 'review' ? has : DB_KIND[k].op === db.op || (DB_KIND[k].op === '' && has);
+});
 const dbPane = k => document.querySelector('#dbGrid .db-pane[data-kind="' + k + '"]');
 
 function dbFmtSecs(s) {
@@ -3796,11 +3896,14 @@ function dbSetOrig(row) {
 function dbOpen(row, op = 'deblur') {
   if (!row || !row.id || !DB_OP[op]) return;
   const o = DB_OP[op];
-  Object.assign(db, { op, row, show: o.local, showing: '', s: null, wantLocal: false, armed: '', replaceArmed: false, finished: '', shown: '', pending: new Set() });
+  clearTimeout(db.replaceTimer);
+  Object.assign(db, { op, row, show: o.local, showing: '', s: null, wantLocal: false, armed: '', replaceArmed: false, replaceMsg: '', finished: '', shown: '', pending: new Set(), aiShown: false });
   $('#dbTitle').textContent = o.title;
   $('#dbClose').setAttribute('aria-label', 'Close ' + o.title);
   $('#dbHint').textContent = o.hint;
   $('#dbChainBtn').hidden = !o.chain;
+  $('#dbLocalBtn').hidden = !o.local;
+  $('#dbCloudBtn').hidden = !o.cloud;
   $('#dbName').textContent = cuBase(row.path);
   $('#dbName').title = row.path || '';
   dbSetOrig(row);
@@ -3907,20 +4010,29 @@ function dbRunningNote(k, j) {
   return j.total ? `${verb} on this PC: part ${j.done} of ${j.total}` + (j.done ? `, about ${dbFmtSecs(j.eta || 0)} left` : '') : 'Starting…';
 }
 
+// A batch's AI pick (Deblur::aiPick), shown on the captions.
+function dbAiMark(s, k) {
+  const a = s && s.ai_pick;
+  if (!a) return '';
+  return (a.kind === k ? ' · ★ AI pick' : '') + ((a.distorted || []).includes(k) ? ' · ⚠ faces distorted (AI)' : '');
+}
+// Panes in a logical order: each fix, then the sizes, then the combined ones, then the cloud ones.
+const DB_PANE_ORDER = ['local', 'color', 'up_local_2x', 'up_local', 'fixed_2x', 'fixed', 'cloud', 'chain', 'up_cloud'];
 function dbRenderPanes(s) {
   const kinds = dbKinds();
   const shown = kinds.filter(k => s[k].state !== 'none');
   const n = 1 + shown.length;
   // Up to three side by side; four as two rows of two, so each stays big enough to judge.
-  $('#dbGrid').style.gridTemplateColumns = `repeat(${n <= 3 ? n : n === 4 ? 2 : 3}, minmax(0, 1fr))`;
+  $('#dbGrid').style.gridTemplateColumns = `repeat(${n <= 3 ? n : n === 4 ? 2 : n <= 6 ? 3 : n <= 8 ? 4 : 5}, minmax(0, 1fr))`;
   $('#dbGrid').style.gridTemplateRows = n > 3 ? 'repeat(2, minmax(0, 1fr))' : '';
   for (const k of kinds) {
     const j = s[k], pane = dbPane(k);
     const img = pane.querySelector('img'), note = pane.querySelector('.db-pane-note'), pick = pane.querySelector('.db-pick');
     pane.hidden = j.state === 'none';
+    pane.style.order = String(DB_PANE_ORDER.indexOf(k) + 1);   // the original (order 0) first, then the logical order
     if (j.state === 'done') {
       const src = dbResultUrl(k, String(j.updated || ''));
-      if (img.dataset.src !== src) { dbCaption(img, j.label || DB_KIND[k].label); img.src = src; img.dataset.src = src; }
+      if (img.dataset.src !== src) { dbCaption(img, (j.label || DB_KIND[k].label) + dbAiMark(s, k)); img.src = src; img.dataset.src = src; }
       img.hidden = false;
       note.textContent = j.saved ? '✓ Saved as “' + j.saved + '”' : j.save_error ? 'Not saved: ' + j.save_error : j.autosave ? 'Saving a copy…' : '';
     } else {
@@ -3945,8 +4057,9 @@ async function dbRefresh(auto = false) {
   catch (e) { dbStatus(e.message, true); return; }
   db.s = s;
   const o = DB_OP[db.op], kinds = dbKinds(), st = s.setup;
-  const L = s[o.local], C = s[o.cloud], X = o.chain ? s[o.chain] : null;
-  const ready = db.op === 'enlarge' ? s.up_ready : s.ready;
+  const none = { state: 'none' };
+  const L = (o.local && s[o.local]) || none, C = (o.cloud && s[o.cloud]) || none, X = o.chain ? s[o.chain] : null;
+  const ready = db.op === 'review' || (db.op === 'enlarge' ? s.up_ready : s.ready);
   const en = s.enlarge || { ok: true, cloud_ok: true, scale: 4 };
   const localOk = db.op !== 'enlarge' || en.ok;
   const cloudOk = db.op !== 'enlarge' || en.cloud_ok;
@@ -3965,13 +4078,17 @@ async function dbRefresh(auto = false) {
   // Start on this PC straight away when it is set up and nothing has been tried yet (or when a
   // setup the user started from here has just finished).
   // Only when this photo has no results at all here (not when there is a batch result to compare).
-  if (ready && localOk && L.state === 'none' && !running.length && (db.wantLocal || (auto && kinds.every(k => s[k].state === 'none')))) {
+  if (o.local && ready && localOk && L.state === 'none' && !running.length && (db.wantLocal || (auto && kinds.every(k => s[k].state === 'none')))) {
     db.wantLocal = false;
     return dbStart(o.local);
   }
 
   // The picked result (db.show stays picked while it is still being made), else the newest done.
   const done = kinds.filter(k => s[k].state === 'done');
+  if (!db.aiShown && s.ai_pick) {   // once: open on the version the AI picked
+    db.aiShown = true;
+    if (done.includes(s.ai_pick.kind)) db.show = s.ai_pick.kind;
+  }
   db.showing = done.includes(db.show) ? db.show : (done[done.length - 1] || '');
   dbRenderPanes(s);
   if (db.showing) dbSetAfter(db.showing, String(s[db.showing].updated || ''));
@@ -3984,7 +4101,9 @@ async function dbRefresh(auto = false) {
   const picked = db.showing ? s[db.showing] : null;
   const errs = kinds.filter(k => s[k].state === 'error');
   const what = (st && st.which === 'enlarge') || (!st && db.op === 'enlarge') ? 'Enlarge' : 'Fix blur';
-  if (db.finished && !busy) {
+  if (db.replaceArmed && db.replaceMsg) {
+    dbStatus(db.replaceMsg);   // while the red confirm button waits for its second click
+  } else if (db.finished && !busy) {
     dbStatus(db.finished, false, true);   // "Replaced …" stays until something new starts
   } else if (settingUp) {
     const pct = st.total ? Math.floor(100 * st.got / st.total) : 0;
@@ -4004,6 +4123,9 @@ async function dbRefresh(auto = false) {
     dbStatus(`Setting up ${what} failed: ` + st.error, true);
   } else if (!localOk && !picked) {
     dbStatus(`This photo is already ${en.width}×${en.height}: Enlarge is for photos up to ${Number(en.max_side).toLocaleString()} px on the long side.`);
+  } else if (picked && picked.saved && s.ai_pick && (s.ai_pick.kind === db.showing || s.ai_pick.kind === 'original')) {
+    dbStatus((s.ai_pick.kind === 'original' ? 'AI pick: keep the original. ' : `AI pick: ${(picked.label || DB_KIND[db.showing].label).replace(/^Batch: /, '')}. `)
+      + (s.ai_pick.reason || '') + ' Every version is saved next to the original; to put one in the original\'s place, pick it ("Use this") and click "Replace the original".');
   } else if (picked && picked.saved) {
     dbStatus('✓ ' + (done.length > 1 ? 'Every version is saved next to the original; this one as “' + picked.saved + '”.' : 'Saved as “' + picked.saved + '” next to the original.')
       + ' To put a version in the original\'s place, pick it ("Use this") and click "Replace the original".', false, true);
@@ -4059,6 +4181,7 @@ async function dbRefresh(auto = false) {
   const rb = $('#dbReplaceBtn');
   rb.disabled = !picked || !!db.finished;
   rb.textContent = db.finished ? 'Replaced ✓' : db.replaceArmed ? 'Confirm: replace the original' : 'Replace the original';
+  rb.classList.toggle('confirm-armed', db.replaceArmed && !db.finished);
 
   if (busy) db.timer = setTimeout(() => dbRefresh(), 1500);
 }
@@ -4145,17 +4268,23 @@ $('#dbSaveBtn').addEventListener('click', async () => {
 $('#dbReplaceBtn').addEventListener('click', async () => {
   const id = db.row.id, kind = db.showing, s = db.s;
   if (!kind || !s) return;
-  if (!db.replaceArmed) {   // two clicks: the original goes to the Recycle Bin
+  if (!db.replaceArmed) {   // two clicks: the first turns the button red for 8 seconds
     db.replaceArmed = true;
     const j = s[kind] || {}, r = s.enlarge || {};   // the original's own size, read from the file
     const smaller = j.width && r.width && r.height && j.width * j.height < r.width * r.height * 0.9
       ? ` Note: this result (${j.width}×${j.height}) is smaller than the original (${r.width}×${r.height}).` : '';
-    dbStatus('Replace the original with ' + DB_KIND[kind].who + ': the original goes to the Recycle Bin and this version takes its name, description and place'
-      + (j.saved ? ' (its saved copy, “' + j.saved + '”, goes too, so there is no duplicate; the other versions stay).' : '.')
-      + smaller + ' Click "Confirm: replace the original" to go ahead.');
-    $('#dbReplaceBtn').textContent = 'Confirm: replace the original';
+    db.replaceMsg = 'Click the red button within 8 seconds to replace the original with ' + DB_KIND[kind].who
+      + ': the original goes to the Recycle Bin (you can restore it from there) and this version takes its name, description and place'
+      + (j.saved ? ' (its saved copy, “' + j.saved + '”, goes too, so there is no duplicate; the other versions stay).' : '.') + smaller;
+    dbStatus(db.replaceMsg);
+    const rb = $('#dbReplaceBtn');
+    rb.textContent = 'Confirm: replace the original';
+    rb.classList.add('confirm-armed');
+    clearTimeout(db.replaceTimer);
+    db.replaceTimer = setTimeout(() => { db.replaceArmed = false; dbRefresh(); }, 8000);
     return;
   }
+  clearTimeout(db.replaceTimer);
   db.replaceArmed = false;
   $('#dbReplaceBtn').disabled = true;
   $('#dbSaveBtn').disabled = true;
@@ -4268,12 +4397,13 @@ function qRender(d) {
     $('#qBatchProg').value = t.total ? Math.round(100 * t.finished / t.total) : 0;
     $('#qBatchCounts').textContent = `${t.c.done.toLocaleString()} fixed · ${t.c.skipped} unchanged · ${t.c.error} failed · ${t.c.queued.toLocaleString()} waiting`
       + (b.already ? ` · ${b.already} left out (already fixed this way)` : '')
-      + '. Each fixed photo is saved as one copy next to the original: "Compare" shows it beside the original, where you can also replace the original with it.';
+      + '. Every version is saved as a copy next to its original. "Review all results" shows every photo with its versions on one page, to choose which originals to replace; "Compare" shows one photo\'s versions large.';
+    $('#qReviewBtn').hidden = !t.c.done;
     const stop = $('#qStopBtn');
     stop.hidden = b.state !== 'running' || !!b.cancelling;
     if (stop.hidden) qs.stopArmed = false;
     stop.textContent = qs.stopArmed ? 'Click again to stop' : 'Stop the batch';
-    const op = (b.steps || []).includes('deblur') || !(b.steps || []).includes('enlarge') ? 'deblur' : 'enlarge';
+
     const list = $('#qBatchList');
     list.textContent = '';
     const order = { running: 0, error: 1, done: 2, skipped: 3, cancelled: 4, queued: 5 };
@@ -4281,12 +4411,13 @@ function qRender(d) {
       .sort((x, y) => (order[x.it.state] - order[y.it.state]) || (y.i - x.i)).slice(0, 200);
     shown.forEach(({ it }) => {
       const what = it.state === 'running' ? 'Working: ' + (it.step || 'starting') + (it.total ? ` (part ${it.done} of ${it.total})` : '')
-        : it.state === 'done' ? (it.note || 'Fixed') + ' Saved as “' + it.saved + '”.'
+        : it.state === 'done' ? (it.note || 'Saved.') + (it.ai ? (it.ai.error ? ' AI pick failed: ' + it.ai.error
+          : ' AI pick: ' + (it.ai.kind === 'original' ? 'keep the original' : ((it.versions || []).find(v => v.kind === it.ai.kind) || { label: it.ai.kind }).label) + '. ' + (it.ai.reason || '')) : '')
         : it.state === 'skipped' ? 'Unchanged: ' + (it.note || '')
         : it.state === 'error' ? 'Failed: ' + (it.error || '')
         : 'Not done (stopped)';
       list.appendChild(qRow(it.name, it.path, what, it.state === 'error', it.state === 'done' ? 'Compare' : '',
-        () => dbOpen({ id: it.id, path: it.path }, op)));
+        () => dbOpen({ id: it.id, path: it.path }, 'review')));
     });
     if (t.c.queued) {
       const more = document.createElement('div');
@@ -4345,11 +4476,164 @@ $('#qStopBtn').addEventListener('click', async () => {
 });
 setTimeout(qTick, 1500);
 
+// ---- Batch review: every photo of the batch with its versions; choose, then replace ----
+// Clicking a version chooses it to replace that photo's original (click the original to keep it).
+// "Replace the originals" takes two clicks, the first turning it red for 8 seconds, as everywhere.
+const rv = { page: 0, data: null, choices: new Map(), touched: new Set(), armed: false, timer: null, busy: false };
+function rvThumb(id, v, label, kind, chosen, disabled, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'rv-pick';
+  b.dataset.kind = kind;
+  b.setAttribute('aria-pressed', chosen ? 'true' : 'false');
+  b.disabled = disabled;
+  const img = document.createElement('img');
+  img.loading = 'lazy';
+  img.alt = '';
+  img.src = 'thumb.php?id=' + encodeURIComponent(id) + (v ? '&v=' + v : '');
+  const cap = document.createElement('span');
+  cap.textContent = label;
+  b.append(img, cap);
+  b.addEventListener('click', onClick);
+  return b;
+}
+function rvRender() {
+  const d = rv.data, body = $('#rvBody');
+  body.textContent = '';
+  if (!d || !d.items.length) {
+    body.innerHTML = '<div class="q-line q-mute"></div>';
+    body.firstChild.textContent = 'No finished photos in this batch yet.';
+  }
+  (d ? d.items : []).forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'rv-row';
+    const head = document.createElement('div');
+    head.className = 'rv-head';
+    const name = document.createElement('span');
+    name.className = 'rv-name';
+    name.textContent = it.name;
+    name.title = it.path;
+    head.appendChild(name);
+    const done = it.replaced;
+    if (done) {
+      const ok = document.createElement('span');
+      ok.className = 'rv-done';
+      ok.textContent = '✓ Replaced with the ' + (it.versions.find(v => v.kind === done.kind) || { label: 'chosen' }).label.toLowerCase() + ' version';
+      head.appendChild(ok);
+    } else {
+      const cmp = document.createElement('button');
+      cmp.type = 'button';
+      cmp.textContent = 'Compare large';
+      cmp.setAttribute('aria-label', 'Compare large: ' + it.name);
+      cmp.addEventListener('click', () => dbOpen({ id: it.id, path: it.path }, 'review'));
+      head.appendChild(cmp);
+    }
+    const thumbs = document.createElement('div');
+    thumbs.className = 'rv-thumbs';
+    const pick = kind => { rv.touched.add(it.id); if (kind) rv.choices.set(it.id, kind); else rv.choices.delete(it.id); rvDisarm(); rvRender(); };
+    const chosen = rv.choices.get(it.id) || '';
+    const ai = it.ai && !it.ai.error ? it.ai : null;
+    const mark = kind => (ai && ai.kind === kind ? ' ★ AI pick' : '') + (ai && (ai.distorted || []).includes(kind) ? ' ⚠ faces distorted (AI)' : '');
+    thumbs.appendChild(rvThumb(it.id, it.v, done ? 'Now: ' + done.name : 'Original' + (it.width ? ` · ${it.width}×${it.height}` : '') + (chosen ? '' : ' · keep'),
+      '', !chosen && !done, !!done, () => pick('')));
+    it.versions.forEach(v => thumbs.appendChild(rvThumb(v.saved_id, v.v, v.label + (v.width ? ` · ${v.width}×${v.height}` : '') + (v.exists ? '' : ' (copy gone)') + mark(v.kind),
+      v.kind, chosen === v.kind, !!done || !v.exists, () => pick(v.kind))));
+    row.append(head, thumbs);
+    if (it.ai) {
+      const why = document.createElement('div');
+      why.className = 'q-line q-mute';
+      why.textContent = it.ai.error ? 'AI pick failed: ' + it.ai.error
+        : (it.ai.kind === 'original' ? 'AI pick: keep the original. ' : 'AI pick (chosen for you unless you change it): ') + (it.ai.reason || '');
+      row.appendChild(why);
+    }
+    body.appendChild(row);
+  });
+  const pages = d ? Math.max(1, Math.ceil(d.total / d.per)) : 1;
+  $('#rvPage').textContent = d ? `Page ${d.page + 1} of ${pages} (${d.total.toLocaleString()} photos)` : '';
+  $('#rvPrev').disabled = !d || d.page <= 0;
+  $('#rvNext').disabled = !d || d.page >= pages - 1;
+  $('#rvSub').textContent = d ? (d.replaced ? `${d.replaced.toLocaleString()} replaced so far. ` : '') + 'Click a version to choose it for that photo; click the original to keep it.' : '';
+  rvFoot();
+}
+function rvFoot() {
+  const n = rv.choices.size, b = $('#rvReplace');
+  $('#rvChosen').textContent = n ? `${n.toLocaleString()} ${n === 1 ? 'original' : 'originals'} to replace` : 'Nothing chosen';
+  b.disabled = !n || rv.busy;
+  $('#rvClear').disabled = !n || rv.busy;
+  b.classList.toggle('confirm-armed', rv.armed);
+  b.textContent = rv.armed ? `Confirm: replace ${n} ${n === 1 ? 'original' : 'originals'}` : (n > 1 ? `Replace ${n} originals` : 'Replace the original');
+}
+function rvDisarm() { clearTimeout(rv.timer); rv.armed = false; rvFoot(); }
+async function rvLoad(page) {
+  try {
+    rv.data = await api('batch_review', { qs: 'page=' + page });
+    // The AI's picks start out chosen; whatever the user clicks wins.
+    rv.data.items.forEach(it => {
+      if (rv.touched.has(it.id) || it.replaced || !it.ai || it.ai.error || it.ai.kind === 'original') return;
+      if (it.versions.some(v => v.kind === it.ai.kind && v.exists)) rv.choices.set(it.id, it.ai.kind);
+    });
+    rv.page = rv.data.page;
+  } catch (e) { $('#rvSub').textContent = e.message; }
+  rvRender();
+  $('#rvBody').scrollTop = 0;
+}
+function rvOpen() {
+  rv.choices.clear();
+  rv.touched = new Set();
+  rvDisarm();
+  $('#reviewDlg').showModal();
+  rvLoad(0);
+}
+$('#rvReplace').addEventListener('click', async () => {
+  const n = rv.choices.size;
+  if (!n || rv.busy) return;
+  if (!rv.armed) {
+    rv.armed = true;
+    rvFoot();
+    $('#rvSub').textContent = `Click the red button within 8 seconds to replace ${n} ${n === 1 ? 'original' : 'originals'} with the chosen versions: each original goes to the Recycle Bin (you can restore it from there) and the version takes its name, description and place.`;
+    rv.timer = setTimeout(() => { rv.armed = false; rvRender(); }, 8000);
+    return;
+  }
+  rvDisarm();
+  rv.busy = true;
+  rvFoot();
+  const all = [...rv.choices].map(([id, kind]) => ({ id, kind }));
+  let ok = 0, changed = false;
+  const failed = [];
+  for (let i = 0; i < all.length; i += 5) {
+    $('#rvChosen').textContent = `Replacing ${Math.min(i + 5, all.length)} of ${all.length}…`;
+    try {
+      const r = await api('batch_replace', { body: { choices: all.slice(i, i + 5) } });
+      r.results.forEach(x => {
+        if (!x.ok) { failed.push(x); return; }
+        ok++;
+        rv.choices.delete(x.id);
+        const at = lastResults.findIndex(y => y.id === x.id);
+        if (at >= 0) { Object.assign(lastResults[at], x.image); changed = true; }
+        if (x.removed_copy) { lastResults = lastResults.filter(y => y.id !== x.removed_copy); changed = true; }
+      });
+      if (r.stats) setStats(r.stats);
+    } catch (e) { failed.push({ error: e.message }); break; }
+  }
+  rv.busy = false;
+  if (changed) renderResults(lastResults);
+  toast(`Replaced ${ok} ${ok === 1 ? 'original' : 'originals'}; the old versions are in the Recycle Bin.` + (failed.length ? ` ${failed.length} failed: ${failed[0].error}` : ''), failed.length ? 'err' : 'ok', 8000);
+  await rvLoad(rv.page);
+});
+$('#rvClear').addEventListener('click', () => { rv.choices.clear(); rvDisarm(); rvRender(); });
+$('#rvPrev').addEventListener('click', () => { rvDisarm(); rvLoad(rv.page - 1); });
+$('#rvNext').addEventListener('click', () => { rvDisarm(); rvLoad(rv.page + 1); });
+$('#rvClose').addEventListener('click', () => $('#reviewDlg').close());
+$('#reviewDlg').addEventListener('keydown', e => e.stopPropagation());
+$('#reviewDlg').addEventListener('close', () => { rvDisarm(); });
+$('#qReviewBtn').addEventListener('click', rvOpen);
+
 // ---- Clean up: fix the selected photos in a batch ----
 const B_DEFAULT = { blurry: ['deblur'], exposure: ['color'], small: ['enlarge'] };
+const bs = { src: 'cu' };   // where the selection comes from: Clean up's list ('cu') or the main grid ('grid')
 function bSelected() {
-  const ids = [...cu.sel[cu.tab]];
-  const rows = new Map((cu.lists[cu.tab] || []).map(r => [r.id, r]));
+  const ids = bs.src === 'grid' ? [...selectedIds] : [...cu.sel[cu.tab]];
+  const rows = new Map((bs.src === 'grid' ? lastResults : (cu.lists[cu.tab] || [])).map(r => [r.id, r]));
   return { ids, rows: ids.map(id => rows.get(id)).filter(Boolean) };
 }
 // A rough time from each photo's size: on this PC a blur fix takes about 6 s per 448 px tile,
@@ -4360,29 +4644,53 @@ function bEstimate() {
   rows.forEach(r => {
     const w = r.width || 1600, h = r.height || 1200;
     if ($('#bDeblur').checked) s += Math.ceil(w / 448) * Math.ceil(h / 448) * 6;
-    if ($('#bColor').checked) s += 3;
-    if ($('#bEnlarge').checked && Math.max(w, h) <= DB_ENLARGE_MAX) s += Math.ceil(w / 112) * Math.ceil(h / 112) * 0.25;
+    const many = ['#bDeblur', '#bColor', '#bEnlarge'].filter(x => $(x).checked).length > 1;   // each on its own, and all together
+    if ($('#bColor').checked) s += many ? 6 : 3;
+    if ($('#bEnlarge').checked && Math.max(w, h) <= DB_ENLARGE_MAX) s += Math.ceil(w / 112) * Math.ceil(h / 112) * 0.25 * (many ? 2 : 1);
   });
   s += (ids.length - rows.length) * 30;
-  const any = $('#bDeblur').checked || $('#bColor').checked || $('#bEnlarge').checked;
+  const ticked = ['#bDeblur', '#bColor', '#bEnlarge'].filter(x => $(x).checked).length;
+  $('#bAll').checked = ticked === 3;
+  $('#bAll').indeterminate = ticked > 0 && ticked < 3;
+  const any = ticked > 0;
   $('#bEstimate').textContent = any ? 'Rough time on this PC: ' + (s < 90 ? 'about a minute.' : s < 5400 ? `about ${Math.round(s / 60)} minutes.` : `about ${(s / 3600).toFixed(1)} hours.`) : 'Tick at least one fix.';
   $('#bStart').disabled = !any;
+  // The AI pick: one Claude Haiku request per photo, about $0.002 (images ~1,000 tokens each at $0.10 per million).
+  if ($('#bAi').checked && !$('#bAi').disabled && ids.length) {
+    $('#bEstimate').textContent += ` AI pick: about $${Math.max(0.01, ids.length * 0.002).toFixed(2)} for ${ids.length.toLocaleString()} ${ids.length === 1 ? 'photo' : 'photos'}, billed to your Anthropic account.`;
+  }
 }
-function bOpen() {
+function bOpen(src) {
+  bs.src = src;
   const { ids } = bSelected();
   if (!ids.length) return;
-  const def = B_DEFAULT[cu.tab] || [];
+  const def = src === 'cu' ? (B_DEFAULT[cu.tab] || []) : [];
   $('#bDeblur').checked = def.includes('deblur');
   $('#bColor').checked = def.includes('color');
   $('#bEnlarge').checked = def.includes('enlarge');
   $('#bCount').textContent = `${ids.length.toLocaleString()} ${ids.length === 1 ? 'photo' : 'photos'} selected. Fixes to make, in this order:`;
+  $('#bAi').checked = false;
+  $('#bAi').disabled = true;
+  api('batch_ai_available').then(r => {
+    $('#bAi').disabled = !r.available;
+    $('#bAi').checked = !!r.available;
+    $('#bAiNote').textContent = r.available
+      ? '(Claude compares every version, checking close-ups of faces for distortion; uses the Claude key that describes your photos)'
+      : '(needs Claude as the AI that describes your photos, with its API key: Settings)';
+    bEstimate();
+  }).catch(() => {});
   $('#bStatus').textContent = '';
   $('#bStart').disabled = false;
   bEstimate();
   $('#batchDlg').showModal();
 }
-['#bDeblur', '#bColor', '#bEnlarge'].forEach(s => $(s).addEventListener('change', bEstimate));
-$('#cuFixSelBtn').addEventListener('click', bOpen);
+['#bDeblur', '#bColor', '#bEnlarge', '#bAi'].forEach(s => $(s).addEventListener('change', bEstimate));
+$('#bAll').addEventListener('change', () => {
+  ['#bDeblur', '#bColor', '#bEnlarge'].forEach(s => { $(s).checked = $('#bAll').checked; });
+  bEstimate();
+});
+$('#cuFixSelBtn').addEventListener('click', () => bOpen('cu'));
+$('#selFixBtn').addEventListener('click', () => bOpen('grid'));
 $('#bCancel').addEventListener('click', () => $('#batchDlg').close());
 $('#batchDlg').addEventListener('keydown', e => e.stopPropagation());
 $('#bStart').addEventListener('click', async () => {
@@ -4390,7 +4698,7 @@ $('#bStart').addEventListener('click', async () => {
   $('#bStart').disabled = true;
   $('#bStatus').textContent = '';
   try {
-    await api('batch_start', { body: { ids: bSelected().ids, steps } });
+    await api('batch_start', { body: { ids: bSelected().ids, steps, ai: $('#bAi').checked && !$('#bAi').disabled } });
     $('#batchDlg').close();
     qOpen();
   } catch (e) {
@@ -4412,6 +4720,7 @@ async function lbRotate(dir) {
     const row = Object.assign({}, r, res.image);
     lastResults[lbIndex] = row;
     lbShowImage(row);
+    lbLoadDetails(row);   // its size as shown and its rotation changed
     const img = document.querySelector('.card[data-id="' + r.id + '"] .imgwrap img');
     if (img) img.src = 'thumb.php?id=' + encodeURIComponent(r.id) + '&v=' + row.v;
   } catch (e) {
