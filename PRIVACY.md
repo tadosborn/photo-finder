@@ -52,6 +52,11 @@ watermark. Nothing is sent to Google unless you use this button.
 Either way, each version is saved as a new file next to the original as soon as it is made; the
 original changes only if you click **Replace the original** (it goes to the Recycle Bin first).
 
+**Batch AI pick** (optional; a tick box when you fix photos in a batch): each photo and its
+versions (reduced to at most 1024 pixels on the long side, plus close-ups of the faces) are sent
+to Anthropic's Claude with your own Anthropic API key, the same service and key that describe your
+photos, to choose the best version. Batches otherwise run entirely on this PC.
+
 ## Update checks (GitHub)
 
 When it opens, Photo Finder can ask GitHub
