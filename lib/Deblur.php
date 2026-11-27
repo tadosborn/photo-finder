@@ -327,7 +327,8 @@ final class Deblur {
             } else {
                 file_put_contents($out, $bin);
             }
-            $state = ['state' => 'done', 'started' => $state['started'], 'seconds' => time() - $state['started'], 'model' => $model, 'updated' => time()];
+            $state = ['state' => 'done', 'started' => $state['started'], 'seconds' => time() - $state['started'], 'model' => $model,
+                      'width' => (int)$info[0], 'height' => (int)$info[1], 'updated' => time()];
         } catch (Throwable $e) {
             $state = ['state' => 'error', 'error' => $e->getMessage(), 'updated' => time()];
         }
@@ -404,12 +405,19 @@ final class Deblur {
         throw new RuntimeException('Too many copies of this photo already');
     }
 
-    /** Write the job's result next to the original with the original's metadata, and index it. */
-    public static function save(array $row, string $kind): array {
+    /** Write the job's result with the original's metadata: as a copy next to the original
+     *  ('copy'), or in its place ('replace': the original goes to the Recycle Bin first, the
+     *  photo keeps its name, description and place in the index). */
+    public static function save(array $row, string $kind, string $mode = 'copy'): array {
         if (!in_array($kind, self::KINDS, true)) throw new InvalidArgumentException('Unknown kind.');
+        if ($mode === 'replace' && !Enhance::canReplace((string)$row['path'])) {
+            throw new RuntimeException('Replacing works for JPEG photos only. Save as a copy instead.');
+        }
         $id = (string)$row['id'];
         $res = self::jobFile($id, $kind, 'jpg');
-        if ((self::jobStatus($id, $kind)['state'] ?? '') !== 'done' || !is_file($res)) throw new RuntimeException('There is no result to save yet.');
+        $job = self::jobStatus($id, $kind);
+        if (($job['state'] ?? '') !== 'done' || !is_file($res)) throw new RuntimeException('There is no result to save yet.');
+        if ($mode === 'copy' && !empty($job['saved'])) throw new RuntimeException('This result is already saved as "' . $job['saved'] . '".');
         $path = (string)$row['path'];
         if (!is_file($path)) throw new RuntimeException('The photo is no longer on disk.');
         $tool = Exif::toolPath() ?? Exporter::autoDetect();
@@ -432,19 +440,45 @@ final class Deblur {
             @unlink($tmp);
             throw new RuntimeException('Could not copy the photo\'s metadata: ' . trim((string)($stderr ?: $stdout)));
         }
-        $dest = self::copyPath($path, $kind);
-        if (!@rename($tmp, $dest)) {
-            if (!@copy($tmp, $dest)) { @unlink($tmp); throw new RuntimeException('Could not write ' . $dest); }
-            @unlink($tmp);
+        if ($mode === 'replace') {
+            $rec = pf_recycle_files([$path])[$path] ?? ['ok' => false, 'error' => 'no response'];
+            if (!$rec['ok']) {
+                @unlink($tmp);
+                throw new RuntimeException('Could not move the original to the Recycle Bin (' . $rec['error'] . '). Nothing was changed.');
+            }
+            if (!@rename($tmp, $path) && !(@copy($tmp, $path) && @unlink($tmp))) {
+                throw new RuntimeException('The original is in the Recycle Bin, but the fixed photo could not be put in its place. It is at ' . $tmp);
+            }
+            $newId = (string)$row['id'];
+            $dest = $path;
+            clearstatcache(true, $path);
+            Db::upsertPending($newId, $path, (int)filesize($path), (int)filemtime($path));
+            // New pixels: its size, and Clean up's measurements, change.
+            Db::get()->prepare('UPDATE images SET width = :w, height = :h, analyzed_at = NULL WHERE id = :id')
+                ->execute([':w' => $w, ':h' => $h, ':id' => $newId]);
+            @unlink(PF_THUMBS . '/' . $newId . '.jpg');
+        } else {
+            $dest = self::copyPath($path, $kind);
+            if (!@rename($tmp, $dest)) {
+                if (!@copy($tmp, $dest)) { @unlink($tmp); throw new RuntimeException('Could not write ' . $dest); }
+                @unlink($tmp);
+            }
+            $newId = Enhance::indexCopy($row, $dest);
         }
-        $newId = Enhance::indexCopy($row, $dest);
         Thumb::ensureThumb($newId, $dest);
-        @unlink($res);
-        @unlink(self::jobFile($id, $kind, 'json'));
+        if ($mode === 'replace') {
+            // Every result was made from the old original: clear them all.
+            self::discard($id);
+        } else {
+            // Keep the result on view (to compare with the other one, or save that too), marked saved.
+            $j = self::jobStatus($id, $kind);
+            $j['saved'] = basename($dest);
+            self::writeJson(self::jobFile($id, $kind, 'json'), $j);
+        }
         $r = Db::getById($newId) ?? [];
         $r['sort_date'] = ($r['taken_at'] ?? '') !== '' ? $r['taken_at'] : (($r['folder_year'] ?? '') !== '' ? $r['folder_year'] : null);
         $r['v'] = (int)($r['mtime'] ?? time());
-        return ['ok' => true, 'name' => basename($dest), 'image' => $r, 'stats' => Db::stats()];
+        return ['ok' => true, 'mode' => $mode, 'name' => basename($dest), 'image' => $r, 'stats' => Db::stats()];
     }
 
     // ---- Helpers ----

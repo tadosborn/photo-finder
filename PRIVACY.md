@@ -72,7 +72,8 @@ The search index, thumbnails, settings and logs are stored in `%LOCALAPPDATA%\Ph
 Photo Finder's web interface listens on `127.0.0.1` only and refuses requests from other
 websites. It changes your photo files only when you ask it to: **Embed metadata** writes the
 descriptions and tags into the files; **Enhance** saves a copy (or, if you choose, replaces the
-original, which goes to the Recycle Bin first); **Fix blur** saves a copy; **Find photos on this
+original, which goes to the Recycle Bin first); **Fix blur** saves a copy or, if you choose,
+replaces the original the same way; **Rotate** changes only the photo's orientation tag; **Find photos on this
 PC** moves the photos you tick into your photo folder; deleting photos, including from **Clean
 up**, moves them to the Recycle Bin.
 

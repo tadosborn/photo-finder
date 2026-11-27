@@ -85,6 +85,8 @@ function Test-ServerConfig([int]$Seconds) {
 }
 
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+# Setup shows this window (it used to run hidden, so a slow step looked like a hung installer).
+try { $Host.UI.RawUI.WindowTitle = 'Photo Finder setup - finishing (this window closes by itself)' } catch { }
 Write-Step "Photo Finder setup: program $projectDir, data $dataDir (account $account)"
 
 # ---- PHP sanity: the bundled runtime must actually start (VC++ runtime present, extensions load) ----
@@ -104,6 +106,7 @@ if ($installed) {
     # module (most likely antivirus holding the freshly installed files), and with no limit Setup
     # never got to start the app. A check that does not finish is not a failed check: carry on;
     # the start step below still confirms the app answers (and starts it again if not).
+    Write-Step 'Checking the web server (antivirus may scan the new files first; this can take up to 90 seconds)...'
     $r = Test-ServerConfig -Seconds 90
     if ($r.TimedOut) {
         Write-Step 'Web server check did not finish within 90 s (antivirus may still be scanning the new files); continuing.' 'Yellow'
@@ -158,7 +161,16 @@ function Register-PfTask([string]$name, $action, $triggers, [TimeSpan]$limit, [s
     $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
         -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit $limit
-    if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
+    $old = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    if ($old) {
+        # An update usually finds the task exactly as it would register it: leave it alone. (On
+        # 2026-11-27 re-registering it from an update failed with "Access is denied", most likely
+        # antivirus restricting a freshly downloaded installer, and Setup stopped there.)
+        $a = @($old.Actions)[0]
+        $same = $a -and $a.Execute -eq $action.Execute -and $a.Arguments -eq $action.Arguments -and
+                $a.WorkingDirectory -eq $action.WorkingDirectory -and
+                ($old.Principal.UserId -split '\\')[-1] -eq ($account -split '\\')[-1]
+        if ($same) { Write-Step "Task $name is already set up."; return }
         Unregister-ScheduledTask -TaskName $name -Confirm:$false
     }
     $p = @{ TaskName = $name; Action = $action; Principal = $principal; Settings = $settings; Description = $desc }
@@ -178,8 +190,14 @@ try {
         (New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $projectDir 'silent-worker.vbs')`"" -WorkingDirectory $projectDir) `
         $atLogon ([TimeSpan]::Zero) 'Photo Finder background indexer. Runs in your user context. Triggered by the web UI or at sign-in.'
 } catch {
-    Write-Step "Registering tasks FAILED: $_" 'Red'
-    Exit-Setup 1
+    # With both tasks in place the app still starts (below); only a missing task is fatal.
+    if ((Get-ScheduledTask -TaskName 'PhotoFinderServer' -ErrorAction SilentlyContinue) -and
+        (Get-ScheduledTask -TaskName 'PhotoFinderWorker' -ErrorAction SilentlyContinue)) {
+        Write-Step "Could not update the scheduled tasks ($_); keeping the existing ones." 'Yellow'
+    } else {
+        Write-Step "Registering tasks FAILED: $_" 'Red'
+        Exit-Setup 1
+    }
 }
 
 # 1.0.0 - 1.0.2 had a PhotoFinderLogin task for the Claude Code backend, removed in 1.0.3.

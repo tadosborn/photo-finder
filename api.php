@@ -559,6 +559,20 @@ try {
         }
         // ---- end Enhance ----
 
+        // ---- Rotate a quarter turn (lib/Rotate.php): the EXIF Orientation tag only, lossless ----
+        case 'rotate': {
+            require_once __DIR__ . '/lib/Rotate.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            $id = preg_replace('/[^a-f0-9]/i', '', (string)($in['id'] ?? ''));
+            $row = $id !== '' ? Db::getById($id) : null;
+            if (!$row) pf_json(['error' => 'not found in index'], 404);
+            if (!pf_path_inside_roots((string)$row['path'], pf_load_settings()['photo_dirs'] ?? [])) {
+                pf_json(['error' => 'outside configured photo folders'], 403);
+            }
+            pf_json(['ok' => true, 'image' => Rotate::rotate($row, ($in['dir'] ?? '') === 'ccw' ? 'ccw' : 'cw')]);
+        }
+
         // ---- Fix blur (lib/Deblur.php): on this PC (NAFNet) or with Google's Gemini ----
         case 'deblur_setup_status':
             require_once __DIR__ . '/lib/Deblur.php';
@@ -601,7 +615,7 @@ try {
                     Deblur::start($row, $kind);
                     pf_json(['ok' => true] + Deblur::status($id));
                 case 'deblur_save':
-                    pf_json(Deblur::save($row, $kind));
+                    pf_json(Deblur::save($row, $kind, ($in['mode'] ?? '') === 'replace' ? 'replace' : 'copy'));
                 case 'deblur_discard':
                     Deblur::discard($id);
                     pf_json(['ok' => true]);

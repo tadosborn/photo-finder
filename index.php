@@ -110,6 +110,8 @@ $apiKeySet = $settings['api_key'] !== '';
   .hint { font-size: 11px; color: var(--mute); margin-top: 4px; }
   .toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel); border: 1px solid var(--line); padding: 12px 18px; border-radius: 8px; z-index: 100; max-width: 400px; opacity: 0; transition: opacity 0.2s; pointer-events:none; }
   .toast.show { opacity: 1; pointer-events: auto; }
+  /* Shown as a popover so it sits above any open dialog (Fix blur, Enhance, Clean up). */
+  .toast[popover] { inset: auto 20px 20px auto; margin: 0; color: var(--text); overflow: visible; }
   .toast.ok { border-color: var(--ok); }
   .toast.err { border-color: var(--err); }
   dialog.lightbox { background: transparent; border: none; padding: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; top: 0; left: 0; }
@@ -153,6 +155,12 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox .lb-fix-btn { position: absolute; top: 16px; right: 394px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-fix-btn:hover { background: rgba(0,0,0,0.92); }
   dialog.lightbox .lb-fix-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.lightbox .lb-rot-btn { position: absolute; top: 16px; width: 36px; height: 36px; padding: 0; border-radius: 50%; background: rgba(0,0,0,0.75); color: #fff; border: none; cursor: pointer; font-size: 20px; line-height: 1; }
+  dialog.lightbox .lb-rot-btn:hover { background: rgba(0,0,0,0.92); }
+  dialog.lightbox .lb-rot-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.lightbox .lb-rot-btn:disabled { opacity: 0.6; cursor: wait; }
+  dialog.lightbox .lb-rot-r { right: 478px; }
+  dialog.lightbox .lb-rot-l { right: 522px; }
   dialog.enhance { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #0b0d11; color: var(--text); }
   dialog.enhance[open] { display: flex; }
   dialog.enhance::backdrop { background: rgba(0,0,0,0.9); }
@@ -353,7 +361,25 @@ $apiKeySet = $settings['api_key'] !== '';
   .db-name { flex: 1; min-width: 0; color: var(--mute); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .db-close { background: transparent; border: none; color: var(--text); font-size: 22px; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; padding: 0; }
   .db-close:hover { background: var(--panel2); }
+  .db-viewbar { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+  .db-viewbar button { border: none; border-radius: 0; background: transparent; padding: 5px 10px; font-size: 12px; }
+  .db-viewbar button[aria-pressed="true"] { background: var(--primary-bg); color: #fff; }
+  .db-viewbar[hidden] { display: none; }
+  .db-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px; background: #0a0c10; }
+  .db-grid[hidden] { display: none; }
+  .db-pane { position: relative; margin: 0; min-width: 0; min-height: 0; overflow: hidden; background: #000; border: 2px solid transparent; border-radius: 6px; }
+  .db-pane[hidden] { display: none; }
+  .db-pane.picked { border-color: var(--accent); }
+  .db-pane img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: 50% 50%; }
+  .db-pane figcaption { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+  .db-pane figcaption span { background: rgba(0,0,0,0.75); color: #fff; font-size: 12px; padding: 3px 9px; border-radius: 10px; }
+  .db-pick { pointer-events: auto; margin-left: auto; font-size: 12px; padding: 4px 10px; background: rgba(0,0,0,0.75); color: #fff; border: 1px solid #fff; border-radius: 12px; }
+  .db-pick[aria-pressed="true"] { background: var(--primary-bg); border-color: var(--primary-bg); }
+  .db-pick:disabled { opacity: 0.5; }
+  .db-pane-note { position: absolute; left: 10px; right: 10px; bottom: 10px; background: rgba(0,0,0,0.8); color: #fff; font-size: 13px; padding: 8px 10px; border-radius: 6px; text-align: center; }
+  .db-pane-note:empty { display: none; }
   .db-compare { position: relative; flex: 1; min-height: 0; background: #0a0c10; overflow: hidden; user-select: none; }
+  .db-compare[hidden] { display: none; }
   .db-compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   .db-after { clip-path: inset(0 0 0 50%); }
   .db-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.9); pointer-events: none; }
@@ -364,13 +390,14 @@ $apiKeySet = $settings['api_key'] !== '';
   .db-bar { padding: 10px 14px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
   .db-status { font-size: 13px; min-height: 18px; }
   .db-status.err { color: var(--err-text); }
+  .db-status.done { color: var(--ok); font-weight: 600; font-size: 14px; }
   .db-bar progress { width: 100%; height: 8px; }
   .db-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .db-row .spacer { flex: 1; }
   .db-which { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .db-which[hidden] { display: none; }
   .db-which button { border: none; border-radius: 0; background: transparent; }
-  .db-which button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .db-which button[aria-pressed="true"] { background: var(--primary-bg); color: #fff; }
   .db-hint { font-size: 12px; color: var(--mute); }
   .cu-name { color: var(--text); word-break: break-all; }
   .cu-path { word-break: break-all; }
@@ -750,6 +777,8 @@ $apiKeySet = $settings['api_key'] !== '';
   <button class="lb-del-btn" id="lbDelBtn" title="Delete photo — moves file to Recycle Bin (Del)">🗑 Delete</button>
   <button class="lb-enh-btn" id="lbEnhBtn" type="button" title="Fix colour, brightness and contrast; sharpen slightly soft photos">✨ Enhance</button>
   <button class="lb-fix-btn" id="lbFixBtn" type="button" title="Make a sharper copy of a blurred photo with AI">Fix blur</button>
+  <button class="lb-rot-btn lb-rot-r" id="lbRotR" type="button" title="Rotate right (R)" aria-label="Rotate right">⟳</button>
+  <button class="lb-rot-btn lb-rot-l" id="lbRotL" type="button" title="Rotate left (Shift+R)" aria-label="Rotate left">⟲</button>
   <button class="lb-close" id="lbClose" title="Close (Esc)">×</button>
   <div class="lb-meta">
     <div class="desc" id="lbDesc"></div>
@@ -757,7 +786,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <div class="tags" id="lbTags"></div>
     <div class="tags" id="lbWhere"></div>
     <div class="tags" id="lbPath"></div>
-    <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · I: toggle info · E: edit · Esc: close</div>
+    <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · R / Shift+R: rotate · I: toggle info · E: edit · Esc: close</div>
   </div>
   <div class="lb-editor" id="lbEditor">
     <h3>Edit metadata <span class="manual-badge" id="lbManualBadge" style="display:none">manually edited — worker won't overwrite</span></h3>
@@ -845,9 +874,34 @@ $apiKeySet = $settings['api_key'] !== '';
   <div class="db-head">
     <h2 id="dbTitle">Fix blur</h2>
     <span class="db-name" id="dbName"></span>
+    <span class="db-viewbar" role="group" aria-label="View">
+      <button type="button" id="dbViewGrid" aria-pressed="true" title="Original and every result next to each other">Side by side</button>
+      <button type="button" id="dbViewSlider" aria-pressed="false" title="Original and one result on top of each other, with a slider">Slider</button>
+    </span>
+    <span class="db-viewbar" role="group" aria-label="Zoom (side by side)" id="dbZoomBar">
+      <button type="button" data-zoom="1" aria-pressed="true" title="Whole photos">Fit</button>
+      <button type="button" data-zoom="2" aria-pressed="false" title="Zoom in; move the mouse over a photo to look around">2×</button>
+      <button type="button" data-zoom="4" aria-pressed="false" title="Zoom in further; move the mouse over a photo to look around">4×</button>
+    </span>
     <button type="button" class="db-close" id="dbClose" aria-label="Close Fix blur" title="Close (Esc). A fix in progress carries on.">×</button>
   </div>
-  <div class="db-compare" id="dbCompare">
+  <div class="db-grid" id="dbGrid">
+    <figure class="db-pane" id="dbPaneOrig">
+      <img alt="Original photo">
+      <figcaption><span>Original</span></figcaption>
+    </figure>
+    <figure class="db-pane" id="dbPaneLocal" data-kind="local" hidden>
+      <img alt="Fixed on this PC" hidden>
+      <figcaption><span>On this PC</span><button type="button" class="db-pick" data-kind="local" aria-pressed="false">Use this</button></figcaption>
+      <div class="db-pane-note"></div>
+    </figure>
+    <figure class="db-pane" id="dbPaneCloud" data-kind="cloud" hidden>
+      <img alt="Redrawn by cloud AI" hidden>
+      <figcaption><span>Cloud AI (redrawn)</span><button type="button" class="db-pick" data-kind="cloud" aria-pressed="false">Use this</button></figcaption>
+      <div class="db-pane-note"></div>
+    </figure>
+  </div>
+  <div class="db-compare" id="dbCompare" hidden>
     <img id="dbBefore" alt="Original photo">
     <img id="dbAfter" class="db-after" alt="Fixed photo" hidden>
     <div class="db-line" id="dbLine" hidden></div>
@@ -866,9 +920,10 @@ $apiKeySet = $settings['api_key'] !== '';
       <button type="button" id="dbLocalBtn">Fix on this PC</button>
       <button type="button" id="dbCloudBtn">Try cloud AI</button>
       <span class="spacer"></span>
+      <button type="button" id="dbReplaceBtn" disabled>Replace the original</button>
       <button type="button" class="primary" id="dbSaveBtn" disabled>Save as a copy</button>
     </div>
-    <div class="db-hint">On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. The original is never changed.</div>
+    <div class="db-hint">On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. Nothing is saved until you choose; "Replace the original" moves the original to the Recycle Bin.</div>
   </div>
 </dialog>
 <!-- ---- end Fix blur ---- -->
@@ -1016,7 +1071,7 @@ $apiKeySet = $settings['api_key'] !== '';
 </dialog>
 <!-- ---- end of Find photos on this PC ---- -->
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" popover="manual" role="status" aria-live="polite"></div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -1030,7 +1085,17 @@ function toast(msg, kind='ok', ms=3000) {
   const t = $('#toast');
   t.textContent = msg;
   t.className = 'toast show ' + kind;
-  setTimeout(() => t.classList.remove('show'), ms);
+  // Re-showing the popover puts it on top of the top layer, above any modal dialog that is open
+  // (a plain fixed element stayed hidden behind Fix blur's window).
+  if (t.showPopover) {
+    try { t.hidePopover(); } catch (e) {}
+    try { t.showPopover(); } catch (e) {}
+  }
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => {
+    t.classList.remove('show');
+    if (t.hidePopover) setTimeout(() => { if (!t.classList.contains('show')) try { t.hidePopover(); } catch (e) {} }, 250);
+  }, ms);
 }
 
 async function api(action, opts = {}) {
@@ -1428,6 +1493,8 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowRight') { e.preventDefault(); navLightbox(1); }
   else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); $('#lightbox').classList.toggle('no-meta'); }
   else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); openEditor(); }
+  else if (e.key === 'r') { e.preventDefault(); lbRotate('cw'); }
+  else if (e.key === 'R') { e.preventDefault(); lbRotate('ccw'); }
   else if (e.key === 'Delete') { e.preventDefault(); deleteCurrentInLightbox(); }
 });
 
@@ -3530,36 +3597,84 @@ window.addEventListener('keydown', e => {
 
 // ---- Fix blur (lib/Deblur.php) ----
 // One photo at a time. The work runs in the background on the server (a fix keeps going when this
-// window is closed); the window polls deblur_status while something is running. Results are only
-// previews until "Save as a copy" writes "<name> (deblurred).jpg" / "(restored).jpg".
-const db = { row: null, show: 'local', showing: '', timer: null, s: null, wantLocal: false, cloudArmed: false, shown: '' };
+// window is closed); the window polls deblur_status while something is running. Two views:
+// side by side (original, on this PC, cloud AI; zoom and pan together) and a slider (original and
+// the picked result on top of each other). Save / Replace act on the picked result ("Use this").
+const db = { row: null, show: 'local', showing: '', timer: null, s: null, wantLocal: false, cloudArmed: false,
+             shown: '', replaceArmed: false, finished: '', view: 'grid', zoom: 1 };
 
 function dbFmtSecs(s) {
   s = Math.max(0, Math.round(s));
   return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min' + (s % 60 >= 30 ? ' 30 s' : '');
 }
-function dbStatus(text, err = false) {
+function dbStatus(text, err = false, done = false) {
   const el = $('#dbStatus');
   el.textContent = text;
   el.classList.toggle('err', err);
+  el.classList.toggle('done', done);
+}
+function dbResultUrl(kind, stamp) {
+  return 'api.php?action=deblur_image&id=' + encodeURIComponent(db.row.id) + '&kind=' + kind + '&t=' + encodeURIComponent(stamp);
 }
 function dbOpen(row) {
   if (!row || !row.id) return;
-  db.row = row;
-  db.show = 'local';
-  db.wantLocal = false;
-  db.cloudArmed = false;
-  db.shown = '';
+  Object.assign(db, { row, show: 'local', showing: '', wantLocal: false, cloudArmed: false, replaceArmed: false, finished: '', shown: '' });
   $('#dbName').textContent = cuBase(row.path);
   $('#dbName').title = row.path || '';
-  $('#dbBefore').src = 'file.php?id=' + encodeURIComponent(row.id) + (row.v ? '&v=' + row.v : '');
+  const orig = 'file.php?id=' + encodeURIComponent(row.id) + (row.v ? '&v=' + row.v : '');
+  $('#dbBefore').src = orig;
+  $('#dbPaneOrig img').src = orig;
+  ['#dbPaneLocal', '#dbPaneCloud'].forEach(p => { const img = $(p + ' img'); img.hidden = true; img.removeAttribute('src'); img.dataset.src = ''; $(p).hidden = true; });
   dbSetAfter(null);
   $('#dbSlider').value = 50;
   dbSlide();
+  dbSetZoom(1);
+  dbSetView(db.view);
   dbStatus('');
   $('#deblurDlg').showModal();
   dbRefresh(true);
 }
+
+// ---- views ----
+function dbSetView(v) {
+  db.view = v;
+  $('#dbGrid').hidden = v !== 'grid';
+  $('#dbCompare').hidden = v !== 'slider';
+  $('#dbZoomBar').hidden = v !== 'grid';
+  $('#dbViewGrid').setAttribute('aria-pressed', v === 'grid' ? 'true' : 'false');
+  $('#dbViewSlider').setAttribute('aria-pressed', v === 'slider' ? 'true' : 'false');
+}
+$('#dbViewGrid').addEventListener('click', () => { dbSetView('grid'); dbRefresh(); });
+$('#dbViewSlider').addEventListener('click', () => { dbSetView('slider'); dbRefresh(); });
+
+// Side by side: all panes zoom together; moving the mouse over any pane moves the same spot into
+// view in all of them, so one detail can be compared across the original and both results.
+function dbSetZoom(z) {
+  db.zoom = z;
+  $$('#dbZoomBar button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.zoom === z ? 'true' : 'false'));
+  $$('#dbGrid .db-pane img').forEach(img => {
+    img.style.transform = z > 1 ? `scale(${z})` : '';
+    if (z === 1) img.style.transformOrigin = '50% 50%';
+  });
+}
+$$('#dbZoomBar button').forEach(b => b.addEventListener('click', () => dbSetZoom(+b.dataset.zoom)));
+$('#dbGrid').addEventListener('pointermove', e => {
+  if (db.zoom === 1) return;
+  const pane = e.target.closest('.db-pane');
+  if (!pane) return;
+  const r = pane.getBoundingClientRect();
+  const x = Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100));
+  const y = Math.min(100, Math.max(0, (e.clientY - r.top) / r.height * 100));
+  $$('#dbGrid .db-pane img').forEach(img => { img.style.transformOrigin = `${x}% ${y}%`; });
+});
+$$('#dbGrid .db-pick').forEach(b => b.addEventListener('click', () => {
+  db.show = b.dataset.kind;
+  db.replaceArmed = false;
+  db.finished = '';
+  dbRefresh();
+}));
+
+// Slider view.
 function dbSetAfter(kind, stamp = '') {
   const img = $('#dbAfter');
   const on = !!kind;
@@ -3569,7 +3684,7 @@ function dbSetAfter(kind, stamp = '') {
   if (db.shown === key) return;
   db.shown = key;
   $('#dbTagR').textContent = kind === 'cloud' ? 'Cloud AI (redrawn)' : 'Fixed on this PC';
-  img.src = 'api.php?action=deblur_image&id=' + encodeURIComponent(db.row.id) + '&kind=' + kind + '&t=' + encodeURIComponent(stamp);
+  img.src = dbResultUrl(kind, stamp);
 }
 function dbSlide() {
   const v = +$('#dbSlider').value;
@@ -3577,6 +3692,33 @@ function dbSlide() {
   $('#dbLine').style.left = v + '%';
 }
 $('#dbSlider').addEventListener('input', dbSlide);
+
+function dbRenderPanes(s) {
+  const shown = ['local', 'cloud'].filter(k => s[k].state !== 'none');
+  $('#dbGrid').style.gridTemplateColumns = `repeat(${1 + shown.length}, minmax(0, 1fr))`;
+  for (const k of ['local', 'cloud']) {
+    const j = s[k], pane = $(k === 'local' ? '#dbPaneLocal' : '#dbPaneCloud');
+    const img = pane.querySelector('img'), note = pane.querySelector('.db-pane-note'), pick = pane.querySelector('.db-pick');
+    pane.hidden = j.state === 'none';
+    if (j.state === 'done') {
+      const src = dbResultUrl(k, String(j.updated || ''));
+      if (img.dataset.src !== src) { img.src = src; img.dataset.src = src; }
+      img.hidden = false;
+      note.textContent = j.saved ? '✓ Saved as “' + j.saved + '”' : '';
+    } else {
+      img.hidden = true;
+      img.removeAttribute('src');
+      img.dataset.src = '';
+      note.textContent = j.state === 'running'
+        ? (k === 'local' ? (j.total ? `Fixing on this PC: part ${j.done} of ${j.total}` + (j.done ? `, about ${dbFmtSecs(j.eta || 0)} left` : '') : 'Starting…') : 'Google Gemini is working: usually 10–40 seconds…')
+        : j.state === 'error' ? (k === 'local' ? 'On this PC: ' : 'Cloud AI: ') + j.error : '';
+    }
+    pick.disabled = j.state !== 'done';
+    pick.setAttribute('aria-pressed', db.showing === k ? 'true' : 'false');
+    pick.textContent = db.showing === k ? 'Using this ✓' : 'Use this';
+    pane.classList.toggle('picked', db.showing === k);
+  }
+}
 
 async function dbRefresh(auto = false) {
   clearTimeout(db.timer);
@@ -3596,44 +3738,51 @@ async function dbRefresh(auto = false) {
     return dbStart('local');
   }
 
-  // Which result to show: the one picked (db.show, which stays picked while it is still being
-  // made), else whichever has finished.
+  // The picked result (db.show stays picked while it is still being made), else whichever is done.
   const done = ['local', 'cloud'].filter(k => s[k].state === 'done');
   db.showing = done.includes(db.show) ? db.show : (done[done.length - 1] || '');
+  dbRenderPanes(s);
   if (db.showing) dbSetAfter(db.showing, String(s[db.showing].updated || ''));
   else dbSetAfter(null);
-  $('#dbWhich').hidden = done.length < 2;
+  $('#dbWhich').hidden = db.view !== 'slider' || done.length < 2;
   $('#dbShowLocal').setAttribute('aria-pressed', db.showing === 'local' ? 'true' : 'false');
   $('#dbShowCloud').setAttribute('aria-pressed', db.showing === 'cloud' ? 'true' : 'false');
 
   // Status line and progress bar.
   const prog = $('#dbProg');
   prog.hidden = true;
-  if (settingUp) {
+  const picked = db.showing ? s[db.showing] : null;
+  if (db.finished && !busy) {
+    dbStatus(db.finished, false, true);   // "Replaced …" stays until something new starts
+  } else if (settingUp) {
     const pct = st.total ? Math.floor(100 * st.got / st.total) : 0;
     dbStatus(st.status === 'installing' ? 'Setting up Fix blur: installing…'
       : `Setting up Fix blur (one-time download of about ${s.download_mb} MB): ${st.file || ''} ${pct}%`);
     prog.hidden = false; prog.value = pct;
-  } else if (L.state === 'running') {
+  } else if (L.state === 'running' && db.view === 'slider') {
     const pct = L.total ? Math.floor(100 * L.done / L.total) : 0;
     dbStatus(L.total ? `Fixing on this PC: part ${L.done} of ${L.total}` + (L.done ? `, about ${dbFmtSecs(L.eta || 0)} left` : '') + '. You can close this window; it carries on.'
       : 'Fixing on this PC: starting…');
     prog.hidden = false; prog.value = pct;
-  } else if (C.state === 'running') {
+  } else if (C.state === 'running' && db.view === 'slider') {
     dbStatus('Sending the photo to Google Gemini: usually 10–40 seconds…');
   } else if (!s.ready && st && st.error) {
     dbStatus('Setting up Fix blur failed: ' + st.error, true);
-  } else if (db.show === 'local' && L.state === 'error') {
-    dbStatus('On this PC: ' + L.error, true);
-  } else if (db.show === 'cloud' && C.state === 'error') {
-    dbStatus('Cloud AI: ' + C.error, true);
-  } else if (db.showing) {
-    const j = s[db.showing];
+  } else if (picked && picked.saved) {
+    dbStatus('✓ Saved as “' + picked.saved + '” next to the original.', false, true);
+  } else if (picked) {
     dbStatus((db.showing === 'cloud'
-      ? `Redrawn by Google Gemini in ${dbFmtSecs(j.seconds || 0)}. Check faces and text before saving.`
-      : `Fixed on this PC in ${dbFmtSecs(j.seconds || 0)}.`) + ' Drag the slider to compare. Nothing is saved until you click "Save as a copy".');
+      ? `Using the cloud AI result (redrawn by Google Gemini in ${dbFmtSecs(picked.seconds || 0)}): check faces and text before saving.`
+      : `Using the result from this PC (made in ${dbFmtSecs(picked.seconds || 0)}).`)
+      + (done.length > 1 ? ' Click "Use this" on the other one to switch.' : '') + ' Nothing is saved until you click a button below.');
+  } else if (busy) {
+    dbStatus('Working… the results appear above as they finish. You can close this window; it carries on.');
+  } else if (L.state === 'error' || C.state === 'error') {
+    dbStatus(L.state === 'error' ? 'On this PC: ' + L.error : 'Cloud AI: ' + C.error, true);
   } else if (!s.ready) {
     dbStatus(`Fixing on this PC needs a one-time download of about ${s.download_mb} MB (the AI model and the program that runs it). Photos never leave this PC.`);
+  } else {
+    dbStatus('');
   }
 
   // Buttons.
@@ -3642,13 +3791,20 @@ async function dbRefresh(auto = false) {
   lb.textContent = !s.ready ? (settingUp ? 'Setting up…' : `Set up on this PC (${s.download_mb} MB)`)
     : L.state === 'running' ? 'Fixing…' : (L.state === 'done' || L.state === 'error') ? 'Fix again on this PC' : 'Fix on this PC';
   cb.disabled = C.state === 'running';
-  cb.textContent = C.state === 'running' ? 'Cloud AI working…' : db.cloudArmed ? 'Send to Google' : `Try cloud AI (${s.cloud_cost})`;
-  $('#dbSaveBtn').disabled = !db.showing;
+  cb.textContent = C.state === 'running' ? 'Cloud AI working…' : db.cloudArmed ? 'Send to Google' : (C.state === 'done' ? 'Try cloud AI again' : `Try cloud AI (${s.cloud_cost})`);
+  const sv = $('#dbSaveBtn');
+  sv.disabled = !picked || !!picked.saved || !!db.finished;
+  sv.textContent = picked && picked.saved ? 'Saved ✓' : 'Save as a copy';
+  const rb = $('#dbReplaceBtn');
+  rb.disabled = !picked || !!db.finished;
+  rb.textContent = db.finished ? 'Replaced ✓' : db.replaceArmed ? 'Confirm: replace the original' : 'Replace the original';
 
   if (busy) db.timer = setTimeout(() => dbRefresh(), 1500);
 }
 
 async function dbStart(kind) {
+  db.finished = '';
+  db.replaceArmed = false;
   const btn = kind === 'cloud' ? $('#dbCloudBtn') : $('#dbLocalBtn');
   btn.disabled = true;
   btn.textContent = 'Starting…';   // starting the background job takes a second
@@ -3685,8 +3841,9 @@ $('#dbCloudBtn').addEventListener('click', () => {
   db.cloudArmed = false;
   dbStart('cloud');
 });
-$('#dbShowLocal').addEventListener('click', () => { db.show = 'local'; dbRefresh(); });
-$('#dbShowCloud').addEventListener('click', () => { db.show = 'cloud'; dbRefresh(); });
+$('#dbShowLocal').addEventListener('click', () => { db.show = 'local'; db.replaceArmed = false; dbRefresh(); });
+$('#dbShowCloud').addEventListener('click', () => { db.show = 'cloud'; db.replaceArmed = false; dbRefresh(); });
+
 $('#dbSaveBtn').addEventListener('click', async () => {
   const id = db.row.id, kind = db.showing;
   if (!kind) return;
@@ -3702,16 +3859,78 @@ $('#dbSaveBtn').addEventListener('click', async () => {
     }
     setStats(res.stats);
     toast('Saved “' + res.name + '” next to the original.');
-    dbStatus('Saved as “' + res.name + '” next to the original.');
   } catch (e) {
     dbStatus(e.message, true);
-    $('#dbSaveBtn').disabled = false;
   }
+  dbRefresh();
+});
+$('#dbReplaceBtn').addEventListener('click', async () => {
+  const id = db.row.id, kind = db.showing, s = db.s;
+  if (!kind || !s) return;
+  if (!db.replaceArmed) {   // two clicks: the original goes to the Recycle Bin
+    db.replaceArmed = true;
+    const j = s[kind] || {}, r = db.row;
+    const smaller = j.width && r.width && r.height && j.width * j.height < r.width * r.height * 0.9
+      ? ` Note: this result (${j.width}×${j.height}) is smaller than the original (${r.width}×${r.height}).` : '';
+    dbStatus('Replace the original with the ' + (kind === 'cloud' ? 'cloud AI' : 'on-PC') + ' result: the original goes to the Recycle Bin and the fixed photo takes its name, description and place.'
+      + smaller + ' Click "Confirm: replace the original" to go ahead.');
+    $('#dbReplaceBtn').textContent = 'Confirm: replace the original';
+    return;
+  }
+  db.replaceArmed = false;
+  $('#dbReplaceBtn').disabled = true;
+  $('#dbSaveBtn').disabled = true;
+  try {
+    const res = await api('deblur_save', { body: { id, kind, mode: 'replace' } });
+    const row = res.image;
+    const i = lastResults.findIndex(x => x.id === id);
+    if (i >= 0) {
+      lastResults[i] = Object.assign({}, lastResults[i], row);
+      if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults);
+      if ($('#lightbox').open && lbIndex === i) lbShowImage(lastResults[i]);
+    }
+    db.row = Object.assign({}, db.row, row);
+    const orig = 'file.php?id=' + encodeURIComponent(id) + '&v=' + row.v;
+    $('#dbBefore').src = orig;
+    $('#dbPaneOrig img').src = orig;
+    setStats(res.stats);
+    db.finished = '✓ Replaced “' + res.name + '” with the fixed photo. The old version is in the Recycle Bin.';
+    toast('Replaced “' + res.name + '”. The old version is in the Recycle Bin.');
+  } catch (e) {
+    dbStatus(e.message, true);
+  }
+  dbRefresh();
 });
 $('#dbClose').addEventListener('click', () => $('#deblurDlg').close());
 // Keys belong to this window while it is open (not to the photo view or Clean up behind it).
 $('#deblurDlg').addEventListener('keydown', e => e.stopPropagation());
 $('#deblurDlg').addEventListener('close', () => { clearTimeout(db.timer); });
+
+// ---- Rotate (lib/Rotate.php): a quarter turn, lossless (only the EXIF Orientation tag changes) ----
+let lbRotating = false;
+async function lbRotate(dir) {
+  if (lbIndex < 0 || lbRotating || !lastResults[lbIndex]) return;
+  const r = lastResults[lbIndex];
+  if (!/\.jpe?g$/i.test(r.path || '')) { toast('Rotating works for JPEG photos only.', 'err', 4000); return; }
+  lbRotating = true;
+  $('#lbRotL').disabled = $('#lbRotR').disabled = true;
+  try {
+    const res = await api('rotate', { body: { id: r.id, dir } });
+    const row = Object.assign({}, r, res.image);
+    lastResults[lbIndex] = row;
+    lbShowImage(row);
+    const img = document.querySelector('.card[data-id="' + r.id + '"] .imgwrap img');
+    if (img) img.src = 'thumb.php?id=' + encodeURIComponent(r.id) + '&v=' + row.v;
+  } catch (e) {
+    toast(e.message, 'err', 5000);
+  } finally {
+    lbRotating = false;
+    $('#lbRotL').disabled = $('#lbRotR').disabled = false;
+  }
+}
+$('#lbRotL').addEventListener('click', e => { e.stopPropagation(); lbRotate('ccw'); });
+$('#lbRotR').addEventListener('click', e => { e.stopPropagation(); lbRotate('cw'); });
+
 $('#lbFixBtn').addEventListener('click', e => {
   e.stopPropagation();
   if (lbIndex >= 0 && lastResults[lbIndex]) dbOpen(lastResults[lbIndex]);

@@ -429,9 +429,11 @@ begin
   end;
   if ExpandConstant('{param:SKIPTASKS|0}') = '1' then Params := Params + ' -SkipTasks';
 
-  WizardForm.StatusLabel.Caption := 'Setting up Photo Finder...';
-  { Scheduled tasks and settings belong to the user who ran Setup, not the elevated installer. }
-  ExecAsOriginalUser('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
+  WizardForm.StatusLabel.Caption := 'Setting up Photo Finder: the setup window shows each step...';
+  { Scheduled tasks and settings belong to the user who ran Setup, not the elevated installer.
+    The window is shown (not hidden) so the user sees each step as it happens: a step that
+    waits on antivirus used to make a hidden setup look hung. }
+  ExecAsOriginalUser('powershell.exe', Params, ExpandConstant('{app}'), SW_SHOWNORMAL, ewWaitUntilTerminated, Code);
   Log('install.ps1 exit ' + IntToStr(Code));
   if DirsFile <> '' then DeleteFile(DirsFile);
   if Code <> 0 then

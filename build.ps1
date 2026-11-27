@@ -45,6 +45,19 @@ $version = $verLine.Matches[0].Groups[1].Value
 Write-Host "== Photo Finder $version =="
 New-Item -ItemType Directory -Force -Path $cache, $dist | Out-Null
 
+function Invoke-Retry([scriptblock]$What, [string]$Label, [int]$Tries = 4) {
+    # The publishers' sites time out now and then (exiftool.org and apachelounge.com both did on
+    # 2026-11-27, failing whole builds): try again a few times before giving up.
+    for ($n = 1; ; $n++) {
+        try { return & $What }
+        catch {
+            if ($n -ge $Tries) { throw }
+            Write-Host "  $Label failed ($($_.Exception.Message)); retrying in $(5 * $n) s"
+            Start-Sleep -Seconds (5 * $n)
+        }
+    }
+}
+
 function Get-Verified([string[]]$urls, [string]$name, [string]$sha256, [string]$agent = 'Wget/1.21 (PhotoFinder build)') {
     # Each download lands in its own folder under the cache, keyed by file name. With several
     # URLs, the first that answers is used; the sha256 check below applies to whichever it is.
@@ -54,7 +67,8 @@ function Get-Verified([string[]]$urls, [string]$name, [string]$sha256, [string]$
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     for ($i = 0; $i -lt $urls.Count; $i++) {
         Write-Host "  downloading $($urls[$i])"
-        try { Invoke-WebRequest -Uri $urls[$i] -OutFile $file -UseBasicParsing -UserAgent $agent -TimeoutSec 120; break }
+        $u = $urls[$i]
+        try { Invoke-Retry { Invoke-WebRequest -Uri $u -OutFile $file -UseBasicParsing -UserAgent $agent -TimeoutSec 120 } "download of $name" $(if ($urls.Count -gt 1) { 2 } else { 4 }); break }
         catch {
             if ($i -eq $urls.Count - 1) { throw }
             Write-Host "  failed ($($_.Exception.Message)); trying the next source"
@@ -70,7 +84,7 @@ function Get-Verified([string[]]$urls, [string]$name, [string]$sha256, [string]$
 
 # ---- 1. dependencies ----
 Write-Host '[1/4] Dependencies'
-$rel = Invoke-RestMethod 'https://windows.php.net/downloads/releases/releases.json'
+$rel = Invoke-Retry { Invoke-RestMethod 'https://windows.php.net/downloads/releases/releases.json' } 'PHP release list'
 $phpRel = $rel.$PhpBranch
 $phpZipInfo = $phpRel.'ts-vs16-x64'.zip
 if (-not $phpZipInfo) { $phpZipInfo = $phpRel.'ts-vs17-x64'.zip }
@@ -84,9 +98,9 @@ $apacheUrls = @("https://www.apachelounge.com/download/$ApacheBuild") + @($Apach
 $apacheZip = Get-Verified $apacheUrls $apacheName $ApacheSha256 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PhotoFinder-build'
 Write-Host "  Apache $apacheName"
 
-$exifVer = (Invoke-RestMethod 'https://exiftool.org/ver.txt').ToString().Trim()
+$exifVer = (Invoke-Retry { Invoke-RestMethod 'https://exiftool.org/ver.txt' } 'ExifTool version check').ToString().Trim()
 $exifName = "exiftool-${exifVer}_64.zip"
-$sums = (Invoke-WebRequest 'https://exiftool.org/checksums.txt' -UseBasicParsing).Content
+$sums = (Invoke-Retry { Invoke-WebRequest 'https://exiftool.org/checksums.txt' -UseBasicParsing } 'ExifTool checksums').Content
 if ($sums -is [byte[]]) { $sums = [Text.Encoding]::ASCII.GetString($sums) }
 $m = [regex]::Match($sums, "SHA2-256\($([regex]::Escape($exifName))\)\s*=\s*([0-9a-fA-F]{64})")
 if (-not $m.Success) { throw "No sha256 for $exifName in exiftool.org/checksums.txt" }
@@ -95,7 +109,7 @@ if (-not $m.Success) { throw "No sha256 for $exifName in exiftool.org/checksums.
 $exifZip = Get-Verified "https://downloads.sourceforge.net/project/exiftool/$exifName" $exifName $m.Groups[1].Value
 Write-Host "  ExifTool $exifVer"
 
-$caRaw = (Invoke-WebRequest 'https://curl.se/ca/cacert.pem.sha256' -UseBasicParsing).Content
+$caRaw = (Invoke-Retry { Invoke-WebRequest 'https://curl.se/ca/cacert.pem.sha256' -UseBasicParsing } 'CA bundle checksum').Content
 if ($caRaw -is [byte[]]) { $caRaw = [Text.Encoding]::ASCII.GetString($caRaw) }   # served as octet-stream
 $caSha = ($caRaw.Trim() -split '\s+')[0]
 if ($caSha -notmatch '^[0-9a-fA-F]{64}$') { throw 'unexpected cacert.pem.sha256 content' }

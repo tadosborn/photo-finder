@@ -22,7 +22,8 @@ you can search instantly.
 - **Fix blur.** Makes a sharper copy of a blurred photo with an AI model that runs on your PC
   (free; downloaded once, about 133 MB; best on camera shake), or optionally with Google Gemini
   and your own key (redraws the photo; a few cents each). Always saved as a copy.
-- **Enhance.** Colour, brightness and sharpness fixes from the photo view.
+- **Enhance and rotate.** Colour, brightness and sharpness fixes from the photo view, and
+  lossless quarter turns (R / Shift+R).
 - **Find photos on this PC.** Searches your user folders for pictures outside your photo
   folders and offers to move them in, with undo.
 - **Self-contained.** One installer with its own web server (Apache), PHP, SQLite and ExifTool;
