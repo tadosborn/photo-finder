@@ -72,6 +72,7 @@ def run(model, src, dst, progress):
     write_state(progress, state)
 
     opts = ort.SessionOptions()
+    opts.log_severity_level = 3  # errors only: the model's export leaves harmless "unused initializer" warnings
     sess = ort.InferenceSession(model, opts, providers=["CPUExecutionProvider"])
     name = sess.get_inputs()[0].name
     acc = np.zeros_like(a)
