@@ -37,11 +37,19 @@ def ramp(np, n, lo_edge, hi_edge, k):
 
 
 def be_polite():
-    """Below-normal priority, as deblur.py: the browser stays responsive while it runs."""
+    """Idle priority: the job uses only processor time nothing else wants, so Photo Finder's own
+    web server (started below normal by its scheduled task), the browser and every other program
+    stay responsive however long it runs. The handle must be typed: left to ctypes' default int,
+    the pseudo-handle from GetCurrentProcess is cut to 32 bits on 64-bit Windows and the call
+    silently fails (it did until 1.0.9, and the job then starved the app at normal priority)."""
     try:
         import ctypes
-        k32 = ctypes.windll.kernel32
-        k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00004000)  # BELOW_NORMAL_PRIORITY_CLASS
+        from ctypes import wintypes
+        k32 = ctypes.WinDLL("kernel32")
+        k32.GetCurrentProcess.restype = wintypes.HANDLE
+        k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        k32.SetPriorityClass.restype = wintypes.BOOL
+        k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00000040)  # IDLE_PRIORITY_CLASS
     except Exception:
         pass
 

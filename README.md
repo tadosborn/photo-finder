@@ -22,8 +22,8 @@ you can search instantly.
 - **Fix blur and Enlarge.** Makes a sharper version of a blurred photo, or a larger one of a small
   photo, with AI models that run on your PC (free; downloaded once, about 137 MB; Fix blur is best
   on camera shake), or optionally with Google Gemini and your own key (redraws the photo; a few
-  cents each), or the two in turn. Every result is shown next to the original first; you save it
-  as a copy or in place of the original.
+  cents each), or the two in turn. Every version is saved as a copy next to the original and
+  shown beside it; you can then put the best one in the original's place.
 - **Enhance and rotate.** Colour, brightness and sharpness fixes from the photo view, and
   lossless quarter turns (R / Shift+R).
 - **Find photos on this PC.** Searches your user folders for pictures outside your photo

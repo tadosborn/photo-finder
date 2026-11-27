@@ -124,7 +124,7 @@ $app = Join-Path $stage 'app'
 New-Item -ItemType Directory -Force -Path $app, (Join-Path $app 'lib'), (Join-Path $app 'bin') | Out-Null
 
 $appFiles = 'index.php', 'api.php', 'file.php', 'thumb.php', 'worker.php', 'guard.php', 'configure.php', 'pull-model.php', 'pf-helper.ps1',
-            'deblur.py', 'enlarge.py', 'deblur-setup.php', 'deblur-cloud.php',
+            'deblur.py', 'enlarge.py', 'deblur-setup.php', 'deblur-job.php',
             'install.ps1', 'uninstall.ps1', 'install.bat', 'uninstall.bat',
             'start.bat', 'worker.bat', 'silent-worker.vbs', 'silent-server.vbs', 'launch.vbs',
             'LICENSE', 'PRIVACY.md', 'THIRD-PARTY-NOTICES.md'

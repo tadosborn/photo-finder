@@ -49,8 +49,8 @@ with your own Google API key, set in Settings > Fix blur. Google's privacy polic
 (<https://policies.google.com/privacy>). Google marks its results with an invisible SynthID
 watermark. Nothing is sent to Google unless you use this button.
 
-Either way, nothing is written until you click **Save as a copy** (a new file next to the
-original) or **Replace the original** (the original goes to the Recycle Bin first).
+Either way, each version is saved as a new file next to the original as soon as it is made; the
+original changes only if you click **Replace the original** (it goes to the Recycle Bin first).
 
 ## Update checks (GitHub)
 
@@ -76,8 +76,8 @@ The search index, thumbnails, settings and logs are stored in `%LOCALAPPDATA%\Ph
 Photo Finder's web interface listens on `127.0.0.1` only and refuses requests from other
 websites. It changes your photo files only when you ask it to: **Embed metadata** writes the
 descriptions and tags into the files; **Enhance** saves a copy (or, if you choose, replaces the
-original, which goes to the Recycle Bin first); **Fix blur** and **Enlarge** save a copy or, if you
-choose, replace the original the same way; **Rotate** changes only the photo's orientation tag; **Find photos on this
+original, which goes to the Recycle Bin first); **Fix blur** and **Enlarge** save each version as a copy
+and, if you choose, replace the original the same way; **Rotate** changes only the photo's orientation tag; **Find photos on this
 PC** moves the photos you tick into your photo folder; deleting photos, including from **Clean
 up**, moves them to the Recycle Bin.
 

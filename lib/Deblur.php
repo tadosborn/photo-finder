@@ -29,12 +29,15 @@ require_once __DIR__ . '/Enhance.php';
  * 139 MB) is downloaded on first use into data/deblur; the enlarging model (UPSCALE, 4 MB) when
  * Enlarge is first used. Every file is checked against the SHA-256 pinned here.
  *
- * Jobs start through ShellExecute (pf-helper "launch", as pull-model.php does) so they inherit
- * none of the web server's handles. Each writes its state to data/deblur/jobs/<id>-<kind>.json
- * and its result to <id>-<kind>.jpg; the page polls status() and shows every result side by
- * side before anything is written. save() then writes "<name> (<SUFFIX>).jpg" beside the
- * original with the original's metadata and indexes it like an Enhance copy, or replaces the
- * original (which goes to the Recycle Bin).
+ * Each job is deblur-job.php in the background, started through ShellExecute (pf-helper
+ * "launch", as pull-model.php is) so it inherits none of the web server's handles; it keeps
+ * going when the window is closed and is independent of every other photo's jobs. The work on
+ * this PC runs at idle priority, so the app and everything else stay responsive. A job writes
+ * its state to data/deblur/jobs/<id>-<kind>.json and its result to <id>-<kind>.jpg, then saves
+ * the result as "<name> (<SUFFIX>).jpg" beside the original (with the original's metadata,
+ * indexed like an Enhance copy). The page polls status() and shows every version side by side;
+ * "Replace the original" puts the chosen one in the original's place (the original, and that
+ * version's now-duplicate copy, go to the Recycle Bin).
  *
  * On this PC the pixels stay in the file's stored orientation (no EXIF rotation is applied) and
  * the result carries the original's Orientation tag, so it shows the right way up and the tag,
@@ -308,7 +311,6 @@ final class Deblur {
         if ($kind === 'chain' && (self::jobStatus($id, 'local')['state'] ?? '') !== 'done') {
             throw new RuntimeException('Fix it on this PC first: the cloud AI then works on that result.');
         }
-        $scale = 0;
         if ($kind === 'up_local' || $kind === 'up_cloud') {
             $e = self::enlargeInfo($row);
             $limit = $kind === 'up_local' ? self::ENLARGE_MAX_SIDE : self::CLOUD_ENLARGE_SIDE - 1;
@@ -316,25 +318,63 @@ final class Deblur {
                 throw new RuntimeException("This photo is already {$e['width']}×{$e['height']}: " . ($kind === 'up_local' ? 'enlarging on this PC' : 'the cloud AI')
                     . ' is for photos up to ' . number_format($limit) . ' px on the long side.');
             }
-            $scale = $e['scale'];
         }
         if (!is_dir(self::jobsDir())) @mkdir(self::jobsDir(), 0777, true);
         $jf = self::jobFile($id, $kind, 'json');
         @unlink(self::jobFile($id, $kind, 'jpg'));
         self::writeJson($jf, ['state' => 'running', 'done' => 0, 'total' => 0, 'started' => time(), 'updated' => time()]);
+        // The job saves its result as a copy itself (runJob). Marked in a file of its own: deblur.py,
+        // enlarge.py and runCloud each write the whole state file, so a flag in it would be lost.
+        touch(self::jobFile($id, $kind, 'auto'));
         try {
-            if ($kind === 'local') {
-                self::launch(self::win(self::python()), ['-I', self::win(PF_ROOT . '/deblur.py'), self::win(self::model()),
-                    self::win((string)$row['path']), self::win(self::jobFile($id, $kind, 'jpg')), self::win($jf)]);
-            } elseif ($kind === 'up_local') {
-                self::launch(self::win(self::python()), ['-I', self::win(PF_ROOT . '/enlarge.py'), self::win(self::upscaleModel()),
-                    self::win((string)$row['path']), self::win(self::jobFile($id, $kind, 'jpg')), self::win($jf), (string)$scale]);
-            } else {
-                self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-cloud.php'), $id, self::win(PF_DATA), $kind]);
-            }
+            self::launch(self::phpExe(), [self::win(PF_ROOT . '/deblur-job.php'), $id, self::win(PF_DATA), $kind]);
         } catch (Throwable $e) {
+            @unlink(self::jobFile($id, $kind, 'auto'));
             self::writeJson($jf, ['state' => 'error', 'error' => $e->getMessage(), 'updated' => time()]);
             throw $e;
+        }
+    }
+
+    /** Runs in deblur-job.php, in the background: make the result, then save it as a copy next
+     *  to the original, whether or not anyone is looking (every version is kept; the window
+     *  then only decides which, if any, replaces the original). */
+    public static function runJob(string $id, string $kind): void {
+        if (!in_array($kind, self::KINDS, true)) throw new InvalidArgumentException('Unknown kind.');
+        try {
+            if (in_array($kind, self::CLOUD_KINDS, true)) self::runCloud($id, $kind);
+            else self::runLocal($id, $kind);
+            if ((self::jobStatus($id, $kind)['state'] ?? '') !== 'done') return;
+            try {
+                $row = Db::getById($id);
+                if (!$row) throw new RuntimeException('The photo is no longer in the index.');
+                self::save($row, $kind, 'copy');
+            } catch (Throwable $e) {
+                $j = self::jobStatus($id, $kind);
+                unset($j['autosave']);
+                $j['save_error'] = $e->getMessage();
+                self::writeJson(self::jobFile($id, $kind, 'json'), $j);
+            }
+        } finally {
+            @unlink(self::jobFile($id, $kind, 'auto'));   // saved, failed to save, or nothing to save
+        }
+    }
+
+    /** deblur.py or enlarge.py under the runtime's Python (which drops itself to idle priority). */
+    private static function runLocal(string $id, string $kind): void {
+        $jf = self::jobFile($id, $kind, 'json');
+        $row = Db::getById($id);
+        if (!$row || !is_file((string)$row['path'])) {
+            self::writeJson($jf, ['state' => 'error', 'error' => 'The photo is no longer on disk.', 'updated' => time()]);
+            return;
+        }
+        $cmd = $kind === 'local'
+            ? [self::python(), '-I', PF_ROOT . '/deblur.py', self::model(), (string)$row['path'], self::jobFile($id, $kind, 'jpg'), $jf]
+            : [self::python(), '-I', PF_ROOT . '/enlarge.py', self::upscaleModel(), (string)$row['path'], self::jobFile($id, $kind, 'jpg'), $jf,
+               (string)self::enlargeInfo($row)['scale']];
+        [, , $err] = pf_run_cmd(array_map([self::class, 'win'], $cmd));
+        if ((self::jobStatus($id, $kind)['state'] ?? '') === 'running') {   // it ended without saying how
+            $last = trim((string)strrchr("\n" . trim($err), "\n"));
+            self::writeJson($jf, ['state' => 'error', 'error' => 'It stopped without finishing' . ($last !== '' ? ': ' . mb_substr($last, 0, 200) : '.'), 'updated' => time()]);
         }
     }
 
@@ -349,6 +389,16 @@ final class Deblur {
             $j['error'] = 'It stopped without finishing. Try again.';
         }
         if (($j['state'] ?? '') === 'done' && !is_file(self::jobFile($id, $kind, 'jpg'))) $j = ['state' => 'none'];
+        // 'autosave': the job will save its result itself (the page waits for 'saved'). A job that
+        // died between its result and its copy left the marker behind: say so after two minutes.
+        unset($j['autosave']);
+        if (is_file(self::jobFile($id, $kind, 'auto')) && ($j['state'] ?? '') !== 'none') {
+            if (($j['state'] ?? '') === 'done' && empty($j['saved']) && empty($j['save_error']) && ($j['updated'] ?? 0) < time() - 120) {
+                $j['save_error'] = 'The copy was not saved (the job stopped).';
+            } else {
+                $j['autosave'] = true;
+            }
+        }
         return $j;
     }
 
@@ -379,12 +429,13 @@ final class Deblur {
             if ((self::jobStatus($id, $k)['state'] ?? '') === 'running') continue;
             @unlink(self::jobFile($id, $k, 'jpg'));
             @unlink(self::jobFile($id, $k, 'json'));
+            @unlink(self::jobFile($id, $k, 'auto'));
         }
     }
 
     // ---- Cloud: Gemini image editing ----
 
-    /** Runs in deblur-cloud.php: a 'cloud', 'chain' or 'up_cloud' job. */
+    /** A 'cloud', 'chain' or 'up_cloud' job (runJob, in deblur-job.php). */
     public static function runCloud(string $id, string $kind = 'cloud'): void {
         if (!in_array($kind, self::CLOUD_KINDS, true)) throw new InvalidArgumentException('Unknown kind.');
         $jf = self::jobFile($id, $kind, 'json');
@@ -601,19 +652,34 @@ final class Deblur {
         Db::get()->prepare('UPDATE images SET width = :w, height = :h' . ($mode === 'replace' ? ', analyzed_at = NULL' : '') . ' WHERE id = :id')
             ->execute([':w' => $sw, ':h' => $sh, ':id' => $newId]);
         Thumb::ensureThumb($newId, $dest);
+        $removed = '';
         if ($mode === 'replace') {
+            // This version now IS the photo: its saved copy would only be a duplicate (to the
+            // Recycle Bin, like the old original). The other versions' copies stay.
+            $sp = (string)($job['saved_path'] ?? '');
+            if ($sp !== '' && pf_norm_path($sp) !== pf_norm_path($path) && is_file($sp)) {
+                $rec = pf_recycle_files([$sp])[$sp] ?? ['ok' => false];
+                if ($rec['ok']) {
+                    $removed = (string)($job['saved_id'] ?? pf_path_id($sp));
+                    Db::deleteImage($removed);
+                    @unlink(PF_THUMBS . '/' . $removed . '.jpg');
+                }
+            }
             // Every result was made from the old original: clear them all.
             self::discard($id);
         } else {
-            // Keep the result on view (to compare with the other one, or save that too), marked saved.
+            // Keep the result on view (to compare with the others), marked saved.
             $j = self::jobStatus($id, $kind);
             $j['saved'] = basename($dest);
+            $j['saved_path'] = $dest;
+            $j['saved_id'] = $newId;
+            unset($j['save_error']);
             self::writeJson(self::jobFile($id, $kind, 'json'), $j);
         }
         $r = Db::getById($newId) ?? [];
         $r['sort_date'] = ($r['taken_at'] ?? '') !== '' ? $r['taken_at'] : (($r['folder_year'] ?? '') !== '' ? $r['folder_year'] : null);
         $r['v'] = (int)($r['mtime'] ?? time());
-        return ['ok' => true, 'mode' => $mode, 'name' => basename($dest), 'image' => $r, 'stats' => Db::stats()];
+        return ['ok' => true, 'mode' => $mode, 'name' => basename($dest), 'image' => $r, 'removed_copy' => $removed, 'stats' => Db::stats()];
     }
 
     // ---- Helpers ----

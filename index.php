@@ -705,7 +705,7 @@ $apiKeySet = $settings['api_key'] !== '';
       </div>
 
       <div class="set-pane" role="tabpanel" id="setPane-fixblur" aria-labelledby="setTab-fixblur" hidden>
-        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper version of a blurred photo; Enlarge (in Clean up's Small list and in the photo view) makes a larger one. Every result is shown next to the original first: you choose to save it as a copy, replace the original (it goes to the Recycle Bin), or neither.</div>
+        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper version of a blurred photo; Enlarge (in Clean up's Small list and in the photo view) makes a larger one. Every version is saved as a copy next to the original and shown beside it; you can then put the best one in the original's place (the original goes to the Recycle Bin).</div>
         <label>On this PC (free)</label>
         <div class="set-row">
           <span id="fbLocalState" class="hint" style="flex:1; margin:0;">Checking…</span>
@@ -859,7 +859,7 @@ $apiKeySet = $settings['api_key'] !== '';
       <option value="1024">1024 px</option>
       <option value="1600" selected>1600 px</option>
     </select>
-    <span class="hint">on the long side, smallest first. "Enlarge…" makes a larger, sharper version to compare before anything is saved.</span>
+    <span class="hint">on the long side, smallest first. "Enlarge…" makes larger, sharper versions, saved next to the original, to compare side by side.</span>
   </div>
   <div class="cu-actions">
     <button type="button" id="cuSelAll">Select all</button>
@@ -3445,7 +3445,7 @@ function cuRender() {
     } else if (kind === 'small') {
       const p = document.createElement('p');
       p.className = 'cu-explain';
-      p.textContent = 'Small photos, smallest first: often pictures from old phones and cameras. Enlarge shows a 2× or 4× version made on this PC (free) and, if you ask, one redrawn by cloud AI, next to the original, before anything is saved.';
+      p.textContent = 'Small photos, smallest first: often pictures from old phones and cameras. Enlarge makes a 2× or 4× version on this PC (free) and, if you ask, one redrawn by cloud AI, saves each next to the original and shows them side by side.';
       body.appendChild(p);
     }
     const grid = document.createElement('div');
@@ -3676,12 +3676,12 @@ const DB_KIND = {
 };
 const DB_OP = {
   deblur: { title: 'Fix blur', local: 'local', cloud: 'cloud', chain: 'chain', verb: 'Fixing',
-    hint: 'On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. "Cloud AI on the on-PC result" lets the cloud AI finish what this PC started. Nothing is saved until you choose; "Replace the original" moves the original to the Recycle Bin.' },
+    hint: 'On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. "Cloud AI on the on-PC result" lets the cloud AI finish what this PC started. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and moves the original to the Recycle Bin.' },
   enlarge: { title: 'Enlarge', local: 'up_local', cloud: 'up_cloud', chain: '', verb: 'Enlarging',
-    hint: 'On this PC sharpens edges as it enlarges and adds nothing that was not there; busy textures can look a little smooth. Cloud AI (Google Gemini) redraws the photo at 2K with more fine detail, so check faces and text. Zoom in (2×, 4×) to compare. Nothing is saved until you choose; "Replace the original" moves the original to the Recycle Bin.' },
+    hint: 'On this PC sharpens edges as it enlarges and adds nothing that was not there; busy textures can look a little smooth. Cloud AI (Google Gemini) redraws the photo at 2K with more fine detail, so check faces and text. Zoom in (2×, 4×) to compare. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and moves the original to the Recycle Bin.' },
 };
 const DB_ENLARGE_MAX = <?= (int)Deblur::ENLARGE_MAX_SIDE ?>;   // Deblur::enlargeInfo() decides; this only hides the viewer's button
-const db = { op: 'deblur', row: null, show: '', showing: '', timer: null, s: null, wantLocal: false, armed: '',
+const db = { op: 'deblur', row: null, show: '', showing: '', timer: null, s: null, wantLocal: false, armed: '', pending: new Set(),
              shown: '', replaceArmed: false, finished: '', view: 'grid', zoom: 1 };
 const dbKinds = () => Object.keys(DB_KIND).filter(k => DB_KIND[k].op === db.op);
 const dbPane = k => document.querySelector('#dbGrid .db-pane[data-kind="' + k + '"]');
@@ -3715,7 +3715,7 @@ function dbSetOrig(row) {
 function dbOpen(row, op = 'deblur') {
   if (!row || !row.id || !DB_OP[op]) return;
   const o = DB_OP[op];
-  Object.assign(db, { op, row, show: o.local, showing: '', s: null, wantLocal: false, armed: '', replaceArmed: false, finished: '', shown: '' });
+  Object.assign(db, { op, row, show: o.local, showing: '', s: null, wantLocal: false, armed: '', replaceArmed: false, finished: '', shown: '', pending: new Set() });
   $('#dbTitle').textContent = o.title;
   $('#dbClose').setAttribute('aria-label', 'Close ' + o.title);
   $('#dbHint').textContent = o.hint;
@@ -3726,6 +3726,7 @@ function dbOpen(row, op = 'deblur') {
   Object.keys(DB_KIND).forEach(k => {
     const p = dbPane(k), img = p.querySelector('img');
     img.hidden = true; img.removeAttribute('src'); img.dataset.src = ''; p.hidden = true;
+    p.querySelector('.db-pane-note').textContent = '';
   });
   dbSetAfter(null);
   $('#dbSlider').value = 50;
@@ -3839,7 +3840,7 @@ function dbRenderPanes(s) {
       const src = dbResultUrl(k, String(j.updated || ''));
       if (img.dataset.src !== src) { dbCaption(img, DB_KIND[k].label); img.src = src; img.dataset.src = src; }
       img.hidden = false;
-      note.textContent = j.saved ? '✓ Saved as “' + j.saved + '”' : '';
+      note.textContent = j.saved ? '✓ Saved as “' + j.saved + '”' : j.save_error ? 'Not saved: ' + j.save_error : j.autosave ? 'Saving a copy…' : '';
     } else {
       img.hidden = true;
       img.removeAttribute('src');
@@ -3870,7 +3871,14 @@ async function dbRefresh(auto = false) {
   const settingUp = !!(st && !st.done && !st.error);
   const setupMine = st && (st.which || 'deblur') === (db.op === 'enlarge' ? 'enlarge' : 'deblur');
   const running = kinds.filter(k => s[k].state === 'running');
-  const busy = settingUp || running.length > 0;
+  // A finished job saves its copy a moment later (the page keeps asking until it has).
+  const saving = kinds.filter(k => s[k].state === 'done' && s[k].autosave && !s[k].saved && !s[k].save_error);
+  const busy = settingUp || running.length > 0 || saving.length > 0;
+  for (const k of kinds) {   // say so as each version is saved, and put it in the grid
+    const j = s[k];   // (by kind: a job's start time changes once it reports its own)
+    if (j.state === 'running' || saving.includes(k)) db.pending.add(k);
+    else if (db.pending.delete(k) && j.saved) dbAnnounceSaved(db.row.id, j);
+  }
 
   // Start on this PC straight away when it is set up and nothing has been tried yet (or when a
   // setup the user started from here has just finished).
@@ -3914,15 +3922,17 @@ async function dbRefresh(auto = false) {
   } else if (!localOk && !picked) {
     dbStatus(`This photo is already ${en.width}×${en.height}: Enlarge is for photos up to ${Number(en.max_side).toLocaleString()} px on the long side.`);
   } else if (picked && picked.saved) {
-    dbStatus('✓ Saved as “' + picked.saved + '” next to the original.', false, true);
+    dbStatus('✓ ' + (done.length > 1 ? 'Every version is saved next to the original; this one as “' + picked.saved + '”.' : 'Saved as “' + picked.saved + '” next to the original.')
+      + ' To put a version in the original\'s place, pick it ("Use this") and click "Replace the original".', false, true);
   } else if (picked) {
     const k = db.showing, dims = picked.width && picked.height ? `${picked.width}×${picked.height}, ` : '';
     dbStatus((k === 'chain'
-      ? `Using the two-step result (fixed on this PC, then redrawn by Google Gemini in ${dbFmtSecs(picked.seconds || 0)}): check faces and text before saving.`
+      ? `Using the two-step result (fixed on this PC, then redrawn by Google Gemini in ${dbFmtSecs(picked.seconds || 0)}): check faces and text.`
       : DB_KIND[k].cloud
-        ? `Using ${DB_KIND[k].who} (${dims}redrawn by Google Gemini in ${dbFmtSecs(picked.seconds || 0)}): check faces and text before saving.`
+        ? `Using ${DB_KIND[k].who} (${dims}redrawn by Google Gemini in ${dbFmtSecs(picked.seconds || 0)}): check faces and text.`
         : `Using ${DB_KIND[k].who} (${dims}made in ${dbFmtSecs(picked.seconds || 0)}).`)
-      + (done.length > 1 ? ' Click "Use this" on another to switch.' : '') + ' Nothing is saved until you click a button below.');
+      + (picked.save_error ? ' It could not be saved automatically (' + picked.save_error + '): click "Save as a copy" to try again.'
+        : picked.autosave ? ' Saving a copy next to the original…' : ' Click "Save as a copy" to keep it.'), !!picked.save_error);
   } else if (busy) {
     dbStatus('Working… the results appear above as they finish. You can close this window; it carries on.');
   } else if (errs.length) {
@@ -3960,14 +3970,33 @@ async function dbRefresh(auto = false) {
       : X.state === 'done' ? 'Cloud AI on the on-PC result again' : `Cloud AI on the on-PC result (${s.cloud_cost})`;
     xb.textContent = db.armed === o.chain && X.state !== 'running' ? 'Send to Google' : xb.dataset.label;
   }
-  const sv = $('#dbSaveBtn');
-  sv.disabled = !picked || !!picked.saved || !!db.finished;
-  sv.textContent = picked && picked.saved ? 'Saved ✓' : 'Save as a copy';
+  const sv = $('#dbSaveBtn');   // only for a result its job did not (or could not) save
+  sv.hidden = !picked || !!picked.saved || (!!picked.autosave && !picked.save_error) || !!db.finished;
+  sv.disabled = false;
   const rb = $('#dbReplaceBtn');
   rb.disabled = !picked || !!db.finished;
   rb.textContent = db.finished ? 'Replaced ✓' : db.replaceArmed ? 'Confirm: replace the original' : 'Replace the original';
 
   if (busy) db.timer = setTimeout(() => dbRefresh(), 1500);
+}
+
+// A saved version goes into the grid next to its original, as an Enhance copy does.
+function dbAddToGrid(origId, row) {
+  if (!row || !row.id || cu.lbSaved || !lastResults.some(x => x.id === origId)) return;
+  lastResults = lastResults.filter(x => x.id !== row.id);
+  lastResults.splice(lastResults.findIndex(x => x.id === origId) + 1, 0, row);
+  if (document.querySelector('.card[data-id="' + origId + '"]')) renderResults(lastResults);
+}
+async function dbAnnounceSaved(origId, j) {
+  toast('Saved “' + j.saved + '” next to the original.');
+  if (!j.saved_id) return;
+  try {
+    const row = await api('image_info', { qs: 'id=' + encodeURIComponent(j.saved_id) });
+    row.sort_date = row.taken_at || row.folder_year || null;
+    row.v = row.mtime;
+    dbAddToGrid(origId, row);
+    setStats(await api('stats'));
+  } catch (e) { }
 }
 
 async function dbStart(kind) {
@@ -4022,13 +4051,7 @@ $('#dbSaveBtn').addEventListener('click', async () => {
   $('#dbSaveBtn').disabled = true;
   try {
     const res = await api('deblur_save', { body: { id, kind } });
-    const row = res.image;
-    // Into the grid next to the original, as Enhance does.
-    if (lastResults.some(x => x.id === id) && !cu.lbSaved) {
-      lastResults = lastResults.filter(x => x.id !== row.id);
-      lastResults.splice(lastResults.findIndex(x => x.id === id) + 1, 0, row);
-      if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults);
-    }
+    dbAddToGrid(id, res.image);
     setStats(res.stats);
     toast('Saved “' + res.name + '” next to the original.');
   } catch (e) {
@@ -4044,7 +4067,8 @@ $('#dbReplaceBtn').addEventListener('click', async () => {
     const j = s[kind] || {}, r = s.enlarge || {};   // the original's own size, read from the file
     const smaller = j.width && r.width && r.height && j.width * j.height < r.width * r.height * 0.9
       ? ` Note: this result (${j.width}×${j.height}) is smaller than the original (${r.width}×${r.height}).` : '';
-    dbStatus('Replace the original with ' + DB_KIND[kind].who + ': the original goes to the Recycle Bin and the new photo takes its name, description and place.'
+    dbStatus('Replace the original with ' + DB_KIND[kind].who + ': the original goes to the Recycle Bin and this version takes its name, description and place'
+      + (j.saved ? ' (its saved copy, “' + j.saved + '”, goes too, so there is no duplicate; the other versions stay).' : '.')
       + smaller + ' Click "Confirm: replace the original" to go ahead.');
     $('#dbReplaceBtn').textContent = 'Confirm: replace the original';
     return;
@@ -4061,11 +4085,15 @@ $('#dbReplaceBtn').addEventListener('click', async () => {
       if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults);
       if ($('#lightbox').open && lbIndex === i) lbShowImage(lastResults[i]);
     }
+    if (res.removed_copy) {
+      lastResults = lastResults.filter(x => x.id !== res.removed_copy);
+      if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults);
+    }
     db.row = Object.assign({}, db.row, row);
     dbSetOrig(db.row);
     setStats(res.stats);
     cuReplaced(db.row);
-    db.finished = '✓ Replaced “' + res.name + '” with the new photo. The old version is in the Recycle Bin.';
+    db.finished = '✓ Replaced “' + res.name + '” with ' + DB_KIND[kind].who + '. The old version is in the Recycle Bin' + (res.removed_copy ? '; the other saved versions stay next to it.' : '.');
     toast('Replaced “' + res.name + '”. The old version is in the Recycle Bin.');
   } catch (e) {
     dbStatus(e.message, true);
