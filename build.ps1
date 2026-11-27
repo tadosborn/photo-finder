@@ -35,8 +35,9 @@ $src   = $PSScriptRoot
 $dist  = Join-Path $src 'dist'
 $cache = Join-Path $dist '.cache'
 $stage = Join-Path $dist '.stage'
-$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-          "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+# PF_ISCC: a copy of Inno Setup somewhere else (for example a folder antivirus leaves alone).
+$iscc = @($env:PF_ISCC, "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+          "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if (-not $iscc) { throw 'Inno Setup 6 not found (winget install JRSoftware.InnoSetup, or choco install innosetup).' }
 
 $verLine = Select-String -Path (Join-Path $src 'lib\version.php') -Pattern "const PF_VERSION = '([0-9][0-9A-Za-z.\-]*)';"

@@ -404,11 +404,53 @@ end;
 
 { ---------- after the files are in place: settings + scheduled tasks ---------- }
 
+{ install.ps1 runs hidden; its progress (a file of three lines: percent, current step, latest
+  message) is shown in Setup's own window by a timer. Setup keeps processing window messages
+  while it waits for a program run as the original user, so the timer fires and the window
+  repaints throughout (Inno's own CodeDll.iss example uses the same SetTimer callback). }
+function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: Longword): Longword;
+external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd, nIDEvent: Longword): Bool;
+external 'KillTimer@user32.dll stdcall';
+
+var
+  ProgressFile, ProgressStep, ProgressMessage: String;
+  ProgressTicks, ProgressTotalTicks: Integer;   { half seconds on the current step / in all }
+
+procedure ShowSetupProgress(Arg1, Arg2, Arg3, Arg4: Longword);
+var
+  Lines: TArrayOfString;
+  Percent: Integer;
+  Caption: String;
+begin
+  Inc(ProgressTicks);
+  Inc(ProgressTotalTicks);
+  if LoadStringsFromFile(ProgressFile, Lines) and (GetArrayLength(Lines) >= 2) then
+  begin
+    if Lines[1] <> ProgressStep then
+    begin
+      ProgressStep := Lines[1];
+      ProgressTicks := 0;
+    end;
+    if GetArrayLength(Lines) >= 3 then ProgressMessage := Lines[2];
+    Percent := StrToIntDef(Trim(Lines[0]), -1);
+    if (Percent >= 0) and (Percent <= 100) then WizardForm.ProgressGauge.Position := Percent;
+    Caption := 'Setting up Photo Finder: ' + ProgressStep + '...';
+    { A slow step (antivirus scanning the new files, say) visibly keeps counting. }
+    if ProgressTicks >= 6 then Caption := Caption + ' ' + IntToStr(ProgressTicks div 2) + ' s';
+  end else
+    { No progress yet (or none readable: Setup elevated as another user, whose folder this is not). }
+    Caption := 'Setting up Photo Finder... ' + IntToStr(ProgressTotalTicks div 2) + ' s';
+  WizardForm.StatusLabel.Caption := Caption;
+  WizardForm.FilenameLabel.Caption := ProgressMessage;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Dirs: TArrayOfString;
   I, Code: Integer;
   Params, DirsFile, LogFile: String;
+  TimerID: Longword;
 begin
   if CurStep <> ssPostInstall then Exit;
   DirsFile := '';
@@ -429,18 +471,42 @@ begin
   end;
   if ExpandConstant('{param:SKIPTASKS|0}') = '1' then Params := Params + ' -SkipTasks';
 
-  WizardForm.StatusLabel.Caption := 'Setting up Photo Finder: the setup window shows each step...';
+  { The signed-in user's data folder, where install.ps1 (running as that user) can write. }
+  ProgressFile := ExpandConstant('{localappdata}\Photo Finder\setup-progress.txt');
+  DeleteFile(ProgressFile);
+  Params := Params + ' -ProgressFile "' + ProgressFile + '"';
+  ProgressStep := '';
+  ProgressMessage := '';
+  ProgressTicks := 0;
+  ProgressTotalTicks := 0;
+  WizardForm.StatusLabel.Caption := 'Setting up Photo Finder...';
+  WizardForm.FilenameLabel.Caption := '';
+  WizardForm.ProgressGauge.Min := 0;
+  WizardForm.ProgressGauge.Max := 100;
+  WizardForm.ProgressGauge.Position := 0;
+
   { Scheduled tasks and settings belong to the user who ran Setup, not the elevated installer.
-    The window is shown (not hidden) so the user sees each step as it happens: a step that
-    waits on antivirus used to make a hidden setup look hung. }
-  ExecAsOriginalUser('powershell.exe', Params, ExpandConstant('{app}'), SW_SHOWNORMAL, ewWaitUntilTerminated, Code);
-  Log('install.ps1 exit ' + IntToStr(Code));
+    The PowerShell window stays hidden: each step shows here instead (a slow step used to
+    make a hidden setup look hung, and a separate console looked out of place). }
+  TimerID := SetTimer(0, 0, 500, CreateCallback(@ShowSetupProgress));
+  try
+    ExecAsOriginalUser('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
+  finally
+    KillTimer(0, TimerID);
+  end;
+  ShowSetupProgress(0, 0, 0, 0);
+  Log('install.ps1 exit ' + IntToStr(Code) + '; last step: ' + ProgressStep + '; last message: ' + ProgressMessage);
+  DeleteFile(ProgressFile);
   if DirsFile <> '' then DeleteFile(DirsFile);
   if Code <> 0 then
   begin
     LogFile := '%LOCALAPPDATA%\Photo Finder\install.log';
+    if ProgressStep <> '' then
+      LogFile := 'It stopped while ' + ProgressStep + ': ' + ProgressMessage + #13#10 + 'Details are in ' + LogFile
+    else
+      LogFile := 'Details are in ' + LogFile;
     SuppressibleMsgBox('Photo Finder was copied, but finishing setup failed (code ' + IntToStr(Code) + ').' + #13#10 +
-      'Details are in ' + LogFile + #13#10#13#10 +
+      LogFile + #13#10#13#10 +
       'You can retry later by running install.bat in ' + ExpandConstant('{app}') + '.', mbError, MB_OK, IDOK);
   end;
 end;

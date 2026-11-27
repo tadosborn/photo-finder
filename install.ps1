@@ -6,13 +6,17 @@
 #   -PhotoDirsFile   UTF-8 text file, one photo folder per line, from the setup wizard
 #   -UpdateCheck     1/0: automatic update checks on/off, from the setup wizard (omit = unchanged)
 #   -SkipTasks       configure only; do not register or start tasks (side-by-side testing)
+#   -ProgressFile    keep this file up to date with the progress (three lines: percent, current
+#                    step, latest message); Setup runs this script hidden and shows them in its
+#                    own window
 #
 # Windows PowerShell 5.1 syntax on purpose: that is the PowerShell every Windows PC has.
 param(
     [switch]$Quiet,
     [string]$PhotoDirsFile = '',
     [ValidateSet('', '0', '1')][string]$UpdateCheck = '',
-    [switch]$SkipTasks
+    [switch]$SkipTasks,
+    [string]$ProgressFile = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,9 +33,29 @@ $dataDir = if ($env:PHOTOFINDER_DATA) { $env:PHOTOFINDER_DATA }
            else { Join-Path $projectDir 'data' }
 $logFile = Join-Path $dataDir 'install.log'
 
+$script:progress = @{ Percent = 0; Step = 'Starting'; Message = '' }
+function Save-Progress {
+    # Written whole and then renamed into place, so Setup never reads half a file. UTF-8 with a
+    # BOM, which Setup reads as UTF-8. A progress file that cannot be written never stops setup.
+    if (-not $ProgressFile) { return }
+    try {
+        $dir = Split-Path -Parent $ProgressFile
+        if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        $text = "{0}`r`n{1}`r`n{2}`r`n" -f $script:progress.Percent, $script:progress.Step, $script:progress.Message
+        [System.IO.File]::WriteAllText("$ProgressFile.tmp", $text, (New-Object System.Text.UTF8Encoding $true))
+        Move-Item -LiteralPath "$ProgressFile.tmp" -Destination $ProgressFile -Force
+    } catch { }
+}
+function Set-Progress([int]$percent, [string]$step) {
+    $script:progress.Percent = $percent
+    $script:progress.Step = $step
+    Save-Progress
+}
 function Write-Step([string]$msg, [string]$color = 'Gray') {
     Write-Host $msg -ForegroundColor $color
     Add-Content -Path $logFile -Value ("[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg) -Encoding UTF8
+    $script:progress.Message = $msg.Trim()
+    Save-Progress
 }
 function Exit-Setup([int]$code) {
     if (-not $Quiet) { Read-Host 'Press Enter to close' | Out-Null }
@@ -85,8 +109,8 @@ function Test-ServerConfig([int]$Seconds) {
 }
 
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-# Setup shows this window (it used to run hidden, so a slow step looked like a hung installer).
-try { $Host.UI.RawUI.WindowTitle = 'Photo Finder setup - finishing (this window closes by itself)' } catch { }
+try { $Host.UI.RawUI.WindowTitle = 'Photo Finder setup' } catch { }
+Set-Progress 5 'checking the PHP runtime'
 Write-Step "Photo Finder setup: program $projectDir, data $dataDir (account $account)"
 
 # ---- PHP sanity: the bundled runtime must actually start (VC++ runtime present, extensions load) ----
@@ -102,6 +126,7 @@ Write-Step 'PHP runtime OK.'
 if ($installed) {
     if (-not (Test-Path $httpd)) { Write-Step "Web server missing: $httpd" 'Red'; Exit-Setup 1 }
     Set-ServerEnv
+    Set-Progress 15 'checking the web server (antivirus may scan the new files first; up to 90 seconds)'
     # Time-limited: on 2026-11-27 an update's check sat for 6 minutes without loading its first
     # module (most likely antivirus holding the freshly installed files), and with no limit Setup
     # never got to start the app. A check that does not finish is not a failed check: carry on;
@@ -119,6 +144,7 @@ if ($installed) {
 }
 
 # ---- Timezone for log timestamps (stored in settings; Program Files is read-only) ----
+Set-Progress 50 'saving settings'
 $tz = ''
 if ($installed) {
     $tzMap = @{
@@ -157,6 +183,7 @@ if ($SkipTasks) {
 }
 
 # ---- Scheduled tasks ----
+Set-Progress 60 'setting up the background tasks'
 function Register-PfTask([string]$name, $action, $triggers, [TimeSpan]$limit, [string]$desc) {
     $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
@@ -220,6 +247,7 @@ if (Test-Path $oldLnk) {
 }
 
 # ---- Start ----
+Set-Progress 75 'starting Photo Finder'
 if ($installed -and -not (Get-OwnServer)) {
     Start-ScheduledTask -TaskName 'PhotoFinderServer'
 }
@@ -242,8 +270,10 @@ if ($installed) {
     if ($up) { Write-Step "Web app is running at $url" 'Green' }
     else { Write-Step "Web app did not answer at $url; see $(Join-Path $dataDir 'server.log')" 'Yellow' }
 }
+Set-Progress 95 'starting the background indexer'
 Start-Sleep -Seconds 1
 if (Get-OwnPhp 'worker.php') { Write-Step 'Worker is running.' 'Green' } else { Write-Step 'Worker did not start yet; the web app retries it when you start indexing.' 'Yellow' }
 
+Set-Progress 100 'done'
 Write-Step 'Setup complete.' 'Green'
 Exit-Setup 0
