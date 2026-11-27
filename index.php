@@ -116,6 +116,9 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox[open] { display: flex; align-items: center; justify-content: center; }
   dialog.lightbox::backdrop { background: rgba(0,0,0,0.95); }
   dialog.lightbox img { max-width: 100vw; max-height: 100vh; object-fit: contain; cursor: zoom-out; }
+  dialog.lightbox img.lb-pending { visibility: hidden; }
+  dialog.lightbox .lb-status { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; background: rgba(0,0,0,0.75); padding: 10px 16px; border-radius: 8px; font-size: 14px; display: none; pointer-events: none; }
+  dialog.lightbox .lb-status.show { display: block; }
   dialog.lightbox .lb-meta { position: absolute; bottom: 0; left: 0; right: 0; color: #fff; padding: 14px 20px 18px; background: linear-gradient(transparent, rgba(0,0,0,0.85) 30%); transition: opacity 0.2s; }
   dialog.lightbox.no-meta .lb-meta { opacity: 0; pointer-events: none; }
   dialog.lightbox .lb-meta .desc { font-size: 15px; line-height: 1.4; max-width: 900px; }
@@ -687,6 +690,7 @@ $apiKeySet = $settings['api_key'] !== '';
 <dialog id="lightbox" class="lightbox">
   <button class="lb-nav lb-prev" id="lbPrev" title="Previous (←)">‹</button>
   <img id="lbImg" alt="">
+  <div class="lb-status" id="lbStatus" role="status" aria-live="polite"></div>
   <button class="lb-nav lb-next" id="lbNext" title="Next (→)">›</button>
   <div class="lb-counter" id="lbCounter"></div>
   <button class="lb-edit-btn" id="lbEditBtn" title="Edit metadata (E)">✎ Edit</button>
@@ -1166,12 +1170,55 @@ $('#selDeleteBtn').addEventListener('click', async () => {
 });
 
 let lbIndex = -1;
+let lbSeq = 0;
+
+function lbStatus(text) {
+  const s = $('#lbStatus');
+  s.textContent = text;
+  s.classList.toggle('show', !!text);
+}
+
+// Shows photo r in the viewer. The caption changes at once, so the picture must never lag behind
+// it: a browser keeps painting the previous image until a new one has loaded, which for a OneDrive
+// file that is only in the cloud can take seconds (the viewer then showed one photo under another
+// photo's description). So the previous picture is hidden straight away, the photo's own thumbnail
+// (usually cached) stands in, and the full-size file replaces it when it arrives. Answers for a
+// photo the viewer has already moved past are ignored.
+function lbShowImage(r) {
+  const img = $('#lbImg');
+  const seq = ++lbSeq;
+  const v = r.v ? '&v=' + r.v : '';
+  const mine = () => seq === lbSeq && img.src.includes('id=' + r.id);
+  let stage = 'thumb';
+  img.classList.add('lb-pending');
+  lbStatus('');
+  const slow = setTimeout(() => { if (seq === lbSeq && stage !== 'done') lbStatus('Loading photo…'); }, 600);
+  const toFull = () => { stage = 'full'; img.src = 'file.php?id=' + r.id + v; };
+  img.onload = () => {
+    if (!mine()) return;
+    img.classList.remove('lb-pending');
+    if (stage === 'thumb') { toFull(); return; }
+    stage = 'done';
+    clearTimeout(slow);
+    lbStatus('');
+  };
+  img.onerror = () => {
+    if (!mine()) return;
+    if (stage === 'thumb') { toFull(); return; }   // no preview: wait for the full-size file instead
+    stage = 'done';
+    clearTimeout(slow);
+    lbStatus(img.classList.contains('lb-pending')
+      ? 'This photo could not be loaded. It may have been moved, or OneDrive may be offline.'
+      : 'The full-size photo could not be loaded; this is the preview.');
+  };
+  img.src = 'thumb.php?id=' + r.id + v;
+}
 
 function openLightbox(idx) {
   if (idx < 0 || idx >= lastResults.length) return;
   lbIndex = idx;
   const r = lastResults[idx];
-  $('#lbImg').src = 'file.php?id=' + r.id + (r.v ? '&v=' + r.v : '');
+  lbShowImage(r);
   $('#lbDesc').textContent = r.description || '';
   $('#lbFaces').textContent = r.faces ? '👤 people: ' + r.faces : '';
   $('#lbTags').textContent = r.tags ? 'tags: ' + r.tags : '';
@@ -1259,6 +1306,7 @@ async function deleteCurrentInLightbox() {
   openLightbox(Math.min(idx, lastResults.length - 1));
 }
 
+$('#lightbox').addEventListener('close', () => { lbSeq++; lbStatus(''); });   // drop late image answers
 $('#lbEditBtn').addEventListener('click', openEditor);
 $('#lbDelBtn').addEventListener('click', deleteCurrentInLightbox);
 $('#lbCancel').addEventListener('click', closeEditor);
