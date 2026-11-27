@@ -63,6 +63,27 @@ function Set-ServerEnv {
     $env:PATH = (Join-Path $projectDir 'php') + ';' + $env:PATH
 }
 
+function Test-ServerConfig([int]$Seconds) {
+    # httpd -t (parse the config, load the modules incl. PHP) with a time limit; the environment
+    # from Set-ServerEnv is inherited. Returns TimedOut, ExitCode and the combined output.
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $httpd
+    $psi.Arguments = "-d `"$($env:PF_APP)/apache`" -f conf/httpd.conf -t"
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $out = $p.StandardOutput.ReadToEndAsync()
+    $err = $p.StandardError.ReadToEndAsync()
+    if (-not $p.WaitForExit($Seconds * 1000)) {
+        try { $p.Kill() } catch { }
+        return [pscustomobject]@{ TimedOut = $true; ExitCode = -1; Output = '' }
+    }
+    $p.WaitForExit()
+    return [pscustomobject]@{ TimedOut = $false; ExitCode = $p.ExitCode; Output = (($out.Result + ' ' + $err.Result) -replace '\s+', ' ').Trim() }
+}
+
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 Write-Step "Photo Finder setup: program $projectDir, data $dataDir (account $account)"
 
@@ -79,13 +100,19 @@ Write-Step 'PHP runtime OK.'
 if ($installed) {
     if (-not (Test-Path $httpd)) { Write-Step "Web server missing: $httpd" 'Red'; Exit-Setup 1 }
     Set-ServerEnv
-    $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $t = @(& $httpd -d "$($env:PF_APP)/apache" -f conf/httpd.conf -t 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $old }
-    if ($LASTEXITCODE -ne 0 -or "$t" -notmatch 'Syntax OK') {
-        Write-Step "Web server check FAILED: $t" 'Red'
+    # Time-limited: on 2026-11-27 an update's check sat for 6 minutes without loading its first
+    # module (most likely antivirus holding the freshly installed files), and with no limit Setup
+    # never got to start the app. A check that does not finish is not a failed check: carry on;
+    # the start step below still confirms the app answers (and starts it again if not).
+    $r = Test-ServerConfig -Seconds 90
+    if ($r.TimedOut) {
+        Write-Step 'Web server check did not finish within 90 s (antivirus may still be scanning the new files); continuing.' 'Yellow'
+    } elseif ($r.ExitCode -ne 0 -or $r.Output -notmatch 'Syntax OK') {
+        Write-Step "Web server check FAILED: $($r.Output)" 'Red'
         Exit-Setup 1
+    } else {
+        Write-Step 'Web server (Apache + PHP) OK.'
     }
-    Write-Step 'Web server (Apache + PHP) OK.'
 }
 
 # ---- Timezone for log timestamps (stored in settings; Program Files is read-only) ----
