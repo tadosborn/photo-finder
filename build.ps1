@@ -22,6 +22,10 @@ param(
     # https://www.apachelounge.com/download/ (the .zip.txt next to the zip holds the sha256).
     [string]$ApacheBuild = 'VS18/binaries/httpd-2.4.71-261112-Win64-VS18.zip',
     [string]$ApacheSha256 = '44961A929DFF16B767B3ADBCEA55760A942A00239B2891DC55806BE34029E1FC',
+    # Used when apachelounge.com doesn't answer (it times out from GitHub's build servers): the
+    # same unmodified zip, attached to this repository's "deps-apache-<version>" pre-release.
+    # It must match $ApacheSha256 like the original, so the copy can't change what is built.
+    [string]$ApacheMirror = 'https://github.com/tadosborn/photo-finder/releases/download/deps-apache-2.4.71/httpd-2.4.71-261112-Win64-VS18.zip',
     [string]$SignCommand = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -41,14 +45,21 @@ $version = $verLine.Matches[0].Groups[1].Value
 Write-Host "== Photo Finder $version =="
 New-Item -ItemType Directory -Force -Path $cache, $dist | Out-Null
 
-function Get-Verified([string]$url, [string]$name, [string]$sha256, [string]$agent = 'Wget/1.21 (PhotoFinder build)') {
-    # Each download lands in its own folder under the cache, keyed by file name.
+function Get-Verified([string[]]$urls, [string]$name, [string]$sha256, [string]$agent = 'Wget/1.21 (PhotoFinder build)') {
+    # Each download lands in its own folder under the cache, keyed by file name. With several
+    # URLs, the first that answers is used; the sha256 check below applies to whichever it is.
     $dir = Join-Path $cache ($name -replace '[^A-Za-z0-9._-]', '_')
     $file = Join-Path $dir $name
     if ((Test-Path $file) -and $sha256 -and ((Get-FileHash $file -Algorithm SHA256).Hash -eq $sha256.ToUpper())) { return $file }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    Write-Host "  downloading $url"
-    Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing -UserAgent $agent
+    for ($i = 0; $i -lt $urls.Count; $i++) {
+        Write-Host "  downloading $($urls[$i])"
+        try { Invoke-WebRequest -Uri $urls[$i] -OutFile $file -UseBasicParsing -UserAgent $agent -TimeoutSec 120; break }
+        catch {
+            if ($i -eq $urls.Count - 1) { throw }
+            Write-Host "  failed ($($_.Exception.Message)); trying the next source"
+        }
+    }
     if ($sha256) {
         $got = (Get-FileHash $file -Algorithm SHA256).Hash
         if ($got -ne $sha256.ToUpper()) { Remove-Item $file -Force; throw "sha256 mismatch for $name (want $sha256, got $got)" }
@@ -69,7 +80,8 @@ Write-Host "  PHP $($phpRel.version) (thread-safe)"
 
 $apacheName = Split-Path $ApacheBuild -Leaf
 # apachelounge.com answers browsers; a bare tool user agent may be turned away.
-$apacheZip = Get-Verified "https://www.apachelounge.com/download/$ApacheBuild" $apacheName $ApacheSha256 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PhotoFinder-build'
+$apacheUrls = @("https://www.apachelounge.com/download/$ApacheBuild") + @($ApacheMirror | Where-Object { $_ })
+$apacheZip = Get-Verified $apacheUrls $apacheName $ApacheSha256 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PhotoFinder-build'
 Write-Host "  Apache $apacheName"
 
 $exifVer = (Invoke-RestMethod 'https://exiftool.org/ver.txt').ToString().Trim()
