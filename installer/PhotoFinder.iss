@@ -432,6 +432,21 @@ var
   ProgressFile, ProgressStep, ProgressMessage: String;
   ProgressTicks, ProgressTotalTicks: Integer;   { half seconds on the current step / in all }
 
+{ Which part is being copied, in place of Inno's plain "Extracting files...". Inno sets that text
+  for each file, just before this event, with the file's path in FilenameLabel, so it is replaced
+  here from the path. }
+procedure CurInstallProgressChanged(CurProgress, MaxProgress: Integer);
+var
+  F: String;
+begin
+  F := Lowercase(WizardForm.FilenameLabel.Caption);
+  if F = '' then Exit;
+  if Pos('\apache\', F) > 0 then WizardForm.StatusLabel.Caption := 'Installing the Apache web server...'
+  else if Pos('\php\', F) > 0 then WizardForm.StatusLabel.Caption := 'Installing PHP...'
+  else if Pos('\bin\', F) > 0 then WizardForm.StatusLabel.Caption := 'Installing ExifTool (reads and writes photo metadata)...'
+  else WizardForm.StatusLabel.Caption := 'Installing Photo Finder...';
+end;
+
 { install.ps1's steps, by the percent it reports with each (5, 15, 50, 60, 75, 95; 100 = done). }
 function SetupStepNumber(Percent: Integer): Integer;
 begin
