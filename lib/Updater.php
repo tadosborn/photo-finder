@@ -117,8 +117,13 @@ final class Updater {
         // pf-helper.ps1 "launch" = Start-Process (ShellExecute). Its input goes in a file, so the
         // command line holds no PowerShell code (antivirus behaviour shields block that).
         $job = PF_DATA . '/update-launch.json';
+        // 'unpack': the installer unpacks its setup engine (Inno Setup's .tmp) into the updates
+        // folder rather than Temp, so an antivirus exception for that one folder covers both files
+        // that Avast's Auto-Sandbox held back for analysis on every update. Only this first,
+        // unelevated start: Windows gives the elevated restart a fresh environment.
         file_put_contents($job, json_encode(['file' => $win($dest),
-            'args' => ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG="' . $win($log) . '"']]));
+            'args' => ['/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/LOG="' . $win($log) . '"'],
+            'unpack' => $win(dirname($dest) . '/unpack')]));
         $cmd = '"' . (getenv('SystemRoot') ?: 'C:\\Windows') . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"'
              . ' -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' . $win(PF_ROOT . '/pf-helper.ps1') . '"'
              . ' -Action launch -In "' . $win($job) . '"';

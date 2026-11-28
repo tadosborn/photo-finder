@@ -447,15 +447,17 @@ begin
   else WizardForm.StatusLabel.Caption := 'Installing Photo Finder...';
 end;
 
-{ install.ps1's steps, by the percent it reports with each (5, 15, 50, 60, 75, 95; 100 = done). }
+{ install.ps1's steps, by the percent it reports with each (5, 50, 60, 75, 95; 100 = done). }
+const
+  SetupSteps = 5;
+
 function SetupStepNumber(Percent: Integer): Integer;
 begin
   if Percent <= 5 then Result := 1
-  else if Percent <= 15 then Result := 2
-  else if Percent <= 50 then Result := 3
-  else if Percent <= 60 then Result := 4
-  else if Percent <= 75 then Result := 5
-  else Result := 6;
+  else if Percent <= 50 then Result := 2
+  else if Percent <= 60 then Result := 3
+  else if Percent <= 75 then Result := 4
+  else Result := 5;
 end;
 
 procedure ShowSetupProgress(Arg1, Arg2, Arg3, Arg4: Longword);
@@ -479,8 +481,8 @@ begin
     if Percent >= 100 then
       Caption := 'Setting up Photo Finder: done'
     else
-      Caption := 'Setting up Photo Finder, step ' + IntToStr(SetupStepNumber(Percent)) + ' of 6: ' + ProgressStep + '...';
-    { A slow step (antivirus scanning the new files, say) visibly keeps counting. }
+      Caption := 'Setting up Photo Finder, step ' + IntToStr(SetupStepNumber(Percent)) + ' of ' + IntToStr(SetupSteps) + ': ' + ProgressStep + '...';
+    { A slow step visibly keeps counting. }
     if ProgressTicks >= 6 then Caption := Caption + ' ' + IntToStr(ProgressTicks div 2) + ' s';
   end else
     { No progress yet (or none readable: Setup elevated as another user, whose folder this is not). }

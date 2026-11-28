@@ -82,8 +82,12 @@ The installer is not code-signed, so Windows cannot name its publisher:
 - If you downloaded it, Windows may show **Windows protected your PC**. Click **More info**,
   then **Run anyway**.
 - The permission prompt says **Unknown publisher**. Click **Yes**.
-- Some antivirus programs (Avast, for example) run an unsigned installer in a sandbox first.
-  Setup still completes.
+- Some antivirus programs (Avast, for example) hold an unsigned installer back to analyse it
+  first, and each update is a new file. Setup still completes. To stop Avast holding the
+  updates Photo Finder installs itself, add an exception (Avast: **Menu > Settings > General >
+  Exceptions**) for `%LOCALAPPDATA%\Photo Finder\updates\*`, written out in full, e.g.
+  `C:\Users\<you>\AppData\Local\Photo Finder\updates\*`. Photo Finder runs an installer from
+  that folder only after verifying its signature.
 
 To confirm your copy is the published one, run `Get-FileHash PhotoFinderSetup-<version>.exe`
 in PowerShell and compare the result with the `.sha256` file on the release page. Updates

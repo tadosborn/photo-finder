@@ -122,26 +122,11 @@ if (-not (Test-Path $php) -or $LASTEXITCODE -ne 0 -or "$check" -match 'missing:|
 }
 Write-Step 'PHP runtime OK.'
 
-# ---- Web server sanity: Apache parses its config and loads PHP as a module ----
-if ($installed) {
-    if (-not (Test-Path $httpd)) { Write-Step "Web server missing: $httpd" 'Red'; Exit-Setup 1 }
-    Set-ServerEnv
-    Set-Progress 15 'checking the web server (antivirus may scan the new files first; up to 90 seconds)'
-    # Time-limited: on 2026-11-27 an update's check sat for 6 minutes without loading its first
-    # module (most likely antivirus holding the freshly installed files), and with no limit Setup
-    # never got to start the app. A check that does not finish is not a failed check: carry on;
-    # the start step below still confirms the app answers (and starts it again if not).
-    Write-Step 'Checking the web server (antivirus may scan the new files first; this can take up to 90 seconds)...'
-    $r = Test-ServerConfig -Seconds 90
-    if ($r.TimedOut) {
-        Write-Step 'Web server check did not finish within 90 s (antivirus may still be scanning the new files); continuing.' 'Yellow'
-    } elseif ($r.ExitCode -ne 0 -or $r.Output -notmatch 'Syntax OK') {
-        Write-Step "Web server check FAILED: $($r.Output)" 'Red'
-        Exit-Setup 1
-    } else {
-        Write-Step 'Web server (Apache + PHP) OK.'
-    }
-}
+# ---- Web server: present. Whether it works is proven by starting it (Start, below); its own
+# config check (httpd -t) runs only if it then does not answer, to say why. Run from here, inside
+# Setup, httpd -t did not finish within 90 s on any update on 2026-11-27 (antivirus watches
+# Setup's processes; the server the scheduled task starts answered within seconds each time). ----
+if ($installed -and -not (Test-Path $httpd)) { Write-Step "Web server missing: $httpd" 'Red'; Exit-Setup 1 }
 
 # ---- Timezone for log timestamps (stored in settings; Program Files is read-only) ----
 Set-Progress 50 'saving settings'
@@ -268,7 +253,19 @@ if ($installed) {
         for ($i = 0; $i -lt 20 -and -not $up; $i++) { Start-Sleep -Milliseconds 500; $up = Test-PfServer }
     }
     if ($up) { Write-Step "Web app is running at $url" 'Green' }
-    else { Write-Step "Web app did not answer at $url; see $(Join-Path $dataDir 'server.log')" 'Yellow' }
+    else {
+        # Why not: Apache's own check of its config and the PHP module, time-limited.
+        Set-Progress 75 'starting Photo Finder: it did not answer, so checking the web server (up to 90 seconds)'
+        Write-Step 'Web app did not answer; checking the web server (up to 90 seconds)...' 'Yellow'
+        Set-ServerEnv
+        $r = Test-ServerConfig -Seconds 90
+        if (-not $r.TimedOut -and ($r.ExitCode -ne 0 -or $r.Output -notmatch 'Syntax OK')) {
+            Write-Step "Web server check FAILED: $($r.Output)" 'Red'
+            Exit-Setup 1
+        }
+        $why = if ($r.TimedOut) { 'its check did not finish within 90 s' } else { 'its configuration is OK' }
+        Write-Step "Web app did not answer at $url ($why); see $(Join-Path $dataDir 'server.log')" 'Yellow'
+    }
 }
 Set-Progress 95 'starting the background indexer'
 Start-Sleep -Seconds 1

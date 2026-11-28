@@ -191,7 +191,7 @@ switch ($Action) {
 
     # Starts a program through ShellExecute (Start-Process), so it inherits none of the web
     # server's handles and can raise the UAC prompt an installer needs. -In is JSON:
-    # {"file": "...", "args": ["..."], "hidden": true|false}. An argument with spaces is quoted
+    # {"file": "...", "args": ["..."], "hidden": true|false, "unpack": "folder for TMP/TEMP" (optional)}. An argument with spaces is quoted
     # here (Windows PowerShell joins ArgumentList without quoting); one that already contains
     # quotes (/LOG="C:\some path\x.log") is passed as it is.
     'launch' {
@@ -201,6 +201,12 @@ switch ($Action) {
             $p.ArgumentList = @($j.args | ForEach-Object { $a = [string]$_; if ($a -match '\s' -and $a -notmatch '"') { '"' + $a + '"' } else { $a } })
         }
         if ($j.hidden) { $p.WindowStyle = 'Hidden' }
+        # Optional folder the program unpacks into (an installer's setup engine): it inherits TMP/TEMP.
+        if ($j.unpack) {
+            New-Item -ItemType Directory -Force -Path ([string]$j.unpack) | Out-Null
+            $env:TMP = [string]$j.unpack
+            $env:TEMP = [string]$j.unpack
+        }
         try { Start-Process @p }
         catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
     }
