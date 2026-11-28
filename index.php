@@ -1200,7 +1200,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <span class="spacer"></span>
     <button type="button" id="rvShowDone" aria-pressed="false" title="Also list the photos already replaced or kept">Show done</button>
     <span id="rvChosen" role="status"></span>
-    <button type="button" id="rvAllAi" title="Choose the AI's pick for every photo waiting for a decision, on every page">Choose every AI pick</button>
+    <button type="button" id="rvAllAi" title="Replace every waiting photo's original with the version the AI picked, on every page (each original is kept beside its photo)">Use every AI pick</button>
     <button type="button" id="rvKeepRest" title="The photos with no version chosen keep their originals and leave this list">Keep the rest</button>
     <button type="button" id="rvClear">Clear choices</button>
     <button type="button" id="rvReplace" disabled>Replace the originals</button>
@@ -5067,10 +5067,9 @@ function rvRender() {
 const rvUnchosen = () => (rv.data ? rv.data.pending_ids : []).filter(id => !rv.choices.has(id));
 function rvFoot() {
   const n = rv.choices.size, b = $('#rvReplace'), d = rv.data;
-  const picks = d ? d.ai_picks.filter(p => rv.choices.get(p.id) !== p.kind).length : 0;
   $('#rvAllAi').hidden = !d || !d.ai_picks.length;
-  $('#rvAllAi').disabled = !picks || rv.busy;
-  $('#rvAllAi').textContent = picks ? `Choose every AI pick (${picks.toLocaleString()} more)` : `Every AI pick is chosen (${d ? d.ai_picks.length.toLocaleString() : 0})`;
+  $('#rvAllAi').disabled = rv.busy;
+  if (!$('#rvAllAi').classList.contains('confirm-armed')) $('#rvAllAi').textContent = `Use every AI pick (${d ? d.ai_picks.length.toLocaleString() : 0})`;
   const rest = rvUnchosen().length;
   $('#rvKeepRest').hidden = !rest;
   $('#rvKeepRest').disabled = rv.busy;
@@ -5117,9 +5116,14 @@ $('#rvReplace').addEventListener('click', async () => {
     return;
   }
   rvDisarm();
+  await rvApply([...rv.choices].map(([id, kind]) => ({ id, kind })));
+});
+// Replace each photo's original with its chosen version, five at a time (Deblur::batchReplace);
+// each original is kept beside its photo.
+async function rvApply(all) {
+  if (!all.length || rv.busy) return;
   rv.busy = true;
   rvFoot();
-  const all = [...rv.choices].map(([id, kind]) => ({ id, kind }));
   let ok = 0, changed = false;
   const failed = [];
   for (let i = 0; i < all.length; i += 5) {
@@ -5141,14 +5145,16 @@ $('#rvReplace').addEventListener('click', async () => {
   if (changed) renderResults(lastResults);
   toast(`Replaced ${ok} ${ok === 1 ? 'original' : 'originals'}; each original is kept next to its photo as “… (original)”, listed in Clean up's “Versions & originals”.` + (failed.length ? ` ${failed.length} failed: ${failed[0].error}` : ''), failed.length ? 'err' : 'ok', 8000);
   await rvLoad(rv.page);
-});
+}
 $('#rvClear').addEventListener('click', () => { rv.choices.clear(); rvDisarm(); rvRender(); });
-// Every AI pick, on every page, at once (then "Replace N originals" does them all).
+// Every AI pick, on every page, used at once: the first click asks (red), the second replaces.
 $('#rvAllAi').addEventListener('click', () => {
-  if (!rv.data) return;
-  rv.data.ai_picks.forEach(p => { rv.choices.set(p.id, p.kind); rv.touched.add(p.id); });
-  rvDisarm();
-  rvRender();
+  const b = $('#rvAllAi'), picks = rv.data ? rv.data.ai_picks : [];
+  if (!picks.length || rv.busy) return;
+  armedClick(b, `Confirm: replace ${picks.length.toLocaleString()} ${picks.length === 1 ? 'original' : 'originals'} with the AI's picks`, async () => {
+    picks.forEach(p => rv.choices.set(p.id, p.kind));
+    await rvApply(picks.map(p => ({ id: p.id, kind: p.kind })));
+  });
 });
 // The photos with no version chosen keep their originals and leave the list.
 $('#rvKeepRest').addEventListener('click', () => {
