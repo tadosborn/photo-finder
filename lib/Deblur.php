@@ -783,7 +783,7 @@ final class Deblur {
 
     /** Queue $ids for the $steps (BATCH_STEPS) and start the runner. Photos outside the photo
      *  folders are left out; so are photos already fixed by an earlier batch with the same steps. */
-    public static function batchStart(array $ids, array $steps, bool $ai = false, string $engine = 'local'): array {
+    public static function batchStart(array $ids, array $steps, bool $ai = false, string $engine = 'local', bool $auto = false): array {
         $steps = array_values(array_intersect(self::BATCH_STEPS, $steps));
         if (!$steps) throw new RuntimeException('Choose at least one fix.');
         if (!in_array($engine, self::BATCH_ENGINES, true)) throw new InvalidArgumentException('Unknown way to run the batch.');
@@ -816,7 +816,7 @@ final class Deblur {
             throw new RuntimeException($already ? 'Every selected photo was already fixed this way by an earlier batch.' : 'None of the selected photos can be fixed.');
         }
         @unlink(self::batchCancelFile());
-        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'engine' => $engine, 'ai' => $ai, 'state' => 'running', 'items' => $items, 'already' => $already,
+        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'engine' => $engine, 'ai' => $ai, 'auto' => $ai && $auto, 'state' => 'running', 'items' => $items, 'already' => $already,
               'current' => -1, 'started' => time(), 'updated' => time()];
         self::writeJson(self::batchFile(), $b);
         try {
@@ -872,6 +872,7 @@ final class Deblur {
             };
             try {
                 $b['items'][$i] = array_merge($b['items'][$i], self::batchOne((string)$b['items'][$i]['id'], $b['steps'], (string)$b['id'], !empty($b['ai']), $tick, (string)($b['engine'] ?? 'local')));
+                if (!empty($b['auto'])) $b['items'][$i] = self::batchAutoApply((string)$b['id'], $b['items'][$i]);
             } catch (DeblurCancelled $e) {
                 $b['items'][$i]['state'] = 'cancelled';
                 $cancelled = true;
@@ -1169,12 +1170,81 @@ final class Deblur {
         return is_array($r) && ($r['batch'] ?? '') === $batchId && is_array($r['items'] ?? null) ? $r['items'] : [];
     }
 
-    /** The finished photos of the current batch, $per at a time, each with its versions. */
-    public static function batchReview(int $page, int $per = 40): array {
+    /** "Use the AI's pick automatically": the version the AI picked replaces the photo's original
+     *  (kept beside it as "(original)", so Restore the original can put it back), as the review's
+     *  Replace would; when the AI picks the original, the photo is marked kept. Returns the item. */
+    private static function batchAutoApply(string $batchId, array $it): array {
+        $ai = $it['ai'] ?? null;
+        if (($it['state'] ?? '') !== 'done' || !is_array($ai) || !empty($ai['error']) || empty($ai['kind'])) return $it;
+        $id = (string)$it['id'];
+        $rec = json_decode((string)@file_get_contents(self::batchReplacedFile()), true);
+        if (!is_array($rec) || ($rec['batch'] ?? '') !== $batchId) $rec = ['batch' => $batchId, 'items' => [], 'kept' => []];
+        if ($ai['kind'] === 'original') {
+            $rec['kept'][$id] = time();
+            $it['note'] = rtrim((string)($it['note'] ?? ''), '.') . '. AI pick: the original, kept as it was.';
+        } else {
+            try {
+                $row = Db::getById($id);
+                if (!$row) throw new RuntimeException('The photo is no longer in the index.');
+                $res = self::save($row, (string)$ai['kind'], 'replace');
+                $rec['items'][$id] = ['kind' => (string)$ai['kind'], 'name' => $res['name'], 'at' => time(), 'auto' => true];
+                $label = '';
+                foreach ($it['versions'] ?? [] as $v) if ($v['kind'] === $ai['kind']) $label = strtolower((string)$v['label']);
+                $it['note'] = rtrim((string)($it['note'] ?? ''), '.') . '. AI pick used: replaced with the ' . ($label ?: 'chosen') . ' version (original kept).';
+            } catch (Throwable $e) {
+                $it['note'] = rtrim((string)($it['note'] ?? ''), '.') . '. The AI pick could not be used: ' . $e->getMessage();
+                return $it;
+            }
+        }
+        self::writeJson(self::batchReplacedFile(), $rec);
+        return $it;
+    }
+
+    /** Photos of batch $batchId the user decided to keep as they were: id => time. */
+    private static function batchKept(string $batchId): array {
+        $r = json_decode((string)@file_get_contents(self::batchReplacedFile()), true);
+        return is_array($r) && ($r['batch'] ?? '') === $batchId && is_array($r['kept'] ?? null) ? $r['kept'] : [];
+    }
+
+    /** Photos $ids of the current batch keep their originals: off the review list. */
+    public static function batchKeep(array $ids): array {
         $b = self::batchStatus();
-        if (!$b) return ['items' => [], 'total' => 0, 'page' => 0, 'per' => $per];
+        if (!$b) throw new RuntimeException('There is no batch to review.');
+        $kept = self::batchKept((string)$b['id']);
         $replaced = self::batchReplaced((string)$b['id']);
-        $done = array_values(array_filter($b['items'] ?? [], fn($i) => ($i['state'] ?? '') === 'done' && !empty($i['versions'])));
+        $inBatch = array_flip(array_map(static fn($i) => (string)$i['id'], $b['items'] ?? []));
+        $n = 0;
+        foreach ($ids as $raw) {
+            $id = (string)preg_replace('/[^a-f0-9]/', '', (string)$raw);
+            if ($id === '' || !isset($inBatch[$id]) || isset($replaced[$id]) || isset($kept[$id])) continue;
+            $kept[$id] = time();
+            $n++;
+        }
+        self::writeJson(self::batchReplacedFile(), ['batch' => $b['id'], 'items' => $replaced, 'kept' => $kept]);
+        return ['kept' => $n];
+    }
+
+    /** The finished photos of the current batch, $per at a time, each with its versions: the ones
+     *  still waiting for a decision, or ($all) every one. With the AI's pick for every waiting photo
+     *  (all pages), so they can all be chosen at once. */
+    public static function batchReview(int $page, int $per = 40, bool $all = false): array {
+        $b = self::batchStatus();
+        if (!$b) return ['items' => [], 'total' => 0, 'page' => 0, 'per' => $per, 'pending' => 0, 'resolved' => 0, 'ai_picks' => [], 'pending_ids' => []];
+        $replaced = self::batchReplaced((string)$b['id']);
+        $kept = self::batchKept((string)$b['id']);
+        $finished = array_values(array_filter($b['items'] ?? [], fn($i) => ($i['state'] ?? '') === 'done' && !empty($i['versions'])));
+        $pending = array_values(array_filter($finished, fn($i) => !isset($replaced[(string)$i['id']]) && !isset($kept[(string)$i['id']])));
+        $picks = [];
+        foreach ($pending as $it) {
+            $k = (string)($it['ai']['kind'] ?? '');
+            if ($k === '' || $k === 'original' || !empty($it['ai']['error'])) continue;
+            foreach ($it['versions'] as $v) {
+                if ($v['kind'] !== $k) continue;
+                $vr = $v['saved_id'] !== '' ? Db::getById($v['saved_id']) : null;
+                if ($vr && is_file((string)$vr['path'])) $picks[] = ['id' => (string)$it['id'], 'kind' => $k];
+            }
+        }
+        $done = $all ? $finished : $pending;
         $page = max(0, min($page, intdiv(max(0, count($done) - 1), $per)));
         $items = [];
         foreach (array_slice($done, $page * $per, $per) as $it) {
@@ -1189,10 +1259,13 @@ final class Deblur {
             $items[] = ['id' => (string)$it['id'], 'name' => (string)$it['name'], 'path' => (string)$it['path'],
                         'exists' => $row && is_file((string)$row['path']), 'v' => $row ? (int)$row['mtime'] : 0,
                         'width' => $row ? (int)$row['width'] : 0, 'height' => $row ? (int)$row['height'] : 0,
-                        'versions' => $vs, 'ai' => $it['ai'] ?? null, 'replaced' => $replaced[(string)$it['id']] ?? null];
+                        'versions' => $vs, 'ai' => $it['ai'] ?? null, 'replaced' => $replaced[(string)$it['id']] ?? null,
+                        'kept' => isset($kept[(string)$it['id']])];
         }
         return ['batch' => ['id' => $b['id'], 'steps' => $b['steps'], 'state' => $b['state']], 'items' => $items,
-                'total' => count($done), 'page' => $page, 'per' => $per, 'replaced' => count($replaced)];
+                'total' => count($done), 'page' => $page, 'per' => $per, 'replaced' => count($replaced), 'kept' => count($kept),
+                'pending' => count($pending), 'resolved' => count($finished) - count($pending),
+                'ai_picks' => $picks, 'pending_ids' => array_map(static fn($i) => (string)$i['id'], $pending)];
     }
 
     /** Replace each chosen original ([['id' => .., 'kind' => ..], ...]) with that version, as
@@ -1218,7 +1291,7 @@ final class Deblur {
                 $results[] = ['id' => $id, 'ok' => false, 'error' => $e->getMessage()];
             }
         }
-        self::writeJson(self::batchReplacedFile(), ['batch' => $b['id'], 'items' => $rep]);
+        self::writeJson(self::batchReplacedFile(), ['batch' => $b['id'], 'items' => $rep, 'kept' => self::batchKept((string)$b['id'])]);
         return ['results' => $results, 'stats' => Db::stats()];
     }
 

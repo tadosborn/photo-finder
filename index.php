@@ -1198,7 +1198,10 @@ $apiKeySet = $settings['api_key'] !== '';
     <span class="q-mute" id="rvPage"></span>
     <button type="button" id="rvNext">Next ›</button>
     <span class="spacer"></span>
+    <button type="button" id="rvShowDone" aria-pressed="false" title="Also list the photos already replaced or kept">Show done</button>
     <span id="rvChosen" role="status"></span>
+    <button type="button" id="rvAllAi" title="Choose the AI's pick for every photo waiting for a decision, on every page">Choose every AI pick</button>
+    <button type="button" id="rvKeepRest" title="The photos with no version chosen keep their originals and leave this list">Keep the rest</button>
     <button type="button" id="rvClear">Clear choices</button>
     <button type="button" id="rvReplace" disabled>Replace the originals</button>
   </div>
@@ -1220,6 +1223,7 @@ $apiKeySet = $settings['api_key'] !== '';
     </select></label>
   <p class="q-mute" id="bEngineNote"></p>
   <label class="b-opt b-all" style="border-bottom: none; border-top: 1px solid var(--line); padding: 8px 0 0;"><input type="checkbox" id="bAi"> <span><strong>Let AI pick the best version and size</strong> <span class="q-mute" id="bAiNote">(Claude compares every version, checking close-ups of faces for distortion; uses the Claude key that describes your photos)</span></span></label>
+  <label class="b-opt" id="bAutoRow"><input type="checkbox" id="bAuto"> <span><strong>Use the AI's pick automatically</strong> <span class="q-mute">(as each photo finishes, the version the AI picks replaces its original; the original is kept beside it, so "Restore the original" can put it back. The review still shows every version.)</span></span></label>
   <p class="q-mute" id="bEstimate"></p>
   <p class="q-mute">One photo at a time, at low priority, so you can keep using Photo Finder or close it. Each fix is saved as its own copy next to the photo and, with more than one ticked, so is all of them together ("(fixed)"); the originals are not changed. Queue shows the progress; its "Review all results" shows every photo with its versions side by side, to choose which originals to replace.</p>
   <div class="b-status" id="bStatus" role="status"></div>
@@ -4976,7 +4980,7 @@ setTimeout(qTick, 1500);
 // ---- Batch review: every photo of the batch with its versions; choose, then replace ----
 // Clicking a version chooses it to replace that photo's original (click the original to keep it).
 // "Replace the originals" takes two clicks, the first turning it red for 8 seconds, as everywhere.
-const rv = { page: 0, data: null, choices: new Map(), touched: new Set(), armed: false, timer: null, busy: false };
+const rv = { page: 0, data: null, choices: new Map(), touched: new Set(), armed: false, timer: null, busy: false, all: false };
 function rvThumb(id, v, label, kind, chosen, disabled, onClick) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -4999,7 +5003,9 @@ function rvRender() {
   body.textContent = '';
   if (!d || !d.items.length) {
     body.innerHTML = '<div class="q-line q-mute"></div>';
-    body.firstChild.textContent = 'No finished photos in this batch yet.';
+    body.firstChild.textContent = d && d.resolved && !rv.all
+      ? `Every photo in this batch is decided: ${d.replaced.toLocaleString()} replaced, ${d.kept.toLocaleString()} kept as they were. "Show done" lists them.`
+      : 'No finished photos in this batch yet.';
   }
   (d ? d.items : []).forEach(it => {
     const row = document.createElement('div');
@@ -5012,10 +5018,15 @@ function rvRender() {
     name.title = it.path;
     head.appendChild(name);
     const done = it.replaced;
-    if (done) {
+    if (it.kept && !done) {
+      const k = document.createElement('span');
+      k.className = 'rv-done';
+      k.textContent = '✓ Kept as it was';
+      head.appendChild(k);
+    } else if (done) {
       const ok = document.createElement('span');
       ok.className = 'rv-done';
-      ok.textContent = '✓ Replaced with the ' + (it.versions.find(v => v.kind === done.kind) || { label: 'chosen' }).label.toLowerCase() + ' version';
+      ok.textContent = '✓ Replaced with the ' + (it.versions.find(v => v.kind === done.kind) || { label: 'chosen' }).label.toLowerCase() + ' version' + (done.auto ? ' (the AI\'s pick, automatically)' : '');
       head.appendChild(ok);
     } else {
       const cmp = document.createElement('button');
@@ -5049,11 +5060,24 @@ function rvRender() {
   $('#rvPage').textContent = d ? `Page ${d.page + 1} of ${pages} (${d.total.toLocaleString()} photos)` : '';
   $('#rvPrev').disabled = !d || d.page <= 0;
   $('#rvNext').disabled = !d || d.page >= pages - 1;
-  $('#rvSub').textContent = d ? (d.replaced ? `${d.replaced.toLocaleString()} replaced so far. ` : '') + 'Click a version to choose it for that photo; click the original to keep it.' : '';
+  $('#rvSub').textContent = d ? `${d.pending.toLocaleString()} waiting for a decision` + (d.resolved ? `, ${d.resolved.toLocaleString()} done` : '') + '. Click a version to choose it for that photo; click the original to keep it.' : '';
   rvFoot();
 }
+// The photos waiting for a decision that no version is chosen for (all pages).
+const rvUnchosen = () => (rv.data ? rv.data.pending_ids : []).filter(id => !rv.choices.has(id));
 function rvFoot() {
-  const n = rv.choices.size, b = $('#rvReplace');
+  const n = rv.choices.size, b = $('#rvReplace'), d = rv.data;
+  const picks = d ? d.ai_picks.filter(p => rv.choices.get(p.id) !== p.kind).length : 0;
+  $('#rvAllAi').hidden = !d || !d.ai_picks.length;
+  $('#rvAllAi').disabled = !picks || rv.busy;
+  $('#rvAllAi').textContent = picks ? `Choose every AI pick (${picks.toLocaleString()} more)` : `Every AI pick is chosen (${d ? d.ai_picks.length.toLocaleString() : 0})`;
+  const rest = rvUnchosen().length;
+  $('#rvKeepRest').hidden = !rest;
+  $('#rvKeepRest').disabled = rv.busy;
+  if (!$('#rvKeepRest').classList.contains('confirm-armed')) $('#rvKeepRest').textContent = `Keep the rest (${rest.toLocaleString()})`;
+  $('#rvShowDone').hidden = !d || !d.resolved;
+  $('#rvShowDone').setAttribute('aria-pressed', String(rv.all));
+  $('#rvShowDone').textContent = rv.all ? 'Hide done' : `Show done (${d ? d.resolved.toLocaleString() : 0})`;
   $('#rvChosen').textContent = n ? `${n.toLocaleString()} ${n === 1 ? 'original' : 'originals'} to replace` : 'Nothing chosen';
   b.disabled = !n || rv.busy;
   $('#rvClear').disabled = !n || rv.busy;
@@ -5063,7 +5087,7 @@ function rvFoot() {
 function rvDisarm() { clearTimeout(rv.timer); rv.armed = false; rvFoot(); }
 async function rvLoad(page) {
   try {
-    rv.data = await api('batch_review', { qs: 'page=' + page });
+    rv.data = await api('batch_review', { qs: 'page=' + page + (rv.all ? '&all=1' : '') });
     // The AI's picks start out chosen; whatever the user clicks wins.
     rv.data.items.forEach(it => {
       if (rv.touched.has(it.id) || it.replaced || !it.ai || it.ai.error || it.ai.kind === 'original') return;
@@ -5077,6 +5101,7 @@ async function rvLoad(page) {
 function rvOpen() {
   rv.choices.clear();
   rv.touched = new Set();
+  rv.all = false;
   rvDisarm();
   $('#reviewDlg').showModal();
   rvLoad(0);
@@ -5118,6 +5143,28 @@ $('#rvReplace').addEventListener('click', async () => {
   await rvLoad(rv.page);
 });
 $('#rvClear').addEventListener('click', () => { rv.choices.clear(); rvDisarm(); rvRender(); });
+// Every AI pick, on every page, at once (then "Replace N originals" does them all).
+$('#rvAllAi').addEventListener('click', () => {
+  if (!rv.data) return;
+  rv.data.ai_picks.forEach(p => { rv.choices.set(p.id, p.kind); rv.touched.add(p.id); });
+  rvDisarm();
+  rvRender();
+});
+// The photos with no version chosen keep their originals and leave the list.
+$('#rvKeepRest').addEventListener('click', () => {
+  const b = $('#rvKeepRest'), ids = rvUnchosen();
+  if (!ids.length || rv.busy) return;
+  armedClick(b, `Confirm: keep ${ids.length.toLocaleString()} as they are`, async () => {
+    rv.busy = true;
+    try {
+      const r = await api('batch_keep', { body: { ids } });
+      toast(`${r.kept.toLocaleString()} ${r.kept === 1 ? 'photo keeps its original' : 'photos keep their originals'}; they are off the list.`, 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+    rv.busy = false;
+    await rvLoad(0);
+  });
+});
+$('#rvShowDone').addEventListener('click', () => { rv.all = !rv.all; rvDisarm(); rvLoad(0); });
 $('#rvPrev').addEventListener('click', () => { rvDisarm(); rvLoad(rv.page - 1); });
 $('#rvNext').addEventListener('click', () => { rvDisarm(); rvLoad(rv.page + 1); });
 $('#rvClose').addEventListener('click', () => $('#reviewDlg').close());
@@ -5189,6 +5236,8 @@ function bOpen(src) {
     if (!r.cloud && $('#bEngine').value !== 'local') $('#bEngine').value = 'local';
     $('#bAi').disabled = !r.available;
     $('#bAi').checked = !!r.available;
+    $('#bAuto').checked = localStorage.getItem('pf.batchAuto') !== '0';
+    $('#bAuto').disabled = !$('#bAi').checked || $('#bAi').disabled;
     $('#bAiNote').textContent = r.available
       ? '(Claude compares every version, checking close-ups of faces for distortion; uses the Claude key that describes your photos)'
       : '(needs Claude as the AI that describes your photos, with its API key: Settings)';
@@ -5201,6 +5250,8 @@ function bOpen(src) {
 }
 ['#bDeblur', '#bColor', '#bEnlarge', '#bAi'].forEach(s => $(s).addEventListener('change', bEstimate));
 $('#bEngine').addEventListener('change', () => { localStorage.setItem('pf.batchEngine', $('#bEngine').value); bEstimate(); });
+$('#bAuto').addEventListener('change', () => localStorage.setItem('pf.batchAuto', $('#bAuto').checked ? '1' : '0'));
+$('#bAi').addEventListener('change', () => { $('#bAuto').disabled = !$('#bAi').checked || $('#bAi').disabled; });
 $('#bAll').addEventListener('change', () => {
   ['#bDeblur', '#bColor', '#bEnlarge'].forEach(s => { $(s).checked = $('#bAll').checked; });
   bEstimate();
@@ -5789,7 +5840,8 @@ $('#bStart').addEventListener('click', async () => {
   $('#bStart').disabled = true;
   $('#bStatus').textContent = '';
   try {
-    await api('batch_start', { body: { ids: bSelected().ids, steps, ai: $('#bAi').checked && !$('#bAi').disabled, engine: $('#bEngine').value } });
+    await api('batch_start', { body: { ids: bSelected().ids, steps, ai: $('#bAi').checked && !$('#bAi').disabled, engine: $('#bEngine').value,
+      auto: $('#bAuto').checked && !$('#bAuto').disabled && $('#bAi').checked } });
     $('#batchDlg').close();
     qOpen();
   } catch (e) {

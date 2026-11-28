@@ -793,7 +793,7 @@ try {
             if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
             $in = pf_input_json();
             pf_json(['ok' => true, 'batch' => Deblur::batchStart(is_array($in['ids'] ?? null) ? $in['ids'] : [], is_array($in['steps'] ?? null) ? $in['steps'] : [], !empty($in['ai']),
-                (string)($in['engine'] ?? 'local'))]);
+                (string)($in['engine'] ?? 'local'), !empty($in['auto']))]);
         }
         case 'batch_ai_available': {
             require_once __DIR__ . '/lib/Deblur.php';
@@ -802,7 +802,14 @@ try {
         }
         case 'batch_review': {
             require_once __DIR__ . '/lib/Deblur.php';
-            pf_json(Deblur::batchReview((int)($_GET['page'] ?? 0)));
+            pf_json(Deblur::batchReview((int)($_GET['page'] ?? 0), 40, !empty($_GET['all'])));
+        }
+        case 'batch_keep': {
+            // Review: these photos keep their originals (off the list of photos waiting for a decision).
+            require_once __DIR__ . '/lib/Deblur.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            pf_json(Deblur::batchKeep(is_array($in['ids'] ?? null) ? $in['ids'] : []));
         }
         case 'batch_replace': {
             require_once __DIR__ . '/lib/Deblur.php';

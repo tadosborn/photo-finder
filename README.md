@@ -24,7 +24,7 @@ you can search instantly.
 - **Fix blur and Enlarge.** Makes a sharper version of a blurred photo, or a larger one of a small
   photo, with AI models that run on your PC (free; downloaded once, about 137 MB; Fix blur is best
   on camera shake), or optionally with Google Gemini and your own key (redraws the photo; a few
-  cents each), or the two in turn. Batches offer the same three ways under **Run**. Every version
+  cents each), or the two in turn. Batches offer the same three ways under **Run**, and can let AI (Claude) pick each photo's best version and use it automatically (the original is always kept). Every version
   is saved as a copy next to the original, and **Compare** shows them as large as the window
   allows (click one to see it alone and flip through them with the arrow keys). You can put the
   best one in the original's place; the original is kept beside it, and **Restore the original**
