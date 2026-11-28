@@ -101,6 +101,12 @@ final class Db {
         }
         // A year taken from the photo's folder ("...\2005\DSC02954.jpg"), used to place photos
         // without a camera date in date order. '' = none; NULL = not worked out yet.
+        // Kept originals and the versions Fix blur / Enlarge / batches save: on disk and indexed,
+        // but not in the gallery (Clean up's "Versions & originals" and the Compare window show them).
+        if (!in_array('gallery_hidden', $colNames, true)) {
+            $pdo->exec('ALTER TABLE images ADD COLUMN gallery_hidden INTEGER NOT NULL DEFAULT 0');
+            self::backfillGalleryHidden($pdo);
+        }
         if (!in_array('folder_year', $colNames, true)) {
             $pdo->exec('ALTER TABLE images ADD COLUMN folder_year TEXT');
         }
@@ -539,6 +545,33 @@ final class Db {
      * Each row carries `sort_date`: the camera date, else the year of its folder ("2005"),
      * else null. Photos without either come last.
      */
+    /** Hide what was made before gallery_hidden existed: kept originals ("(original)"), Fix blur /
+     *  Enlarge copies (by their suffixes), and the versions the job and batch records name (a
+     *  batch's colour version is "(enhanced)", like a copy saved with Enhance, which stays). */
+    private static function backfillGalleryHidden(PDO $pdo): void {
+        $re = '/ \((?:deblurred|restored|deblurred, restored|enlarged|AI enlarged|enlarged 2x|fixed|fixed 2x|original)(?: \d+)?\)\.[^.\/\\\\]+$/i';
+        $ids = [];
+        foreach ($pdo->query("SELECT id, path FROM images WHERE path LIKE '% (%)%'") as $r) {
+            if (preg_match($re, (string)$r['path'])) $ids[] = (string)$r['id'];
+        }
+        $dir = PF_DATA . '/deblur';
+        foreach (glob($dir . '/jobs/*.json') ?: [] as $f) {
+            $j = json_decode((string)@file_get_contents($f), true);
+            if (is_array($j) && !empty($j['saved_id'])) $ids[] = (string)$j['saved_id'];
+        }
+        $b = json_decode((string)@file_get_contents($dir . '/batch.json'), true);
+        foreach ((is_array($b) ? ($b['items'] ?? []) : []) as $it) {
+            foreach ($it['versions'] ?? [] as $v) if (!empty($v['saved_id'])) $ids[] = (string)$v['saved_id'];
+        }
+        foreach (array_chunk(array_values(array_unique($ids)), 200) as $chunk) {
+            $pdo->prepare('UPDATE images SET gallery_hidden = 1 WHERE id IN (' . implode(',', array_fill(0, count($chunk), '?')) . ')')->execute($chunk);
+        }
+    }
+
+    public static function setGalleryHidden(string $id, bool $hidden = true): void {
+        self::get()->prepare('UPDATE images SET gallery_hidden = :h WHERE id = :id')->execute([':h' => $hidden ? 1 : 0, ':id' => $id]);
+    }
+
     public static function search(string $query, int $limit = 100, int $offset = 0, string $sort = 'new'): array {
         $query = trim($query);
         $date = "COALESCE(NULLIF(i.taken_at, ''), NULLIF(i.folder_year, ''))";
@@ -556,13 +589,13 @@ final class Db {
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         };
         if ($query === '') {
-            return $page(self::get()->prepare("SELECT {$cols} FROM images i WHERE i.status = 'ok' ORDER BY {$order} LIMIT :n OFFSET :o"));
+            return $page(self::get()->prepare("SELECT {$cols} FROM images i WHERE i.status = 'ok' AND i.gallery_hidden = 0 ORDER BY {$order} LIMIT :n OFFSET :o"));
         }
         try {
             $stmt = self::get()->prepare(
                 "SELECT {$cols}, snippet(images_fts, 1, '<mark>', '</mark>', '...', 12) AS snip
                  FROM images_fts JOIN images i ON i.id = images_fts.id
-                 WHERE images_fts MATCH :q AND i.status = 'ok'
+                 WHERE images_fts MATCH :q AND i.status = 'ok' AND i.gallery_hidden = 0
                  ORDER BY {$order} LIMIT :n OFFSET :o"
             );
             $stmt->bindValue(':q', self::buildFtsQuery($query));
@@ -571,7 +604,7 @@ final class Db {
             $order = str_replace('bm25(images_fts)', "({$date} IS NULL), {$date} DESC, i.path", $order);
             $stmt = self::get()->prepare(
                 "SELECT {$cols} FROM images i
-                 WHERE i.status = 'ok' AND (i.description LIKE :q OR i.tags LIKE :q OR i.text_in_image LIKE :q OR i.faces LIKE :q)
+                 WHERE i.status = 'ok' AND i.gallery_hidden = 0 AND (i.description LIKE :q OR i.tags LIKE :q OR i.text_in_image LIKE :q OR i.faces LIKE :q)
                  ORDER BY {$order} LIMIT :n OFFSET :o"
             );
             $stmt->bindValue(':q', '%' . $query . '%');

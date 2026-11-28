@@ -756,7 +756,7 @@ $apiKeySet = $settings['api_key'] !== '';
       </div>
 
       <div class="set-pane" role="tabpanel" id="setPane-fixblur" aria-labelledby="setTab-fixblur" hidden>
-        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper version of a blurred photo; Enlarge (in Clean up's Small list and in the photo view) makes a larger one. Every version is saved as a copy next to the original and shown beside it; you can then put the best one in the original's place (the original is kept next to it as "name (original).jpg"; Clean up's Kept originals list deletes them in bulk when you choose).</div>
+        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper version of a blurred photo; Enlarge (in Clean up's Small list and in the photo view) makes a larger one. Every version is saved as a copy next to the original and shown beside it; you can then put the best one in the original's place (the original is kept next to it as "name (original).jpg"; Clean up's "Versions & originals" list deletes them in bulk when you choose). Versions and kept originals stay out of the gallery, so it shows each picture once.</div>
         <label>On this PC (free)</label>
         <div class="set-row">
           <span id="fbLocalState" class="hint" style="flex:1; margin:0;">Checking…</span>
@@ -883,7 +883,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <button type="button" role="tab" id="cuTabExposure" data-cu-tab="exposure" aria-selected="false" aria-controls="cuBody">Too dark / too bright / blank<span class="cu-count" id="cuCountExposure">–</span></button>
     <button type="button" role="tab" id="cuTabDuplicates" data-cu-tab="duplicates" aria-selected="false" aria-controls="cuBody">Duplicates<span class="cu-count" id="cuCountDuplicates">–</span></button>
     <button type="button" role="tab" id="cuTabSmall" data-cu-tab="small" aria-selected="false" aria-controls="cuBody">Small<span class="cu-count" id="cuCountSmall">–</span></button>
-    <button type="button" role="tab" id="cuTabOriginals" data-cu-tab="originals" aria-selected="false" aria-controls="cuBody">Kept originals<span class="cu-count" id="cuCountOriginals">–</span></button>
+    <button type="button" role="tab" id="cuTabOriginals" data-cu-tab="originals" aria-selected="false" aria-controls="cuBody">Versions &amp; originals<span class="cu-count" id="cuCountOriginals">–</span></button>
   </div>
   <div class="cu-controls" id="cuCtlBlurry">
     <label for="cuBlurRange">Sensitivity</label>
@@ -906,7 +906,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <span class="hint">The best copy (most pixels, then largest file, then earliest date) is never selected for you.</span>
   </div>
   <div class="cu-controls" id="cuCtlOriginals" hidden>
-    <span class="hint">Originals kept by "Replace the original", next to the photo that replaced them. Select all and move them to the Recycle Bin when you no longer need them.</span>
+    <span class="hint">The versions Fix blur, Enlarge and batches saved, and the originals "Replace the original" kept. They stay out of the gallery so it shows each picture once. Select all and move them to the Recycle Bin when you no longer need them.</span>
   </div>
   <div class="cu-controls" id="cuCtlSmall" hidden>
     <label for="cuSmallSide">Smaller than</label>
@@ -1961,7 +1961,6 @@ async function enhSave(mode) {
       enh.saving = false;
       enhClose();
       if (at >= 0) openLightbox(at);
-      if (res.kept && at >= 0) { lastResults.splice(at + 1, 0, res.kept); if (inGrid) renderResults(lastResults); }
       toast('Replaced “' + res.name + '”. The original is kept as “' + (res.kept ? res.kept.path.split('/').pop() : 'name (original).jpg') + '”.');
     }
     if (res.stats) setStats(res.stats);
@@ -3525,7 +3524,8 @@ function cuCard(r, kind, pageItems, idx) {
     (r.problems || []).forEach(p => chips.appendChild(cuChip(p.text)));
     Object.values(r.described || {}).forEach(ph => chips.appendChild(cuChip('AI: "' + ph + '"', 'ai')));
   } else if (kind === 'originals') {
-    chips.appendChild(cuChip(r.replaced_by ? 'Replaced by “' + r.replaced_by.name + '”' + (r.replaced_by.width ? ` (${r.replaced_by.width}×${r.replaced_by.height})` : '') : 'Kept original'));
+    const of = r.replaced_by ? '“' + r.replaced_by.name + '”' : '';
+    chips.appendChild(cuChip(r.kept_original ? (of ? 'Kept original, replaced by ' + of : 'Kept original') : (of ? 'Version of ' + of : 'Version')));
   } else if (kind === 'small') {
     chips.appendChild(cuChip('Small: ' + (r.width * r.height / 1e6).toFixed(r.width * r.height < 1e6 ? 2 : 1) + ' megapixels'));
   } else {
@@ -3583,7 +3583,7 @@ function cuRender() {
       exposure: 'No photos that are too dark, too bright or blank.',
       duplicates: 'No duplicates found.',
       small: `No photos smaller than ${$('#cuSmallSide').value} px on the long side.`,
-      originals: 'No kept originals: "Replace the original" keeps one here each time it replaces a photo.',
+      originals: 'Nothing here: the versions Fix blur, Enlarge and batches save, and the originals "Replace the original" keeps, are listed here.',
     }[kind];
     body.innerHTML = '<div class="cu-empty"></div>';
     body.firstChild.textContent = empty + (cu.status && cu.status.remaining ? ' Some photos are not analysed yet.' : '');
@@ -3863,7 +3863,7 @@ const DB_OP = {
     hint: 'On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. "Cloud AI on the on-PC result" lets the cloud AI finish what this PC started. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and keeps the original next to it as "name (original).jpg".' },
   // Compare: every version the photo has (a batch's, or made one at a time), nothing to start.
   review: { title: 'Compare', local: '', cloud: '', chain: '', verb: '',
-    hint: 'Every version of this photo, each saved as a copy next to the original. Zoom in (2×, 4×) to compare. Pick the best ("Use this") and click "Replace the original" to put it in the original\'s place; the original is kept next to it as "name (original).jpg" (Clean up\'s Kept originals list deletes them in bulk).' },
+    hint: 'Every version of this photo, each saved as a copy next to the original. Zoom in (2×, 4×) to compare. Pick the best ("Use this") and click "Replace the original" to put it in the original\'s place; the original is kept next to it as "name (original).jpg" (Clean up\'s "Versions & originals" list deletes them in bulk).' },
   enlarge: { title: 'Enlarge', local: 'up_local', cloud: 'up_cloud', chain: '', verb: 'Enlarging',
     hint: 'On this PC sharpens edges as it enlarges and adds nothing that was not there; busy textures can look a little smooth. Cloud AI (Google Gemini) redraws the photo at 2K with more fine detail, so check faces and text. Zoom in (2×, 4×) to compare. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and keeps the original next to it as "name (original).jpg".' },
 };
@@ -4197,22 +4197,11 @@ async function dbRefresh(auto = false) {
   if (busy) db.timer = setTimeout(() => dbRefresh(), 1500);
 }
 
-// A saved version goes into the grid next to its original, as an Enhance copy does.
-function dbAddToGrid(origId, row) {
-  if (!row || !row.id || cu.lbSaved || !lastResults.some(x => x.id === origId)) return;
-  lastResults = lastResults.filter(x => x.id !== row.id);
-  lastResults.splice(lastResults.findIndex(x => x.id === origId) + 1, 0, row);
-  if (document.querySelector('.card[data-id="' + origId + '"]')) renderResults(lastResults);
-}
 async function dbAnnounceSaved(origId, j) {
   toast('Saved “' + j.saved + '” next to the original.');
   if (!j.saved_id) return;
   try {
-    const row = await api('image_info', { qs: 'id=' + encodeURIComponent(j.saved_id) });
-    row.sort_date = row.taken_at || row.folder_year || null;
-    row.v = row.mtime;
-    dbAddToGrid(origId, row);
-    setStats(await api('stats'));
+    setStats(await api('stats'));   // (versions are not shown in the gallery: Compare and Clean up show them)
   } catch (e) { }
 }
 
@@ -4268,7 +4257,6 @@ $('#dbSaveBtn').addEventListener('click', async () => {
   $('#dbSaveBtn').disabled = true;
   try {
     const res = await api('deblur_save', { body: { id, kind } });
-    dbAddToGrid(id, res.image);
     setStats(res.stats);
     toast('Saved “' + res.name + '” next to the original.');
   } catch (e) {
@@ -4316,7 +4304,6 @@ $('#dbReplaceBtn').addEventListener('click', async () => {
     dbSetOrig(db.row);
     setStats(res.stats);
     cuReplaced(db.row);
-    if (res.kept && i >= 0) { lastResults.splice(lastResults.findIndex(x => x.id === id) + 1, 0, res.kept); if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults); }
     const keptName = res.kept ? res.kept.path.split('/').pop() : '';
     db.finished = '✓ Replaced “' + res.name + '” with ' + DB_KIND[kind].who + '. The original is kept as “' + keptName + '”' + (res.removed_copy ? '; the other saved versions stay next to it.' : '.');
     toast('Replaced “' + res.name + '”. The original is kept as “' + keptName + '”.');
@@ -4603,7 +4590,7 @@ $('#rvReplace').addEventListener('click', async () => {
   if (!rv.armed) {
     rv.armed = true;
     rvFoot();
-    $('#rvSub').textContent = `Click the red button within 8 seconds to replace ${n} ${n === 1 ? 'original' : 'originals'} with the chosen versions: each version takes its photo's name, description and place, and each original is kept next to it as “name (original).jpg” (Clean up's Kept originals list deletes them in bulk when you choose).`;
+    $('#rvSub').textContent = `Click the red button within 8 seconds to replace ${n} ${n === 1 ? 'original' : 'originals'} with the chosen versions: each version takes its photo's name, description and place, and each original is kept next to it as “name (original).jpg” (Clean up's “Versions & originals” list deletes them in bulk when you choose).`;
     rv.timer = setTimeout(() => { rv.armed = false; rvRender(); }, 8000);
     return;
   }
@@ -4623,7 +4610,6 @@ $('#rvReplace').addEventListener('click', async () => {
         rv.choices.delete(x.id);
         const at = lastResults.findIndex(y => y.id === x.id);
         if (at >= 0) { Object.assign(lastResults[at], x.image); changed = true; }
-        if (at >= 0 && x.kept) { lastResults.splice(at + 1, 0, x.kept); changed = true; }
         if (x.removed_copy) { lastResults = lastResults.filter(y => y.id !== x.removed_copy); changed = true; }
       });
       if (r.stats) setStats(r.stats);
@@ -4631,7 +4617,7 @@ $('#rvReplace').addEventListener('click', async () => {
   }
   rv.busy = false;
   if (changed) renderResults(lastResults);
-  toast(`Replaced ${ok} ${ok === 1 ? 'original' : 'originals'}; each original is kept next to its photo as “… (original)”, listed in Clean up's Kept originals.` + (failed.length ? ` ${failed.length} failed: ${failed[0].error}` : ''), failed.length ? 'err' : 'ok', 8000);
+  toast(`Replaced ${ok} ${ok === 1 ? 'original' : 'originals'}; each original is kept next to its photo as “… (original)”, listed in Clean up's “Versions & originals”.` + (failed.length ? ` ${failed.length} failed: ${failed[0].error}` : ''), failed.length ? 'err' : 'ok', 8000);
   await rvLoad(rv.page);
 });
 $('#rvClear').addEventListener('click', () => { rv.choices.clear(); rvDisarm(); rvRender(); });

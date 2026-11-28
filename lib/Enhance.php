@@ -680,6 +680,7 @@ final class Enhance {
                 throw new RuntimeException('Could not put the enhanced photo in the original\'s place. Nothing was changed.');
             }
             $keptId = self::indexCopy($row, $keptPath);
+            Db::setGalleryHidden($keptId);   // listed in Clean up's "Versions & originals", not the gallery
             Thumb::ensureThumb($keptId, $keptPath);
             $kept = self::rowForPage($keptId);
             $id = (string)$row['id'];

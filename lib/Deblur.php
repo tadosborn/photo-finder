@@ -657,6 +657,7 @@ final class Deblur {
                 throw new RuntimeException('Could not put the new version in the original\'s place. Nothing was changed.');
             }
             $keptId = Enhance::indexCopy($row, $keptPath);   // its description, people, date and size, before the row changes
+            Db::setGalleryHidden($keptId);                    // not a second copy of the photo in the gallery
             Thumb::ensureThumb($keptId, $keptPath);
             $kept = Enhance::rowForPage($keptId);
             $newId = (string)$row['id'];
@@ -671,6 +672,7 @@ final class Deblur {
                 @unlink($tmp);
             }
             $newId = Enhance::indexCopy($row, $dest);   // copies the original's row, size included
+            Db::setGalleryHidden($newId);               // a version: Compare and Clean up show it, not the gallery
         }
         // New pixels: the photo's own size (a cloud result is 2K, an enlargement larger), and for
         // a replaced photo Clean up's measurements, change.

@@ -51,7 +51,7 @@ watermark. Nothing is sent to Google unless you use this button.
 
 Either way, each version is saved as a new file next to the original as soon as it is made; the
 original changes only if you click **Replace the original**, and even then it is kept next to the new
-version as "name (original).jpg" (Clean up's **Kept originals** list deletes them in bulk when you
+version as "name (original).jpg" (Clean up's **Versions & originals** list deletes them in bulk when you
 choose).
 
 **Batch AI pick** (optional; a tick box when you fix photos in a batch): each photo and its

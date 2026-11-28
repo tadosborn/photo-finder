@@ -421,7 +421,7 @@ final class Cleanup {
         $said = self::describedAs();
         $rows = Db::get()->query(
             'SELECT ' . self::ROW_COLS . " FROM images
-             WHERE status = 'ok' AND sharpness IS NOT NULL AND COALESCE(cleanup_keep, 0) = 0
+             WHERE status = 'ok' AND sharpness IS NOT NULL AND COALESCE(cleanup_keep, 0) = 0 AND gallery_hidden = 0
              ORDER BY sharpness ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
         $out = [];
@@ -444,7 +444,7 @@ final class Cleanup {
         $said = self::describedAs();
         $rows = Db::get()->query(
             'SELECT ' . self::ROW_COLS . " FROM images
-             WHERE status = 'ok' AND lum_mean IS NOT NULL AND COALESCE(cleanup_keep, 0) = 0
+             WHERE status = 'ok' AND lum_mean IS NOT NULL AND COALESCE(cleanup_keep, 0) = 0 AND gallery_hidden = 0
              ORDER BY lum_mean ASC"
         )->fetchAll(PDO::FETCH_ASSOC);
         $out = [];
@@ -488,7 +488,7 @@ final class Cleanup {
         // SQLite orders every number before any text, so every photo would count as small.
         $rows = Db::get()->query(
             'SELECT ' . self::ROW_COLS . " FROM images
-             WHERE status = 'ok' AND width > 0 AND height > 0 AND MAX(width, height) < " . (int)self::SMALL_SIDE . "
+             WHERE status = 'ok' AND gallery_hidden = 0 AND width > 0 AND height > 0 AND MAX(width, height) < " . (int)self::SMALL_SIDE . "
                AND COALESCE(cleanup_keep, 0) = 0
              ORDER BY width * height ASC, path"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -522,23 +522,27 @@ final class Cleanup {
         }
     }
 
-    /** Originals kept by "Replace the original" ("<name> (original).jpg"), newest first, each with
-     *  the photo that replaced it (same folder, the name without the suffix) when it is indexed. */
+    /** Everything the gallery leaves out: originals kept by "Replace the original" ("<name>
+     *  (original).jpg") and the versions Fix blur / Enlarge / batches saved, newest first. Each
+     *  names the photo it belongs to (same folder, its name without the suffix) when indexed. */
     public static function keptOriginals(): array {
         $rows = Db::get()->query(
             'SELECT ' . self::ROW_COLS . " FROM images
-             WHERE status IN ('ok', 'pending') AND (path LIKE '% (original).%' OR path LIKE '% (original %).%')
+             WHERE status IN ('ok', 'pending') AND (gallery_hidden = 1 OR path LIKE '% (original).%' OR path LIKE '% (original %).%')
                AND COALESCE(cleanup_keep, 0) = 0
              ORDER BY mtime DESC, path"
         )->fetchAll(PDO::FETCH_ASSOC);
-        $byPath = Db::get()->prepare('SELECT id, path, width, height FROM images WHERE path = :p');
+        $byStem = Db::get()->prepare("SELECT id, path, width, height FROM images WHERE path LIKE :p ESCAPE '\\' AND gallery_hidden = 0 LIMIT 1");
         $out = [];
         foreach ($rows as $r) {
             $r = self::rowOut($r);
-            $now = (string)preg_replace('/ \(original(?: \d+)?\)(\.[^.\/]*)?$/i', '$1', (string)$r['path']);
-            $byPath->execute([':p' => $now]);
-            $n = $byPath->fetch(PDO::FETCH_ASSOC) ?: null;
-            $byPath->closeCursor();
+            $p = (string)$r['path'];
+            $r['kept_original'] = (bool)preg_match('/ \(original(?: \d+)?\)(\.[^.\/]*)?$/i', $p);
+            // The photo it belongs to: the name with its last " (...)" suffix taken off, any extension.
+            $stem = (string)preg_replace('/ \([^()]*\)(\.[^.\/]*)?$/', '', $p);
+            $byStem->execute([':p' => str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $stem) . '.%']);
+            $n = $byStem->fetch(PDO::FETCH_ASSOC) ?: null;
+            $byStem->closeCursor();
             $r['replaced_by'] = $n ? ['id' => (string)$n['id'], 'name' => basename((string)$n['path']), 'width' => (int)$n['width'], 'height' => (int)$n['height']] : null;
             $out[] = $r;
         }
@@ -564,7 +568,7 @@ final class Cleanup {
         self::correctCappedSizes();   // the best copy is the one with the most pixels
         $rows = Db::get()->query(
             'SELECT ' . self::ROW_COLS . " FROM images
-             WHERE status = 'ok' AND dhash IS NOT NULL ORDER BY rowid"
+             WHERE status = 'ok' AND dhash IS NOT NULL AND gallery_hidden = 0 ORDER BY rowid"
         )->fetchAll(PDO::FETCH_ASSOC);
         $rows = array_map([self::class, 'rowOut'], $rows);
         $n = count($rows);
