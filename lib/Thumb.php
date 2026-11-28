@@ -64,7 +64,7 @@ final class Thumb {
         }
     }
 
-    private static function loadGd(string $path, int $type): \GdImage|false {
+    public static function loadGd(string $path, int $type): \GdImage|false {
         return match ($type) {
             IMAGETYPE_JPEG => @imagecreatefromjpeg($path),
             IMAGETYPE_PNG => @imagecreatefrompng($path),
@@ -75,7 +75,7 @@ final class Thumb {
         };
     }
 
-    private static function applyOrientation(\GdImage $im, string $path): \GdImage {
+    public static function applyOrientation(\GdImage $im, string $path): \GdImage {
         if (!function_exists('exif_read_data')) return $im;
         $exif = @exif_read_data($path);
         if (!$exif || empty($exif['Orientation'])) return $im;

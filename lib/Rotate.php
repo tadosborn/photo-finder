@@ -57,7 +57,7 @@ final class Rotate {
         clearstatcache(true, $path);
         Db::upsertPending($id, $path, (int)filesize($path), (int)filemtime($path));
         // Clean up measures thumbnails; this one changes, so measure it again.
-        Db::get()->prepare('UPDATE images SET analyzed_at = NULL WHERE id = :id')->execute([':id' => $id]);
+        Db::get()->prepare('UPDATE images SET analyzed_at = NULL, updated_at = :t WHERE id = :id')->execute([':t' => time(), ':id' => $id]);
         @unlink(PF_THUMBS . '/' . $id . '.jpg');
         Thumb::ensureThumb($id, $path);
 

@@ -54,7 +54,7 @@ $apiKeySet = $settings['api_key'] !== '';
   .selbar .sel-spacer { flex: 1; }
   .selbar button.danger { background: var(--err-bg); border-color: var(--err-bg); color: #fff; }
   .selbar button.danger:hover { filter: brightness(1.1); }
-  dialog.lightbox .lb-del-btn { position: absolute; top: 16px; right: 160px; background: rgba(0,0,0,0.75); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-del-btn { background: rgba(0,0,0,0.75); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-del-btn:hover { background: var(--err-bg); }
   .card .meta { padding: 10px 12px; font-size: 12px; color: var(--mute); }
   .card .desc { color: var(--text); font-size: 13px; line-height: 1.4; max-height: 3.6em; overflow: hidden; }
@@ -132,9 +132,9 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.lightbox .lb-prev { left: 0; border-radius: 0 6px 6px 0; }
   dialog.lightbox .lb-next { right: 0; border-radius: 6px 0 0 6px; }
   dialog.lightbox .lb-counter { position: absolute; top: 16px; left: 20px; color: #fff; background: rgba(0,0,0,0.75); padding: 4px 10px; border-radius: 12px; font-size: 12px; }
-  dialog.lightbox .lb-close { position: absolute; top: 16px; right: 20px; color: #fff; background: rgba(0,0,0,0.75); border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 22px; line-height: 1; }
+  dialog.lightbox .lb-close { color: #fff; background: rgba(0,0,0,0.75); border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 22px; line-height: 1; }
   dialog.lightbox .lb-close:hover { background: rgba(0,0,0,0.8); }
-  dialog.lightbox .lb-edit-btn { position: absolute; top: 16px; right: 64px; background: rgba(0,0,0,0.75); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-edit-btn { background: rgba(0,0,0,0.75); color:#fff; border:none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-edit-btn:hover { background: rgba(0,0,0,0.8); }
   dialog.lightbox .lb-edit-btn.dirty { background: var(--warn); color: #1a1107; }
   dialog.lightbox .lb-editor { position: absolute; top: 60px; right: 20px; left: 20px; bottom: 20px; background: rgba(20,24,32,0.97); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; color: var(--text); overflow-y: auto; display: none; max-width: 720px; margin: 0 auto; }
@@ -151,22 +151,27 @@ $apiKeySet = $settings['api_key'] !== '';
      Contrast (WCAG AA): text #e6e8ee on #181c24 13.9:1, #b3bbc8 on #181c24 9.0:1, on #21262f 8.1:1;
      control borders #7c8597 on #181c24 4.6:1 (disabled #6b7487 3.6:1; the red button has a #f87171 edge,
      6.0:1); white on the over-photo labels and the lightbox button (black 75%+) >= 10:1. */
-  dialog.lightbox .lb-enh-btn { position: absolute; top: 16px; right: 268px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-enh-btn { background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-enh-btn:hover { background: rgba(0,0,0,0.92); }
   dialog.lightbox .lb-enh-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
-  dialog.lightbox .lb-fix-btn { position: absolute; top: 16px; right: 394px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-fix-btn { background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-fix-btn:hover { background: rgba(0,0,0,0.92); }
   dialog.lightbox .lb-fix-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
-  dialog.lightbox .lb-rot-btn { position: absolute; top: 16px; width: 36px; height: 36px; padding: 0; border-radius: 50%; background: rgba(0,0,0,0.75); color: #fff; border: none; cursor: pointer; font-size: 20px; line-height: 1; }
+  dialog.lightbox .lb-rot-btn { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: rgba(0,0,0,0.75); color: #fff; border: none; cursor: pointer; font-size: 20px; line-height: 1; }
   dialog.lightbox .lb-rot-btn:hover { background: rgba(0,0,0,0.92); }
   dialog.lightbox .lb-rot-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
   dialog.lightbox .lb-rot-btn:disabled { opacity: 0.6; cursor: wait; }
-  dialog.lightbox .lb-rot-r { right: 478px; }
-  dialog.lightbox .lb-rot-l { right: 522px; }
-  /* Left of the rotate buttons, so hiding it (photos too large to enlarge) leaves no gap. */
-  dialog.lightbox .lb-enl-btn { position: absolute; top: 16px; right: 566px; background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-enl-btn { background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
   dialog.lightbox .lb-enl-btn:hover { background: rgba(0,0,0,0.92); }
   dialog.lightbox .lb-enl-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.lightbox .lb-share-btn { background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-share-btn:hover { background: rgba(0,0,0,0.92); }
+  dialog.lightbox .lb-share-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  /* The viewer's buttons in one row from the top right, so one that is hidden (Enlarge on large
+     photos, Delete from Clean up) leaves no gap. The row itself lets clicks through to the photo. */
+  dialog.lightbox .lb-tools { position: absolute; top: 16px; right: 20px; left: 120px; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; pointer-events: none; }
+  dialog.lightbox .lb-tools > * { pointer-events: auto; }
+  dialog.lightbox .lb-tools > [hidden] { display: none; }
   dialog.enhance { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: none; background: #0b0d11; color: var(--text); }
   dialog.enhance[open] { display: flex; }
   dialog.enhance::backdrop { background: rgba(0,0,0,0.9); }
@@ -435,6 +440,15 @@ $apiKeySet = $settings['api_key'] !== '';
   dialog.batch p { font-size: 13px; margin: 8px 0; }
   .b-opt { display: flex; gap: 8px; align-items: baseline; margin: 8px 0; font-size: 14px; }
   .b-all { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  /* Share (a batch-style window). Text is the batch window's: --text and --mute on --panel. */
+  .sh-thumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
+  .sh-thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; background: #0a0c10; }
+  .sh-thumbs span { color: var(--mute); font-size: 13px; }
+  dialog.share .b-opt { align-items: center; }
+  dialog.share select { width: auto; max-width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+  dialog.share .b-row button[hidden] { display: none; }
+  /* Disabled buttons stay readable (--mute on --panel2), as in Clean up. */
+  dialog.batch button:disabled { opacity: 1; color: var(--mute); background: var(--panel2); border-color: var(--line); }
   /* Batch review: every photo of a batch with its versions */
   dialog.review { width: min(1240px, 97vw); height: min(880px, 95vh); max-height: none; }
   dialog.review .q-body { flex: 1; min-height: 0; }
@@ -568,6 +582,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <span class="sel-count" id="selCount">0 selected</span>
   <button type="button" id="selAllBtn">Select all</button>
   <button type="button" id="selClearBtn">Clear</button>
+  <button type="button" id="selShareBtn" title="Share the selected photos: email, nearby devices and other apps, or download them">Share selected…</button>
   <button type="button" id="selFixBtn" title="Fix the selected photos one after another on this PC; each gets a copy next to it">Fix selected…</button>
   <span class="sel-spacer"></span>
   <button type="button" id="selDeleteBtn" class="danger">Delete selected</button>
@@ -575,10 +590,19 @@ $apiKeySet = $settings['api_key'] !== '';
 
 <main>
   <div class="viewbar" id="viewbar">
+    <label for="recentSel">Show</label>
+    <select id="recentSel" title="Photos Photo Finder recently added, described, edited, rotated or replaced with a fix">
+      <option value="0">All photos</option>
+      <option value="1">Updated in the last day</option>
+      <option value="7">Updated in the last 7 days</option>
+      <option value="30">Updated in the last 30 days</option>
+    </select>
+    <span class="viewbar-gap"></span>
     <label for="sortSel">Order</label>
     <select id="sortSel">
       <option value="new">Newest first</option>
       <option value="old">Oldest first</option>
+      <option value="updated">Recently updated first</option>
       <option value="relevance">Best match (when searching)</option>
     </select>
     <span class="viewbar-gap"></span>
@@ -830,14 +854,17 @@ $apiKeySet = $settings['api_key'] !== '';
   <div class="lb-status" id="lbStatus" role="status" aria-live="polite"></div>
   <button class="lb-nav lb-next" id="lbNext" title="Next (→)">›</button>
   <div class="lb-counter" id="lbCounter"></div>
-  <button class="lb-edit-btn" id="lbEditBtn" title="Edit metadata (E)">✎ Edit</button>
-  <button class="lb-del-btn" id="lbDelBtn" title="Delete photo — moves file to Recycle Bin (Del)">🗑 Delete</button>
-  <button class="lb-enh-btn" id="lbEnhBtn" type="button" title="Fix colour, brightness and contrast; sharpen slightly soft photos">✨ Enhance</button>
-  <button class="lb-fix-btn" id="lbFixBtn" type="button" title="Make a sharper copy of a blurred photo with AI">Fix blur</button>
-  <button class="lb-rot-btn lb-rot-r" id="lbRotR" type="button" title="Rotate right (R)" aria-label="Rotate right">⟳</button>
-  <button class="lb-rot-btn lb-rot-l" id="lbRotL" type="button" title="Rotate left (Shift+R)" aria-label="Rotate left">⟲</button>
-  <button class="lb-enl-btn" id="lbEnlBtn" type="button" title="Make a larger, sharper copy of a small photo with AI">Enlarge</button>
-  <button class="lb-close" id="lbClose" title="Close (Esc)">×</button>
+  <div class="lb-tools">
+    <button class="lb-enl-btn" id="lbEnlBtn" type="button" title="Make a larger, sharper copy of a small photo with AI">Enlarge</button>
+    <button class="lb-rot-btn lb-rot-l" id="lbRotL" type="button" title="Rotate left (Shift+R)" aria-label="Rotate left">⟲</button>
+    <button class="lb-rot-btn lb-rot-r" id="lbRotR" type="button" title="Rotate right (R)" aria-label="Rotate right">⟳</button>
+    <button class="lb-fix-btn" id="lbFixBtn" type="button" title="Make a sharper copy of a blurred photo with AI">Fix blur</button>
+    <button class="lb-enh-btn" id="lbEnhBtn" type="button" title="Fix colour, brightness and contrast; sharpen slightly soft photos">✨ Enhance</button>
+    <button class="lb-share-btn" id="lbShareBtn" type="button" title="Share this photo: email, nearby devices and other apps, copy or download (S)">Share</button>
+    <button class="lb-del-btn" id="lbDelBtn" type="button" title="Move this photo, with its saved versions and kept original, to the Recycle Bin (Del)">🗑 Delete</button>
+    <button class="lb-edit-btn" id="lbEditBtn" type="button" title="Edit metadata (E)">✎ Edit</button>
+    <button class="lb-close" id="lbClose" type="button" title="Close (Esc)">×</button>
+  </div>
   <div class="lb-meta">
     <div class="desc" id="lbDesc"></div>
     <div class="tags" id="lbFaces"></div>
@@ -845,7 +872,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <div class="tags" id="lbWhere"></div>
     <div class="tags" id="lbPath"></div>
     <div class="lb-details" id="lbDetails"></div>
-    <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · R / Shift+R: rotate · I: toggle info · E: edit · Esc: close</div>
+    <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · R / Shift+R: rotate · I: toggle info · E: edit · S: share · Esc: close</div>
   </div>
   <div class="lb-editor" id="lbEditor">
     <h3>Edit metadata <span class="manual-badge" id="lbManualBadge" style="display:none">manually edited — worker won't overwrite</span></h3>
@@ -1095,6 +1122,26 @@ $apiKeySet = $settings['api_key'] !== '';
   <div class="b-status" id="bStatus" role="status"></div>
   <div class="b-row"><button type="button" id="bCancel">Cancel</button><button type="button" class="primary" id="bStart">Start</button></div>
 </dialog>
+<!-- ==== Share (lib/Share.php makes the copies; Windows' share window, a download or the clipboard takes them) ==== -->
+<dialog id="shareDlg" class="batch share" aria-labelledby="shTitle">
+  <h2 id="shTitle">Share</h2>
+  <div class="sh-thumbs" id="shThumbs"></div>
+  <label class="b-opt"><span>Size</span>
+    <select id="shSize">
+      <option value="full">Full size (the photo as it is)</option>
+      <option value="small">Smaller copies, for email and messages (2,048 pixels)</option>
+    </select></label>
+  <label class="b-opt"><input type="checkbox" id="shLoc"> <span>Include the location <span class="q-mute">(where it was taken: GPS position and place names)</span></span></label>
+  <p class="q-mute" id="shInfo" role="status" aria-live="polite"></p>
+  <div class="b-status" id="shStatus" role="alert"></div>
+  <div class="b-row">
+    <button type="button" id="shClose">Close</button>
+    <button type="button" id="shCopy" title="Copy the picture, to paste into an email, a document or a chat">Copy</button>
+    <button type="button" id="shDownload">Download</button>
+    <button type="button" class="primary" id="shShare">Share…</button>
+  </div>
+  <p class="q-mute">Share… opens Windows' share window: email, nearby devices, Phone Link and the other apps on this PC that take photos. Unless "Include the location" is ticked, the photos go as copies with it taken out. Your photos themselves are never changed.</p>
+</dialog>
 <!-- ==== Enhance view (opened from the lightbox; lib/Enhance.php saves the full-size photo) ==== -->
 <dialog id="enhanceDlg" class="enhance" aria-labelledby="enhTitle">
   <div class="enh-wrap">
@@ -1304,7 +1351,10 @@ function renderResults(rows) {
   grid.innerHTML = '';
   if (!rows.length) {
     empty.style.display = 'block';
-    empty.textContent = $('#q').value
+    const within = view.days === 1 ? 'the last day' : 'the last ' + view.days + ' days';
+    empty.textContent = view.days
+      ? ($('#q').value ? 'No matches were updated in ' + within + '.' : 'No photos were updated in ' + within + '.') + ' Choose "All photos" under Show to see every photo.'
+      : $('#q').value
       ? 'No matches. Try different words, or make sure indexing has run.'
       : 'No photos indexed yet. Open Settings → add a folder → click Scan → click Start indexing.';
     return;
@@ -1334,7 +1384,7 @@ function renderResults(rows) {
     card.innerHTML = `
       <div class="card-tools">
         <input type="checkbox" class="sel" title="Select"${selectedIds.has(row.id) ? ' checked' : ''}>
-        <button type="button" class="del" title="Delete — moves file to Recycle Bin">🗑</button>
+        <button type="button" class="del" title="Move this photo, with its saved versions and kept original, to the Recycle Bin">🗑</button>
       </div>
       <div class="imgwrap" data-idx="${idx}">
         <img loading="lazy" src="thumb.php?id=${row.id}${row.v ? '&v=' + row.v : ''}" alt="">
@@ -1350,7 +1400,7 @@ function renderResults(rows) {
     });
     card.querySelector('.del').addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm('Move this photo to the Recycle Bin?\n\n' + row.path)) return;
+      if (!(await deleteAsk([row.id], row.path))) return;
       await deletePhotos([row.id]);
       renderResults(lastResults);
     });
@@ -1370,12 +1420,25 @@ function escapeHtml(s) {
 const view = {
   sort: localStorage.getItem('pf.sort') || 'new',
   group: localStorage.getItem('pf.group') || 'month',
+  days: 0,          // Show: only photos updated in the last N days (0 = all). Not kept: a filter left on would hide photos next time.
+  autoSort: null,   // the order to go back to when the filter is turned off, if choosing it switched to "Recently updated first"
   more: false,
   loading: false,
 };
 const dateOf = d => d && d.length >= 10 ? new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10), +(d.slice(11, 13) || 0), +(d.slice(14, 16) || 0)) : null;
 const fmt = (d, opts) => d.toLocaleDateString(undefined, opts);
+// "Recently updated first" is grouped by the day of the change, whatever the date grouping.
+function updatedGroup(row) {
+  if (!row.updated_at) return { key: 'none', label: 'Not updated' };
+  const t = new Date(row.updated_at * 1000);
+  const day = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const ago = Math.round((today - day) / 864e5);
+  const label = ago === 0 ? 'Updated today' : ago === 1 ? 'Updated yesterday' : 'Updated ' + fmt(day, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+  return { key: day.getFullYear() + '-' + day.getMonth() + '-' + day.getDate(), label };
+}
 function groupOf(row) {
+  if (view.sort === 'updated' && view.group !== 'folder') return updatedGroup(row);
   const d = row.sort_date || '';
   const exact = d.length >= 10;
   switch (view.group) {
@@ -1410,7 +1473,7 @@ function groupHeadings(rows) {
   rows.forEach((row, i) => {
     let k, lab;
     const d = dateOf(row.sort_date);
-    if (view.group === 'event' && d) {
+    if (view.group === 'event' && d && view.sort !== 'updated') {
       // A new event starts after a gap of more than 12 hours between photos.
       const gap = prev ? Math.abs(d - prev) / 36e5 : Infinity;
       k = gap > 12 || key === null || String(key).startsWith('x') ? 'e' + i : key;
@@ -1434,6 +1497,7 @@ function updateSelBar() {
   $('#selbar').classList.toggle('show', n > 0);
   $('#selDeleteBtn').textContent = n > 1 ? `Delete selected (${n})` : 'Delete selected';
   $('#selFixBtn').textContent = n > 1 ? `Fix selected (${n})…` : 'Fix selected…';
+  $('#selShareBtn').textContent = n > 1 ? `Share selected (${n})…` : 'Share selected…';
 }
 
 function toggleSelect(id, on) {
@@ -1449,10 +1513,28 @@ function toggleSelect(id, on) {
 
 /** Recycle the given photo ids (files → Recycle Bin) and drop them from the
  *  in-memory result set. Does NOT re-render — callers refresh as needed. */
+// The gallery's Delete question. The gallery shows each picture once, so a photo's saved versions
+// (Fix blur, Enlarge, batches) and its kept original are not on view: they go with it, and the
+// question says so.
+async function deleteAsk(ids, path) {
+  let v = { versions: 0, originals: 0, names: [] };
+  try { v = await api('delete_preview', { body: { ids } }); } catch (e) {}
+  const one = ids.length === 1;
+  let q = one ? 'Move this photo to the Recycle Bin?\n\n' + (path || '') : `Move ${ids.length} selected photos to the Recycle Bin?`;
+  if (v.versions) {
+    const saved = v.versions - v.originals, parts = [];
+    if (saved) parts.push(saved + (saved === 1 ? ' saved version' : ' saved versions'));
+    if (v.originals) parts.push(v.originals + (v.originals === 1 ? ' kept original' : ' kept originals'));
+    q += '\n\n' + (one ? 'With it: ' : 'With them: ') + parts.join(' and ') + '.\n'
+      + v.names.join('\n') + (v.versions > v.names.length ? `\n…and ${v.versions - v.names.length} more` : '');
+  }
+  return confirm(q);
+}
+
 async function deletePhotos(ids) {
   if (!ids.length) return null;
   try {
-    const r = await api('delete_files', { body: { ids } });
+    const r = await api('delete_files', { body: { ids, with_versions: true } });
     const removed = new Set(r.deleted_ids || []);
     if (removed.size) {
       lastResults = lastResults.filter(x => !removed.has(x.id));
@@ -1461,7 +1543,9 @@ async function deletePhotos(ids) {
     if (r.stats) setStats(r.stats);
     const failN = (r.failed || []).length;
     if (r.deleted) {
-      toast(`Moved ${r.deleted} photo${r.deleted === 1 ? '' : 's'} to Recycle Bin`
+      const vn = r.versions_deleted || 0;
+      toast(`Moved ${r.deleted} photo${r.deleted === 1 ? '' : 's'}`
+        + (vn ? ` and ${vn} saved version${vn === 1 ? '' : 's'}` : '') + ' to the Recycle Bin'
         + (failN ? ` — ${failN} failed` : ''), failN ? 'err' : 'ok');
     } else {
       toast(failN ? `Delete failed: ${r.failed[0].error}` : 'Nothing deleted', 'err');
@@ -1481,7 +1565,8 @@ $('#selClearBtn').addEventListener('click', () => {
 $('#selDeleteBtn').addEventListener('click', async () => {
   const ids = [...selectedIds];
   if (!ids.length) return;
-  if (!confirm(`Move ${ids.length} selected photo${ids.length === 1 ? '' : 's'} to the Recycle Bin?`)) return;
+  const only = ids.length === 1 ? lastResults.find(x => x.id === ids[0]) : null;
+  if (!(await deleteAsk(ids, only ? only.path : ''))) return;
   $('#selDeleteBtn').disabled = true;
   await deletePhotos(ids);
   renderResults(lastResults);
@@ -1658,7 +1743,7 @@ async function deleteCurrentInLightbox() {
   if (lbIndex < 0) return;
   const r = lastResults[lbIndex];
   if (!r) return;
-  if (!confirm('Move this photo to the Recycle Bin?\n\n' + (r.path || ''))) return;
+  if (!(await deleteAsk([r.id], r.path))) return;
   const idx = lbIndex;
   const res = await deletePhotos([r.id]);
   if (!res || !res.deleted) return;
@@ -1686,7 +1771,7 @@ $('#lbClose').addEventListener('click', () => $('#lightbox').close());
 $('#lbPrev').addEventListener('click', e => { e.stopPropagation(); navLightbox(-1); });
 $('#lbNext').addEventListener('click', e => { e.stopPropagation(); navLightbox(1); });
 document.addEventListener('keydown', e => {
-  if (!$('#lightbox').open) return;
+  if (!$('#lightbox').open || $('#shareDlg').open) return;
   // If the user is typing in an input/textarea (e.g. the editor), don't hijack keys.
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
@@ -1705,6 +1790,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'r') { e.preventDefault(); lbRotate('cw'); }
   else if (e.key === 'R') { e.preventDefault(); lbRotate('ccw'); }
   else if (e.key === 'Delete') { e.preventDefault(); deleteCurrentInLightbox(); }
+  else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); lbShare(); }
 });
 
 // ==== Enhance: the preview is drawn here, the full-size photo is saved by lib/Enhance.php ====
@@ -2019,12 +2105,13 @@ async function doSearch(append = false) {
   const sort = view.group === 'folder' ? 'folder' : view.sort;
   const offset = append ? lastResults.length : 0;
   try {
-    const data = await api('search', { qs: 'q=' + encodeURIComponent(q) + '&sort=' + sort + '&limit=' + PAGE + '&offset=' + offset });
+    const data = await api('search', { qs: 'q=' + encodeURIComponent(q) + '&sort=' + sort + '&days=' + view.days + '&limit=' + PAGE + '&offset=' + offset });
     view.more = !!data.more;
     renderResults(append ? lastResults.concat(data.results) : data.results);
     if (!append) window.scrollTo(0, 0);
     $('#moreWrap').style.display = view.more ? '' : 'none';
-    $('#viewCount').textContent = lastResults.length ? lastResults.length + (view.more ? '+' : '') + (q ? ' matches' : ' photos') : '';
+    $('#viewCount').textContent = lastResults.length ? lastResults.length + (view.more ? '+' : '') + (q ? ' matches' : ' photos')
+      + (view.days ? ' updated in the last ' + (view.days === 1 ? 'day' : view.days + ' days') : '') : '';
   } catch (e) {
     toast(e.message, 'err');
   } finally {
@@ -2037,7 +2124,16 @@ new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && view.more
   .observe($('#moreWrap'));
 $('#sortSel').value = view.sort;
 $('#groupSel').value = view.group;
-$('#sortSel').addEventListener('change', () => { view.sort = $('#sortSel').value; localStorage.setItem('pf.sort', view.sort); doSearch(); });
+$('#sortSel').addEventListener('change', () => { view.sort = $('#sortSel').value; view.autoSort = null; localStorage.setItem('pf.sort', view.sort); doSearch(); });
+// Show: recently updated photos. Turning it on orders them by the change, newest first (unless the
+// order was chosen by hand meanwhile, turning it off goes back to the order before).
+$('#recentSel').addEventListener('change', () => {
+  view.days = +$('#recentSel').value || 0;
+  if (view.days && view.sort !== 'updated') { view.autoSort = view.sort; view.sort = 'updated'; }
+  else if (!view.days && view.autoSort) { view.sort = view.autoSort; view.autoSort = null; }
+  $('#sortSel').value = view.sort;
+  doSearch();
+});
 $('#groupSel').addEventListener('change', () => { view.group = $('#groupSel').value; localStorage.setItem('pf.group', view.group); doSearch(); });
 $('#searchBtn').addEventListener('click', () => doSearch());
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -4691,6 +4787,159 @@ $('#bAll').addEventListener('change', () => {
 });
 $('#cuFixSelBtn').addEventListener('click', () => bOpen('cu'));
 $('#selFixBtn').addEventListener('click', () => bOpen('grid'));
+
+// ==== Share: Windows' share window, a download or the clipboard (lib/Share.php makes the copies) ====
+// The share window gets the files themselves (navigator.share), fetched as soon as the set is
+// ready: a share must start straight from the click, so there is no time to fetch them then.
+// Edge and Chrome hand Windows at most 10 files and 50 MB at once (Chromium's share service).
+const SH_MAX_FILES = 10, SH_MAX_BYTES = 50 * 1024 * 1024;
+const sh = { ids: [], set: null, files: null, seq: 0, madeAt: 0 };
+function shOpen(ids, rows) {
+  if (!ids.length) return;
+  sh.ids = ids;
+  sh.set = null;
+  sh.files = null;
+  const n = ids.length;
+  $('#shTitle').textContent = n === 1 ? 'Share this photo' : `Share ${n.toLocaleString()} photos`;
+  const th = $('#shThumbs');
+  th.innerHTML = '';
+  rows.slice(0, 12).forEach(r => {
+    const img = document.createElement('img');
+    img.src = 'thumb.php?id=' + encodeURIComponent(r.id) + (r.v ? '&v=' + r.v : '');
+    img.alt = '';
+    img.title = cuBase(r.path);
+    th.appendChild(img);
+  });
+  if (n > 12) th.insertAdjacentHTML('beforeend', `<span>and ${(n - 12).toLocaleString()} more</span>`);
+  $('#shSize').value = localStorage.getItem('pf.shareSize') === 'small' ? 'small' : 'full';
+  $('#shLoc').checked = localStorage.getItem('pf.shareLoc') === '1';
+  $('#shCopy').hidden = n !== 1 || !window.ClipboardItem;
+  $('#shDownload').textContent = n === 1 ? 'Download' : 'Download (.zip)';
+  $('#shareDlg').showModal();
+  shPrepare();
+}
+function shButtons(ready) {
+  const k = ready && sh.set ? sh.set.files.length : 0;
+  $('#shShare').disabled = !(ready && sh.files);
+  $('#shDownload').disabled = !k;
+  $('#shCopy').disabled = k !== 1;
+}
+const shUrl = (n, dl) => `api.php?action=share_file&token=${sh.set.token}&n=${n}${dl ? '&download=1' : ''}`;
+async function shPrepare() {
+  const seq = ++sh.seq;
+  sh.set = null;
+  sh.files = null;
+  shButtons(false);
+  $('#shStatus').textContent = '';
+  const small = $('#shSize').value === 'small', loc = $('#shLoc').checked;
+  const n = sh.ids.length;
+  $('#shInfo').textContent = 'Getting ' + (n === 1 ? 'the photo' : n.toLocaleString() + ' photos') + ' ready' + (small ? ' (making smaller copies)' : '') + '…';
+  try {
+    const set = await api('share_prepare', { body: { ids: sh.ids, small, location: loc } });
+    if (seq !== sh.seq) return;
+    sh.set = set;
+    sh.madeAt = Date.now();
+    const k = set.files.length;
+    let info = k ? `${k.toLocaleString()} ${k === 1 ? 'photo' : 'photos'}, ${csBytes(set.bytes)}` : '';
+    if (small && k) {
+      const kept = set.files.filter(f => !f.smaller).length;
+      if (kept) info += ` (${kept === k ? (k === 1 ? 'it goes' : 'all go') : kept.toLocaleString() + (kept === 1 ? ' goes' : ' go')} full size: already ${set.small_side.toLocaleString()} pixels or less, or a TIFF or GIF)`;
+    }
+    if (!loc && k) info += '. Location taken out.';
+    if (set.skipped.length) {
+      $('#shStatus').textContent = 'Left out: ' + set.skipped.map(s => `${s.name} (${s.reason})`).join('; ');
+    }
+    if (!k) { $('#shInfo').textContent = ''; shButtons(true); return; }
+    const canFiles = !!(navigator.canShare && window.File);
+    let why = '';
+    if (!canFiles) why = 'This browser cannot open Windows\' share window; use Download or Copy.';
+    else if (k > SH_MAX_FILES) why = `Windows' share window takes up to ${SH_MAX_FILES} photos at a time: select fewer, or use Download for all ${k.toLocaleString()}.`;
+    else if (set.bytes > SH_MAX_BYTES) why = 'Windows\' share window takes up to 50 MB at a time: choose Smaller copies, or use Download.';
+    else {
+      $('#shInfo').textContent = info + ' Loading…';
+      const files = await Promise.all(set.files.map(async f => {
+        const r = await fetch(shUrl(f.n));
+        if (!r.ok) throw new Error('Could not load ' + f.name + ' (HTTP ' + r.status + ')');
+        return new File([await r.blob()], f.name, { type: f.type });
+      }));
+      if (seq !== sh.seq) return;
+      if (navigator.canShare({ files })) sh.files = files;
+      else why = 'Windows\' share window does not take these files; use Download.';
+    }
+    $('#shInfo').textContent = info + (why ? ' ' + why : '');
+    shButtons(true);
+  } catch (e) {
+    if (seq !== sh.seq) return;
+    $('#shInfo').textContent = '';
+    $('#shStatus').textContent = e.message;
+    shButtons(!!sh.set);
+  }
+}
+// A set lasts an hour on the server; one that old is made again before a download.
+async function shFresh() {
+  if (sh.set && Date.now() - sh.madeAt < 45 * 60e3) return true;
+  await shPrepare();
+  return !!(sh.set && sh.set.files.length);
+}
+$('#shShare').addEventListener('click', async () => {
+  if (!sh.files) return;
+  try {
+    await navigator.share({ files: sh.files, title: sh.files.length === 1 ? sh.files[0].name : `${sh.files.length} photos` });
+    $('#shareDlg').close();
+    toast(sh.ids.length === 1 ? 'Photo shared.' : 'Photos shared.', 'ok');
+  } catch (e) {
+    if (e.name === 'AbortError') return;   // the share window was closed without choosing an app
+    $('#shStatus').textContent = 'Could not open Windows\' share window: ' + e.message + '. Use Download instead.';
+  }
+});
+$('#shDownload').addEventListener('click', async () => {
+  if (!(await shFresh())) return;
+  const many = sh.set.files.length > 1;
+  const a = document.createElement('a');
+  a.href = many ? `api.php?action=share_zip&token=${sh.set.token}` : shUrl(0, true);
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  $('#shInfo').textContent = many ? 'Making the .zip; it goes to your Downloads folder.' : 'Downloading to your Downloads folder.';
+});
+// The clipboard takes a picture as PNG only, so the photo is drawn and converted here. (A copied
+// picture carries no metadata, so no location either.)
+$('#shCopy').addEventListener('click', async () => {
+  if (!sh.set || sh.set.files.length !== 1) return;
+  $('#shStatus').textContent = '';
+  $('#shInfo').textContent = 'Copying…';
+  const png = (async () => {
+    const blob = sh.files ? sh.files[0] : await (await fetch(shUrl(0))).blob();
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement('canvas');
+    c.width = bmp.width;
+    c.height = bmp.height;
+    c.getContext('2d').drawImage(bmp, 0, 0);
+    bmp.close();
+    return new Promise((res, rej) => c.toBlob(b => (b ? res(b) : rej(new Error('the picture could not be converted'))), 'image/png'));
+  })();
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    $('#shInfo').textContent = 'Copied. Paste it (Ctrl+V) into an email, a document or a chat.';
+  } catch (e) {
+    $('#shInfo').textContent = '';
+    $('#shStatus').textContent = 'Could not copy: ' + e.message;
+  }
+});
+$('#shSize').addEventListener('change', () => { localStorage.setItem('pf.shareSize', $('#shSize').value); shPrepare(); });
+$('#shLoc').addEventListener('change', () => { localStorage.setItem('pf.shareLoc', $('#shLoc').checked ? '1' : '0'); shPrepare(); });
+$('#shClose').addEventListener('click', () => $('#shareDlg').close());
+$('#shareDlg').addEventListener('close', () => { sh.seq++; sh.files = null; sh.set = null; });
+function lbShare() {
+  if (lbIndex >= 0 && lastResults[lbIndex]) shOpen([lastResults[lbIndex].id], [lastResults[lbIndex]]);
+}
+$('#lbShareBtn').addEventListener('click', lbShare);
+$('#selShareBtn').addEventListener('click', () => {
+  const ids = [...selectedIds];
+  const rows = new Map(lastResults.map(r => [r.id, r]));
+  shOpen(ids, ids.map(id => rows.get(id)).filter(Boolean));
+});
 $('#bCancel').addEventListener('click', () => $('#batchDlg').close());
 $('#batchDlg').addEventListener('keydown', e => e.stopPropagation());
 $('#bStart').addEventListener('click', async () => {

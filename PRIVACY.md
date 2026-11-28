@@ -59,6 +59,19 @@ versions (reduced to at most 1024 pixels on the long side, plus close-ups of the
 to Anthropic's Claude with your own Anthropic API key, the same service and key that describe your
 photos, to choose the best version. Batches otherwise run entirely on this PC.
 
+## Sharing
+
+**Share** sends nothing anywhere by itself. **Share…** hands the photos to Windows' share window,
+and they go only where you send them from there (an email, a nearby device, another app), under
+that app's terms. **Download** saves them to your Downloads folder; **Copy** puts the picture on
+the clipboard (a copied picture carries no metadata).
+
+Unless you tick **Include the location**, the photos are shared as copies without their GPS
+position and place names (city, country and similar fields). The rest of the photo's metadata,
+such as its date, description and camera, stays in the copy. Smaller copies are re-saved at
+2,048 pixels on the long side. The copies are made in `%LOCALAPPDATA%\Photo Finder\share` and
+deleted after an hour; your photos themselves are not changed.
+
 ## Update checks (GitHub)
 
 When it opens, Photo Finder can ask GitHub
@@ -86,7 +99,8 @@ descriptions and tags into the files; **Enhance** saves a copy (or, if you choos
 original, which is kept next to it as "name (original).jpg"); **Fix blur** and **Enlarge** save each
 version as a copy and, if you choose, replace the original the same way; **Rotate** changes only the photo's orientation tag; **Find photos on this
 PC** moves the photos you tick into your photo folder; deleting photos, including from **Clean
-up**, moves them to the Recycle Bin.
+up**, moves them to the Recycle Bin (from the gallery and the photo view, together with the
+photo's saved versions and kept original, which the gallery does not show).
 
 Uninstalling (Windows Settings > Apps) removes the program and asks whether to delete the
 index, thumbnails and settings as well.

@@ -344,8 +344,10 @@ try {
             $q = (string)($_GET['q'] ?? '');
             $limit = max(1, min(500, (int)($_GET['limit'] ?? 120)));
             $offset = max(0, (int)($_GET['offset'] ?? 0));
-            $sort = in_array($_GET['sort'] ?? '', ['new', 'old', 'folder', 'relevance'], true) ? $_GET['sort'] : 'new';
-            $rows = Db::search($q, $limit + 1, $offset, $sort);   // one extra row says whether there is more
+            $sort = in_array($_GET['sort'] ?? '', ['new', 'old', 'folder', 'relevance', 'updated'], true) ? $_GET['sort'] : 'new';
+            // Recently updated: only the last N days (1, 7 or 30); 0 = every photo.
+            $days = max(0, min(366, (int)($_GET['days'] ?? 0)));
+            $rows = Db::search($q, $limit + 1, $offset, $sort, $days > 0 ? time() - $days * 86400 : 0);   // one extra row says whether there is more
             $more = count($rows) > $limit;
             if ($more) array_pop($rows);
             pf_json(['query' => $q, 'count' => count($rows), 'offset' => $offset, 'more' => $more, 'results' => $rows]);
@@ -410,6 +412,15 @@ try {
             }
             $ids = array_keys($ids);
             if (!$ids) pf_json(['error' => 'no valid ids'], 400);
+            // From the gallery: a photo goes with its saved versions and kept originals, which the
+            // gallery does not show (Db::versionsOf). Clean up deletes exactly the files it lists.
+            $versionIds = [];
+            if (!empty($in['with_versions'])) {
+                foreach ($ids as $id) {
+                    foreach (Db::versionsOf($id) as $v) $versionIds[$v['id']] = true;
+                }
+                foreach (array_keys($versionIds) as $vid) if (!in_array($vid, $ids, true)) $ids[] = $vid;
+            }
 
             $settings = pf_load_settings();
             $roots = $settings['photo_dirs'] ?? [];
@@ -445,13 +456,32 @@ try {
             }
             if ($removeIds) Db::deleteImages($removeIds);
 
+            $versionsGone = count(array_filter($removeIds, static fn($id) => isset($versionIds[$id])));
             pf_json([
                 'ok' => true,
-                'deleted' => count($removeIds),
+                'deleted' => count($removeIds) - $versionsGone,
+                'versions_deleted' => $versionsGone,
                 'deleted_ids' => array_values($removeIds),
                 'failed' => $failed,
                 'stats' => Db::stats(),
             ]);
+        }
+        case 'delete_preview': {
+            // What a gallery Delete of these photos takes with them, for its question.
+            $in = pf_input_json();
+            $names = [];
+            $n = 0;
+            $originals = 0;   // of them, kept originals ("<name> (original).jpg")
+            foreach (array_slice(is_array($in['ids'] ?? null) ? $in['ids'] : [], 0, 5000) as $raw) {
+                $id = preg_replace('/[^a-f0-9]/i', '', (string)$raw);
+                if ($id === '') continue;
+                foreach (Db::versionsOf($id) as $v) {
+                    $n++;
+                    if (preg_match('/ \(original(?: \d+)?\)(\.[^.\/]*)?$/i', $v['path'])) $originals++;
+                    if (count($names) < 8) $names[] = basename($v['path']);
+                }
+            }
+            pf_json(['versions' => $n, 'originals' => $originals, 'names' => $names]);
         }
         case 'photo_details': {
             // The photo view's details: size, DPI, file, camera and exposure, read from the file.
@@ -588,6 +618,32 @@ try {
                 pf_json(['error' => 'outside configured photo folders'], 403);
             }
             pf_json(['ok' => true, 'image' => Rotate::rotate($row, ($in['dir'] ?? '') === 'ccw' ? 'ccw' : 'cw')]);
+        }
+
+        // ---- Share (lib/Share.php): photos ready for Windows' share window, a download or a copy ----
+        case 'share_prepare': {
+            require_once __DIR__ . '/lib/Share.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            set_time_limit(0);
+            ini_set('memory_limit', '1536M');   // a 50 MP photo is 200 MB per GD image
+            $in = pf_input_json();
+            pf_json(Share::prepare(is_array($in['ids'] ?? null) ? $in['ids'] : [], !empty($in['small']), !empty($in['location'])));
+        }
+        case 'share_file': {
+            require_once __DIR__ . '/lib/Share.php';
+            $f = Share::file((string)($_GET['token'] ?? ''), (int)($_GET['n'] ?? -1));
+            if (!$f) pf_json(['error' => 'This share has expired. Close Share and open it again.'], 410);
+            Share::send((string)$f['path'], (string)$f['name'], (string)$f['type'], !empty($_GET['download']));
+            exit;
+        }
+        case 'share_zip': {
+            require_once __DIR__ . '/lib/Share.php';
+            set_time_limit(0);
+            $token = (string)($_GET['token'] ?? '');
+            $zip = Share::zip($token);
+            Share::send($zip, 'Photos (' . Share::count($token) . ').zip', 'application/zip', true);
+            @unlink($zip);
+            exit;
         }
 
         // ---- Queue and batch (lib/Deblur.php): what Fix blur / Enlarge is doing; many photos at once ----

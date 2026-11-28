@@ -28,6 +28,15 @@ you can search instantly.
   shown beside it; you can then put the best one in the original's place.
 - **Enhance and rotate.** Colour, brightness and sharpness fixes from the photo view, and
   lossless quarter turns (R / Shift+R).
+- **Share.** From the photo view (S) or a selection in the gallery: Windows' share window (email,
+  nearby devices, Phone Link and other apps), Copy, or Download (several photos as a .zip). Full
+  size or smaller copies for email; the location is taken out unless you include it.
+- **Recently updated.** Show only the photos added, described, edited, rotated or fixed in the
+  last day, 7 days or 30 days, newest change first.
+- **One picture, one place.** The gallery shows each photo once: the versions Fix blur, Enlarge
+  and batches save, and the originals kept when you replace one, stay out of it (Clean up's
+  "Versions & originals" lists them). Deleting a photo from the gallery takes them with it, to the
+  Recycle Bin.
 - **Find photos on this PC.** Searches your user folders for pictures outside your photo
   folders and offers to move them in, with undo.
 - **Self-contained.** One installer with its own web server (Apache), PHP, SQLite and ExifTool;

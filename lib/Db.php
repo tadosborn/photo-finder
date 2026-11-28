@@ -110,6 +110,16 @@ final class Db {
         if (!in_array('folder_year', $colNames, true)) {
             $pdo->exec('ALTER TABLE images ADD COLUMN folder_year TEXT');
         }
+        // When Photo Finder last changed the photo or what it knows about it: indexed or described
+        // again, its description edited, rotated, or replaced by a fix (Db::touchUpdated). The
+        // gallery's "Recently updated" filter and order use it. Embedding metadata does not count
+        // (it rewrites every photo with what the index already shows). Photos indexed before this
+        // column existed start from their index time.
+        if (!in_array('updated_at', $colNames, true)) {
+            $pdo->exec('ALTER TABLE images ADD COLUMN updated_at INTEGER');
+            $pdo->exec("UPDATE images SET updated_at = indexed_at WHERE status = 'ok'");
+        }
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_images_updated_at ON images(updated_at)');
         $todo = $pdo->query('SELECT id, path FROM images WHERE folder_year IS NULL')->fetchAll(PDO::FETCH_ASSOC);
         if ($todo) {
             $pdo->beginTransaction();
@@ -251,7 +261,7 @@ final class Db {
                 : null;
             $u = $pdo->prepare(
                 'UPDATE images SET description = :d, tags = :t, text_in_image = :tx, faces = COALESCE(:f, faces),
-                 width = :w, height = :h, indexed_at = :ia, status = \'ok\', error = NULL, redescribe = 0,
+                 width = :w, height = :h, indexed_at = :ia, updated_at = :ia, status = \'ok\', error = NULL, redescribe = 0,
                  described_by = COALESCE(:by, described_by)
                  WHERE id = :id'
             );
@@ -292,8 +302,8 @@ final class Db {
         $pdo = self::get();
         $pdo->beginTransaction();
         try {
-            $sets = ['description_manual = 1'];
-            $params = [':id' => $id];
+            $sets = ['description_manual = 1', 'updated_at = :now'];
+            $params = [':id' => $id, ':now' => time()];
             if ($description !== null) { $sets[] = 'description = :d';  $params[':d']  = $description; }
             if ($tags        !== null) { $sets[] = 'tags = :t';         $params[':t']  = $tags; }
             if ($faces       !== null) { $sets[] = 'faces = :f';        $params[':f']  = $faces; }
@@ -568,20 +578,62 @@ final class Db {
         }
     }
 
+    /**
+     * The saved versions and kept originals of gallery photo $id: hidden rows (gallery_hidden)
+     * named "<its name> (...)" with any extension, nested ones too ("x (original) (deblurred).jpg"),
+     * that belong to no other photo in the gallery ("x (2).jpg" is a photo of its own, and
+     * "x (2) (deblurred).jpg" is its version, not x.jpg's). Returns rows of [id, path].
+     */
+    public static function versionsOf(string $id): array {
+        $row = self::getById($id);
+        if (!$row || (int)($row['gallery_hidden'] ?? 0) === 1) return [];
+        $pdo = self::get();
+        $stem = (string)preg_replace('/\.[^.\/]*$/', '', (string)$row['path']);
+        $like = static fn(string $s): string => str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $s);
+        $cand = $pdo->prepare("SELECT id, path FROM images WHERE gallery_hidden = 1 AND id <> :id AND path LIKE :p ESCAPE '\\'");
+        $cand->execute([':id' => $id, ':p' => $like($stem) . ' (%']);
+        $rows = $cand->fetchAll(PDO::FETCH_ASSOC);
+        $visible = $pdo->prepare("SELECT 1 FROM images WHERE gallery_hidden = 0 AND path LIKE :p ESCAPE '\\' LIMIT 1");
+        $out = [];
+        foreach ($rows as $c) {
+            $t = (string)$c['path'];
+            while (true) {
+                $u = preg_replace('/ \([^()]*\)(\.[^.\/]*)?$/', '', $t);   // take off the last " (...)"
+                if (!is_string($u) || $u === $t) break;
+                $t = $u;
+                if (strcasecmp($t, $stem) === 0) { $out[] = ['id' => (string)$c['id'], 'path' => (string)$c['path']]; break; }
+                $visible->execute([':p' => $like($t) . '.%']);
+                $other = $visible->fetchColumn();
+                $visible->closeCursor();
+                if ($other) break;
+            }
+        }
+        return $out;
+    }
+
+    /** Mark photo $id as changed now (rotated, replaced by a fix): it leads "Recently updated". */
+    public static function touchUpdated(string $id): void {
+        self::get()->prepare('UPDATE images SET updated_at = :t WHERE id = :id')->execute([':t' => time(), ':id' => $id]);
+    }
+
     public static function setGalleryHidden(string $id, bool $hidden = true): void {
         self::get()->prepare('UPDATE images SET gallery_hidden = :h WHERE id = :id')->execute([':h' => $hidden ? 1 : 0, ':id' => $id]);
     }
 
-    public static function search(string $query, int $limit = 100, int $offset = 0, string $sort = 'new'): array {
+    /** $since > 0: only photos updated (updated_at) at or after that Unix time. */
+    public static function search(string $query, int $limit = 100, int $offset = 0, string $sort = 'new', int $since = 0): array {
         $query = trim($query);
         $date = "COALESCE(NULLIF(i.taken_at, ''), NULLIF(i.folder_year, ''))";
-        $cols = "i.id, i.path, i.description, i.tags, i.faces, i.width, i.height, i.lat, i.lon, i.taken_at, {$date} AS sort_date";
+        $cols = "i.id, i.path, i.description, i.tags, i.faces, i.width, i.height, i.lat, i.lon, i.taken_at, i.updated_at, {$date} AS sort_date";
         $order = match ($sort) {
             'old'       => "({$date} IS NULL), {$date} ASC, i.path",
             'folder'    => 'i.path',
+            'updated'   => '(i.updated_at IS NULL), i.updated_at DESC, i.path',
             'relevance' => $query !== '' ? 'bm25(images_fts)' : "({$date} IS NULL), {$date} DESC, i.path",
             default     => "({$date} IS NULL), {$date} DESC, i.path",
         };
+        // Inlined as an int: PDO binds as TEXT, and an INTEGER column compares less than any TEXT.
+        $recent = $since > 0 ? ' AND i.updated_at >= ' . $since : '';
         $page = function (PDOStatement $stmt) use ($limit, $offset): array {
             $stmt->bindValue(':n', $limit, PDO::PARAM_INT);
             $stmt->bindValue(':o', $offset, PDO::PARAM_INT);
@@ -589,13 +641,13 @@ final class Db {
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         };
         if ($query === '') {
-            return $page(self::get()->prepare("SELECT {$cols} FROM images i WHERE i.status = 'ok' AND i.gallery_hidden = 0 ORDER BY {$order} LIMIT :n OFFSET :o"));
+            return $page(self::get()->prepare("SELECT {$cols} FROM images i WHERE i.status = 'ok' AND i.gallery_hidden = 0{$recent} ORDER BY {$order} LIMIT :n OFFSET :o"));
         }
         try {
             $stmt = self::get()->prepare(
                 "SELECT {$cols}, snippet(images_fts, 1, '<mark>', '</mark>', '...', 12) AS snip
                  FROM images_fts JOIN images i ON i.id = images_fts.id
-                 WHERE images_fts MATCH :q AND i.status = 'ok' AND i.gallery_hidden = 0
+                 WHERE images_fts MATCH :q AND i.status = 'ok' AND i.gallery_hidden = 0{$recent}
                  ORDER BY {$order} LIMIT :n OFFSET :o"
             );
             $stmt->bindValue(':q', self::buildFtsQuery($query));
@@ -604,7 +656,7 @@ final class Db {
             $order = str_replace('bm25(images_fts)', "({$date} IS NULL), {$date} DESC, i.path", $order);
             $stmt = self::get()->prepare(
                 "SELECT {$cols} FROM images i
-                 WHERE i.status = 'ok' AND i.gallery_hidden = 0 AND (i.description LIKE :q OR i.tags LIKE :q OR i.text_in_image LIKE :q OR i.faces LIKE :q)
+                 WHERE i.status = 'ok' AND i.gallery_hidden = 0{$recent} AND (i.description LIKE :q OR i.tags LIKE :q OR i.text_in_image LIKE :q OR i.faces LIKE :q)
                  ORDER BY {$order} LIMIT :n OFFSET :o"
             );
             $stmt->bindValue(':q', '%' . $query . '%');

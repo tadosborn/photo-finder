@@ -686,6 +686,7 @@ final class Enhance {
             $id = (string)$row['id'];
             clearstatcache(true, $path);
             Db::upsertPending($id, $path, (int)filesize($path), (int)filemtime($path));
+            Db::touchUpdated($id);
             $dest = $path;
         } else {
             $dest = self::copyPath($path);

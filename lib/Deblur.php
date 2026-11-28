@@ -664,6 +664,7 @@ final class Deblur {
             $dest = $path;
             clearstatcache(true, $path);
             Db::upsertPending($newId, $path, (int)filesize($path), (int)filemtime($path));
+            Db::touchUpdated($newId);
             @unlink(PF_THUMBS . '/' . $newId . '.jpg');
         } else {
             $dest = self::copyPath($path, $kind, isset($job['suffix']) ? (string)$job['suffix'] : null);
