@@ -31,14 +31,14 @@ final class OpenAICompat implements PhotoDescriber {
         return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
     }
 
-    public function analyzeImage(string $jpegBytes): array {
+    public function analyzeImage(string $jpegBytes, array $people = []): array {
         $payload = [
             'model' => $this->model,
             'max_tokens' => 1000,
             'messages' => [
                 ['role' => 'system', 'content' => Describer::PROMPT],
                 ['role' => 'user', 'content' => [
-                    ['type' => 'text', 'text' => Describer::USER_TEXT],
+                    ['type' => 'text', 'text' => Describer::userText($people)],
                     ['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,' . base64_encode($jpegBytes)]],
                 ]],
             ],

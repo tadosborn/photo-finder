@@ -6,6 +6,7 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/Exif.php';
 require_once __DIR__ . '/Exporter.php';
 require_once __DIR__ . '/Thumb.php';
+require_once __DIR__ . '/People.php';
 
 /**
  * Rotate a photo a quarter turn, losslessly: only the EXIF Orientation tag changes (ExifTool),
@@ -58,6 +59,7 @@ final class Rotate {
         Db::upsertPending($id, $path, (int)filesize($path), (int)filemtime($path));
         // Clean up measures thumbnails; this one changes, so measure it again.
         Db::get()->prepare('UPDATE images SET analyzed_at = NULL, updated_at = :t WHERE id = :id')->execute([':t' => time(), ':id' => $id]);
+        People::rotated($id, $dir === 'ccw' ? 'ccw' : 'cw');   // its faces turn with it
         @unlink(PF_THUMBS . '/' . $id . '.jpg');
         Thumb::ensureThumb($id, $path);
 

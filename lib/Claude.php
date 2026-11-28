@@ -35,7 +35,7 @@ final class Claude implements PhotoDescriber {
 
     public function label(): string { return 'anthropic:' . $this->model; }
 
-    public function analyzeImage(string $jpegBytes): array {
+    public function analyzeImage(string $jpegBytes, array $people = []): array {
         $payload = [
             'model' => $this->model,
             'max_tokens' => 4000,
@@ -50,7 +50,7 @@ final class Claude implements PhotoDescriber {
                     ['type' => 'image', 'source' => [
                         'type' => 'base64', 'media_type' => 'image/jpeg', 'data' => base64_encode($jpegBytes),
                     ]],
-                    ['type' => 'text', 'text' => Describer::USER_TEXT],
+                    ['type' => 'text', 'text' => Describer::userText($people)],
                 ],
             ]],
         ];

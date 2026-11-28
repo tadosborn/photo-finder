@@ -620,6 +620,99 @@ try {
             pf_json(['ok' => true, 'image' => Rotate::rotate($row, ($in['dir'] ?? '') === 'ccw' ? 'ccw' : 'cw')]);
         }
 
+        // ---- People (lib/People.php): faces found on this PC, and the people the user names ----
+        case 'people_status':
+        case 'people_setup':
+        case 'people_scan':
+        case 'people_scan_cancel':
+        case 'people_list':
+        case 'people_groups':
+        case 'people_person':
+        case 'people_photo':
+        case 'people_photos':
+        case 'people_who':
+        case 'people_face':
+        case 'people_assign':
+        case 'people_unassign':
+        case 'people_reject':
+        case 'people_ignore':
+        case 'people_rename':
+        case 'people_merge':
+        case 'people_delete':
+        case 'people_forget': {
+            require_once __DIR__ . '/lib/People.php';
+            $isPost = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
+            $in = $isPost ? pf_input_json() : $_GET;
+            $reads = ['people_status', 'people_list', 'people_groups', 'people_person', 'people_photo', 'people_who', 'people_face', 'people_photos'];
+            if (!in_array($action, $reads, true) && !$isPost) pf_json(['error' => 'POST required'], 405);
+            set_time_limit(180);
+            $faces = is_array($in['faces'] ?? null) ? $in['faces'] : [];
+            switch ($action) {
+                case 'people_status':
+                    pf_json(People::status());
+                case 'people_setup':
+                    Deblur::startSetup('faces');
+                    pf_json(People::status());
+                case 'people_scan':
+                    People::scanStart();
+                    pf_json(People::status());
+                case 'people_scan_cancel':
+                    People::scanCancel();
+                    pf_json(['ok' => true]);
+                case 'people_list':
+                    pf_json(['people' => People::people()]);
+                case 'people_groups':
+                    pf_json(People::groups());
+                case 'people_person':
+                    pf_json(People::person((int)($in['id'] ?? 0), max(0, (int)($in['page'] ?? 0))));
+                case 'people_photo':
+                    pf_json(People::photoFaces(preg_replace('/[^a-f0-9]/i', '', (string)($in['id'] ?? ''))));
+                case 'people_photos': {
+                    // The photos faces are in, as the gallery lists them (the photo view opens them).
+                    $rows = [];
+                    foreach (array_slice(is_array($in['ids'] ?? null) ? $in['ids'] : explode(',', (string)($in['ids'] ?? '')), 0, 2000) as $raw) {
+                        $r = Db::getById(preg_replace('/[^a-f0-9]/i', '', (string)$raw));
+                        if (!$r || ($r['status'] ?? '') !== 'ok') continue;
+                        $rows[] = array_intersect_key($r, array_flip(['id', 'path', 'description', 'tags', 'faces', 'width', 'height', 'lat', 'lon', 'taken_at', 'updated_at']))
+                            + ['sort_date' => ($r['taken_at'] ?? '') !== '' ? $r['taken_at'] : (($r['folder_year'] ?? '') !== '' ? $r['folder_year'] : null)];
+                    }
+                    pf_json(['results' => $rows]);
+                }
+                case 'people_who':
+                    pf_json(['who' => People::who((int)($in['face'] ?? 0))]);
+                case 'people_face': {
+                    $p = People::thumbPath((int)($in['id'] ?? 0));
+                    if ($p === null) { http_response_code(404); exit; }
+                    header('Content-Type: image/jpeg');
+                    header('Content-Length: ' . filesize($p));
+                    header('Cache-Control: private, max-age=86400');
+                    readfile($p);
+                    exit;
+                }
+                case 'people_assign':
+                    pf_json(['person' => People::assign($faces, isset($in['person']) ? (int)$in['person'] : null, isset($in['name']) ? (string)$in['name'] : null)]);
+                case 'people_unassign':
+                    People::unassign($faces);
+                    pf_json(['ok' => true]);
+                case 'people_reject':
+                    People::reject($faces, (int)($in['person'] ?? 0));
+                    pf_json(['ok' => true]);
+                case 'people_ignore':
+                    People::ignore($faces, ($in['ignored'] ?? true) !== false);
+                    pf_json(['ok' => true]);
+                case 'people_rename':
+                    pf_json(['person' => People::rename((int)($in['person'] ?? 0), (string)($in['name'] ?? ''))]);
+                case 'people_merge':
+                    pf_json(['person' => People::merge((int)($in['from'] ?? 0), (int)($in['into'] ?? 0))]);
+                case 'people_delete':
+                    People::deletePerson((int)($in['person'] ?? 0));
+                    pf_json(['ok' => true]);
+                case 'people_forget':
+                    People::forget();
+                    pf_json(People::status());
+            }
+        }
+
         // ---- Share (lib/Share.php): photos ready for Windows' share window, a download or a copy ----
         case 'share_prepare': {
             require_once __DIR__ . '/lib/Share.php';

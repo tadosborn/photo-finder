@@ -34,5 +34,9 @@ folder (normally `C:\Program Files\Photo Finder`).
 - **Enlarge's on-PC model.** Downloaded only when Enlarge is first used (into the same folder),
   checked against a SHA-256 pinned in `lib\Deblur.php`: Real-ESRGAN General x4v3 (Xintao Wang and
   contributors, BSD 3-Clause), as exported to ONNX by Qualcomm AI Hub Models (BSD 3-Clause).
+- **People's on-PC face models.** Downloaded only when People is first set up (into the same
+  folder, with the runtime above if it is not there yet), checked against SHA-256s pinned in
+  `lib\Deblur.php`, from OpenCV's model zoo on Hugging Face: YuNet face detection (Shiqi Yu,
+  MIT) and SFace face recognition (Yaoyao Zhong; ONNX conversion by Chengrui Wang; Apache 2.0).
 - **Google Gemini** (the optional cloud AI of Fix blur and Enlarge) is used through the user's own
   Google API key, under Google's terms.

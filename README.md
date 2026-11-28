@@ -31,6 +31,13 @@ you can search instantly.
 - **Share.** From the photo view (S) or a selection in the gallery: Windows' share window (email,
   nearby devices, Phone Link and other apps), Copy, or Download (several photos as a .zip). Full
   size or smaller copies for email; the location is taken out unless you include it.
+- **People.** Finds the faces in your photos and recognises the people you name, on your PC only
+  (open models, about 38 MB, downloaded once). Names already in your photos' metadata (digiKam,
+  Lightroom, Picasa, Windows Photo Gallery) teach it from the start. "Who is this?" groups faces
+  that look like one person. Each person's page suggests more of their photos for you to confirm.
+  Confirmed names are searchable, and the describing AI uses them ("Tad and Jane at the beach").
+  Embed metadata writes them into the files with each face's position. In the photo view, F
+  shows a box around each face to name it.
 - **Recently updated.** Show only the photos added, described, edited, rotated or fixed in the
   last day, 7 days or 30 days, newest change first.
 - **One picture, one place.** The gallery shows each photo once: the versions Fix blur, Enlarge

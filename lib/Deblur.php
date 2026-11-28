@@ -64,6 +64,16 @@ final class Deblur {
          'url' => 'https://huggingface.co/opencv/deblurring_nafnet/resolve/main/deblurring_nafnet_2025may.onnx',
          'sha256' => '07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587'],
     ];
+    /** People (lib/People.php, faces.py): OpenCV model zoo's face detector (YuNet, MIT) and face
+     *  recogniser (SFace, Apache 2.0), installed beside the runtime in runtime/faces. */
+    public const FACES = [
+        ['name' => 'YuNet face detection model', 'kind' => 'face', 'file' => 'face_detection_yunet_2023mar.onnx', 'size' => 232589,
+         'url' => 'https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx',
+         'sha256' => '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4'],
+        ['name' => 'SFace face recognition model', 'kind' => 'face', 'file' => 'face_recognition_sface_2021dec.onnx', 'size' => 38696353,
+         'url' => 'https://huggingface.co/opencv/face_recognition_sface/resolve/main/face_recognition_sface_2021dec.onnx',
+         'sha256' => '0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79'],
+    ];
     /** The enlarging model (Qualcomm AI Hub's ONNX export of Real-ESRGAN General x4v3): a zip
      *  holding the .onnx and its weights (.data), which must stay side by side. */
     public const UPSCALE = ['name' => 'Real-ESRGAN enlarging model', 'kind' => 'upscale', 'file' => 'real_esrgan_general_x4v3-onnx-float.zip', 'size' => 4541448,
@@ -140,11 +150,22 @@ final class Deblur {
     /** Enlarge on this PC: the runtime and the enlarging model. */
     public static function isUpscaleReady(): bool { return self::isReady() && self::upscaleInstalled(); }
 
-    /** What a setup for 'deblur' (the runtime) or 'enlarge' (the runtime and the enlarging model)
-     *  still has to download. */
+    public static function facesDir(): string { return self::packDir() . '/faces'; }
+    private static function facesInstalled(): bool {
+        foreach (self::FACES as $m) {
+            if (!is_file(self::facesDir() . '/' . $m['file']) || filesize(self::facesDir() . '/' . $m['file']) !== $m['size']) return false;
+        }
+        return true;
+    }
+    /** People on this PC: the runtime and the two face models. */
+    public static function isFacesReady(): bool { return self::isReady() && self::facesInstalled(); }
+
+    /** What a setup for 'deblur' (the runtime), 'enlarge' (the runtime and the enlarging model) or
+     *  'faces' (the runtime and the face models) still has to download. */
     private static function setupItems(string $which): array {
         $items = self::isReady() ? [] : self::PACK;
         if ($which === 'enlarge' && !self::upscaleInstalled()) $items[] = self::UPSCALE;
+        if ($which === 'faces' && !self::facesInstalled()) array_push($items, ...self::FACES);
         return $items;
     }
 
@@ -163,7 +184,7 @@ final class Deblur {
 
     /** $which: 'deblur' (the runtime) or 'enlarge' (the runtime, if missing, and the enlarging model). */
     public static function startSetup(string $which = 'deblur'): void {
-        if (!in_array($which, ['deblur', 'enlarge'], true)) throw new InvalidArgumentException('Unknown setup.');
+        if (!in_array($which, ['deblur', 'enlarge', 'faces'], true)) throw new InvalidArgumentException('Unknown setup.');
         $bytes = self::setupBytes($which);
         if ($bytes === 0) return;
         $st = self::setupStatus();
@@ -230,6 +251,12 @@ final class Deblur {
                 self::unzip($dl . '/' . self::UPSCALE['file'], self::upscaleDir());
                 if (!is_file(self::upscaleModel())) throw new RuntimeException('The enlarging model did not unpack correctly.');
                 self::writeJson(self::upscaleDir() . '/ready.json', ['sha256' => self::UPSCALE['sha256'], 'installed' => time()]);
+            }
+            if (in_array('face', $kinds, true)) {
+                @mkdir(self::facesDir(), 0777, true);
+                foreach (self::FACES as $m) {
+                    if (!copy($dl . '/' . $m['file'], self::facesDir() . '/' . $m['file'])) throw new RuntimeException('Could not install the ' . $m['name'] . '.');
+                }
             }
             foreach ($items as $f) @unlink($dl . '/' . $f['file']);   // unpacked; the downloads are no longer needed
             $state['status'] = 'done';
@@ -665,6 +692,7 @@ final class Deblur {
             clearstatcache(true, $path);
             Db::upsertPending($newId, $path, (int)filesize($path), (int)filemtime($path));
             Db::touchUpdated($newId);
+            Db::rescanFaces($newId);
             @unlink(PF_THUMBS . '/' . $newId . '.jpg');
         } else {
             $dest = self::copyPath($path, $kind, isset($job['suffix']) ? (string)$job['suffix'] : null);
@@ -1218,7 +1246,7 @@ final class Deblur {
 
     // ---- Helpers ----
 
-    private static function writeJson(string $file, array $data): void {
+    public static function writeJson(string $file, array $data): void {
         $dir = dirname($file);
         if (!is_dir($dir)) @mkdir($dir, 0777, true);
         $tmp = $file . '.' . getmypid() . '.tmp';   // its own name: two writers never share one
@@ -1232,10 +1260,10 @@ final class Deblur {
         @unlink($tmp);
     }
 
-    private static function win(string $p): string { return str_replace('/', '\\', $p); }
+    public static function win(string $p): string { return str_replace('/', '\\', $p); }
 
     /** The installed copy's own php.exe; else (a source checkout) the PHP running this code. */
-    private static function phpExe(): string {
+    public static function phpExe(): string {
         foreach ([PF_ROOT . '/php/php.exe',
                   strtolower(basename(PHP_BINARY)) === 'php.exe' ? PHP_BINARY : '',
                   php_ini_loaded_file() ? dirname(php_ini_loaded_file()) . '/php.exe' : ''] as $c) {
@@ -1245,7 +1273,7 @@ final class Deblur {
     }
 
     /** Started through ShellExecute (pf-helper.ps1 "launch"), hidden, inheriting nothing. */
-    private static function launch(string $file, array $args): void {
+    public static function launch(string $file, array $args): void {
         [$exit, , $err] = pf_helper('launch', json_encode(['file' => $file, 'args' => $args, 'hidden' => true]));
         if ($exit !== 0) throw new RuntimeException('Could not start: ' . trim((string)$err));
     }

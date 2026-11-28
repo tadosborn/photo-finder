@@ -14,8 +14,10 @@ require_once __DIR__ . '/util.php';
  * The app ships no keys of its own: every backend uses what the user enters in Settings.
  */
 interface PhotoDescriber {
-    /** @return array{description:string,tags:string[],text_in_image:string} */
-    public function analyzeImage(string $jpegBytes): array;
+    /** $people: who is in the photo, left to right, as the user named them in People (null for a
+     *  face not named); [] when nobody is named. See Describer::userText().
+     *  @return array{description:string,tags:string[],text_in_image:string} */
+    public function analyzeImage(string $jpegBytes, array $people = []): array;
 
     /** Stored with each photo so a later switch of model can re-describe only what changed. */
     public function label(): string;
@@ -28,11 +30,21 @@ final class Describer {
         - "description": one or two sentences (max ~200 chars) factually describing the scene, subjects, setting, colors, mood, and notable details. Be specific and concrete.
         - "tags": array of 8-20 lowercase single-word or short-phrase keywords for search (objects, scene, colors, activity, time-of-day, season, weather, emotions, style). Include synonyms a person might search.
         - "text_in_image": any readable text visible in the image (signs, labels, screenshots, captions). Empty string if none.
-        Do not include people's identities, just descriptive labels (e.g. "man with beard", "two children", "elderly woman").
+        Never guess who someone is from how they look. Name a person only when the request names them (the photo's owner identified them); refer to everyone else with descriptive labels (e.g. "man with beard", "two children", "elderly woman").
         Return strictly valid JSON. No markdown fences. No prose outside the JSON.
         TXT;
 
     public const USER_TEXT = 'Catalog this image. Return JSON only.';
+
+    /** The request text: with the people the owner named in People (left to right; null = a face
+     *  not named), so the description says "Tad and Jane at the beach", not "a man and a woman". */
+    public static function userText(array $people = []): string {
+        if (!array_filter($people, static fn($n) => $n !== null && $n !== '')) return self::USER_TEXT;
+        $list = implode(', ', array_map(static fn($n) => $n === null || $n === '' ? '(someone not named)' : (string)$n, $people));
+        $who = count($people) === 1 ? "The person in this photo, as named by its owner: {$list}."
+                                    : "The people in this photo, as named by its owner, from left to right: {$list}.";
+        return self::USER_TEXT . ' ' . $who . ' Use their names for them in the description and add each name to the tags.';
+    }
 
     /** JSON Schema of the answer (used where the backend can enforce it). */
     public static function schema(): array {

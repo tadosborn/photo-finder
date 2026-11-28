@@ -29,7 +29,11 @@ final class Exporter {
 
     public function processBatch(array $items): array {
         if (!$items) return ['processed' => 0, 'errors' => 0, 'messages' => []];
+        require_once __DIR__ . '/People.php';
         $items = array_values($items);
+        // The people named in each (People): written as names and face regions.
+        foreach ($items as &$it) $it['people'] = People::embedData((string)$it['id'], (string)$it['path']);
+        unset($it);
 
         // One ExifTool run for the whole batch, one command per photo. -echo3/-echo4 print a
         // {pf:N} marker on stdout and stderr after photo N's command finishes, so the output
@@ -119,7 +123,29 @@ final class Exporter {
                 $a .= "-XMP-microsoft:LastKeywordXMP-={$tag}\n-XMP-microsoft:LastKeywordXMP+={$tag}\n";
             }
         }
+        $p = $item['people'] ?? null;
+        if (is_array($p) && $p['regions']) {
+            // Who is in it: IPTC's PersonInImage (the names) and MWG face regions (where each is,
+            // as Windows, digiKam and Lightroom read them; centre and size, 0..1 of the file's
+            // stored frame). The regions are written whole, so the list is exactly these people.
+            $a .= "-XMP-iptcExt:PersonInImage=\n";
+            foreach ($p['names'] as $n) $a .= '-XMP-iptcExt:PersonInImage+=' . $n . "\n";
+            $list = [];
+            foreach ($p['regions'] as $g) {
+                [$x, $y, $w, $h] = array_map(static fn($v) => max(0.0, min(1.0, (float)$v)), $g['box']);
+                $list[] = sprintf('{Area={X=%.5f,Y=%.5f,W=%.5f,H=%.5f,Unit=normalized},Name=%s,Type=Face}',
+                                  $x + $w / 2, $y + $h / 2, $w, $h, self::structValue((string)$g['name']));
+            }
+            $a .= sprintf("-XMP-mwg-rs:RegionInfo={AppliedToDimensions={W=%d,H=%d,Unit=pixel},RegionList=[%s]}\n",
+                          (int)$p['width'], (int)$p['height'], implode(',', $list));
+        }
         return $a . $item['path'] . "\n";
+    }
+
+    /** A value inside an ExifTool structure: , ] } | and a leading [ { or space are escaped with |. */
+    private static function structValue(string $v): string {
+        $v = preg_replace('/[,\]\}|]/', '|$0', trim(preg_replace('/[\r\n]+/', ' ', $v) ?? $v)) ?? $v;
+        return preg_match('/^[\[\{ ]/', $v) ? '|' . $v : $v;
     }
 
     /** Run ExifTool on an argfile body. Options go in -common_args so they apply to every

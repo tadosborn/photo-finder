@@ -138,6 +138,42 @@ final class Db {
             }
         }
         // ---- end Clean up ----
+        // ---- People (lib/People.php): faces found on this PC and the people the user names ----
+        // face: one per face found (box 0..1 of the upright photo, left to right by n; emb = SFace's
+        // 128 numbers). person_id = the person the user confirmed (or the photo's own named face
+        // region did, source 'metadata'); ignored = "not someone to name". face_reject: "not P".
+        // images.faces_meta = the names the photo's own metadata (or the editor) gives; faces (shown
+        // and searched) = those and the confirmed people, see refreshFaces().
+        $pdo->exec('CREATE TABLE IF NOT EXISTS person (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            created_at INTEGER NOT NULL)');
+        $pdo->exec('CREATE TABLE IF NOT EXISTS face (
+            id INTEGER PRIMARY KEY,
+            image_id TEXT NOT NULL,
+            n INTEGER NOT NULL,
+            x REAL NOT NULL, y REAL NOT NULL, w REAL NOT NULL, h REAL NOT NULL,
+            score REAL, px INTEGER,
+            emb BLOB,
+            thumb TEXT,
+            person_id INTEGER,
+            source TEXT,
+            ignored INTEGER NOT NULL DEFAULT 0,
+            confirmed_at INTEGER)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_face_image ON face(image_id)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_face_person ON face(person_id)');
+        $pdo->exec('CREATE TABLE IF NOT EXISTS face_reject (
+            face_id INTEGER NOT NULL,
+            person_id INTEGER NOT NULL,
+            PRIMARY KEY (face_id, person_id))');
+        foreach (['faces_scanned_at' => 'INTEGER', 'faces_meta' => 'TEXT', 'regions_extra' => 'TEXT'] as $col => $type) {
+            if (!in_array($col, $colNames, true)) {
+                $pdo->exec("ALTER TABLE images ADD COLUMN {$col} {$type}");
+                // Until now every name in faces came from the photo's metadata or the editor.
+                if ($col === 'faces_meta') $pdo->exec("UPDATE images SET faces_meta = faces WHERE COALESCE(faces, '') <> ''");
+            }
+        }
+        // ---- end People ----
         // taken_at already exists in initial schema (top of file) — just make sure
         // there's an index so future map/timeline views are fast.
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_images_taken_at ON images(taken_at)');
@@ -295,6 +331,40 @@ final class Db {
         }
     }
 
+    /** The names a photo's own metadata gives (scan): kept apart from the people confirmed in
+     *  Photo Finder, then both shown and searched (refreshFaces). */
+    public static function updateMetaFaces(string $id, array $names): void {
+        self::get()->prepare('UPDATE images SET faces_meta = :f WHERE id = :id')
+            ->execute([':f' => implode(', ', array_map('strval', $names)), ':id' => $id]);
+        self::refreshFaces($id);
+    }
+
+    /** faces (shown and searched) = the confirmed people, left to right, then any other name the
+     *  photo's metadata or the editor gives. */
+    public static function refreshFaces(string $id): void {
+        $st = self::get()->prepare('SELECT p.name FROM face f JOIN person p ON p.id = f.person_id WHERE f.image_id = :id ORDER BY f.x');
+        $st->execute([':id' => $id]);
+        $names = $st->fetchAll(PDO::FETCH_COLUMN);
+        $m = self::get()->prepare('SELECT COALESCE(faces_meta, \'\') FROM images WHERE id = :id');
+        $m->execute([':id' => $id]);
+        foreach (explode(',', (string)$m->fetchColumn()) as $n) $names[] = trim($n);
+        $out = [];
+        foreach ($names as $n) {
+            if ($n !== '' && !isset($out[mb_strtolower($n)])) $out[mb_strtolower($n)] = $n;
+        }
+        self::updateFaces($id, array_values($out));
+    }
+
+    /** Who is in photo $id, left to right, for the describing AI: names the user confirmed, null
+     *  for a face not named. [] when nobody in it is named. */
+    public static function peopleForPrompt(string $id): array {
+        $st = self::get()->prepare('SELECT p.name FROM face f LEFT JOIN person p ON p.id = f.person_id
+                                    WHERE f.image_id = :id AND f.ignored = 0 ORDER BY f.x');
+        $st->execute([':id' => $id]);
+        $names = array_map(static fn($n) => $n === null ? null : (string)$n, $st->fetchAll(PDO::FETCH_COLUMN));
+        return array_filter($names, static fn($n) => $n !== null) ? $names : [];
+    }
+
     /** User-edited metadata: description, tags, faces, text_in_image.
      *  Marks the row as manually edited so the worker won't overwrite on re-index.
      *  Pass null for any field to leave it unchanged. Pass empty string to clear. */
@@ -309,6 +379,22 @@ final class Db {
             if ($faces       !== null) { $sets[] = 'faces = :f';        $params[':f']  = $faces; }
             if ($textInImage !== null) { $sets[] = 'text_in_image = :x'; $params[':x'] = $textInImage; }
             $pdo->prepare('UPDATE images SET ' . implode(', ', $sets) . ' WHERE id = :id')->execute($params);
+            if ($faces !== null) {
+                // The editor's People line: a confirmed person whose name was taken out is no longer
+                // that face (and is not suggested for it again); the other names are kept as the
+                // photo's own (faces_meta).
+                $typed = [];
+                foreach (explode(',', $faces) as $n) if (trim($n) !== '') $typed[mb_strtolower(trim($n))] = trim($n);
+                $conf = $pdo->prepare('SELECT f.id, f.person_id, p.name FROM face f JOIN person p ON p.id = f.person_id WHERE f.image_id = :id');
+                $conf->execute([':id' => $id]);
+                foreach ($conf->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                    $key = mb_strtolower((string)$c['name']);
+                    if (isset($typed[$key])) { unset($typed[$key]); continue; }
+                    $pdo->prepare('UPDATE face SET person_id = NULL, source = NULL, confirmed_at = NULL WHERE id = :f')->execute([':f' => $c['id']]);
+                    $pdo->prepare('INSERT OR IGNORE INTO face_reject (face_id, person_id) VALUES (:f, :p)')->execute([':f' => $c['id'], ':p' => $c['person_id']]);
+                }
+                $pdo->prepare('UPDATE images SET faces_meta = :m WHERE id = :id')->execute([':m' => implode(', ', $typed), ':id' => $id]);
+            }
 
             $pathRow = $pdo->prepare('SELECT path FROM images WHERE id = :id');
             $pathRow->execute([':id' => $id]);
@@ -611,6 +697,12 @@ final class Db {
         return $out;
     }
 
+    /** Photo $id shows new pixels (replaced by a fix): People finds its faces again, keeping who
+     *  each one is by where it is (People::importPhoto). */
+    public static function rescanFaces(string $id): void {
+        self::get()->prepare('UPDATE images SET faces_scanned_at = NULL WHERE id = :id')->execute([':id' => $id]);
+    }
+
     /** Mark photo $id as changed now (rotated, replaced by a fix): it leads "Recently updated". */
     public static function touchUpdated(string $id): void {
         self::get()->prepare('UPDATE images SET updated_at = :t WHERE id = :id')->execute([':t' => time(), ':id' => $id]);
@@ -861,11 +953,21 @@ final class Db {
         try {
             $pdo->prepare('DELETE FROM images_fts WHERE id = :id')->execute([':id' => $id]);
             $pdo->prepare('DELETE FROM images WHERE id = :id')->execute([':id' => $id]);
+            self::deleteFacesOf($pdo, [$id]);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
             throw $e;
         }
+    }
+
+    /** The faces found in photos $ids (People), their "not this person" marks and their pictures. */
+    private static function deleteFacesOf(PDO $pdo, array $ids): void {
+        if (!$ids) return;
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $pdo->prepare("DELETE FROM face_reject WHERE face_id IN (SELECT id FROM face WHERE image_id IN ($ph))")->execute($ids);
+        $pdo->prepare("DELETE FROM face WHERE image_id IN ($ph)")->execute($ids);
+        foreach ($ids as $id) foreach (glob(PF_DATA . '/people/faces/' . $id . '-*.jpg') ?: [] as $t) @unlink($t);
     }
 
     /** Remove many rows (and their FTS entries) from the index in one transaction.
@@ -880,6 +982,7 @@ final class Db {
                 $ph = implode(',', array_fill(0, count($chunk), '?'));
                 $pdo->prepare("DELETE FROM images_fts WHERE id IN ($ph)")->execute($chunk);
                 $pdo->prepare("DELETE FROM images WHERE id IN ($ph)")->execute($chunk);
+                self::deleteFacesOf($pdo, $chunk);
             }
             $pdo->commit();
         } catch (Throwable $e) {

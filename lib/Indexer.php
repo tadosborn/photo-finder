@@ -125,7 +125,7 @@ final class Indexer {
             // Only overwrite faces when the file actually has named regions —
             // an empty result must not clobber manually-entered names from the editor.
             if (!empty($e['faces'])) {
-                Db::updateFaces($id, $e['faces']);
+                Db::updateMetaFaces($id, $e['faces']);
                 $faces++;
             }
         }
@@ -198,7 +198,8 @@ final class Indexer {
                 pf_log('→ analyzing ' . $base . ' with ' . $label);
                 $t0 = microtime(true);
                 $prepped = Thumb::prepareForApi($path, $maxDim);
-                $analysis = $client->analyzeImage($prepped['bytes']);
+                // Who the user named in it (People): the description uses their names.
+                $analysis = $client->analyzeImage($prepped['bytes'], Db::peopleForPrompt($id));
                 if (trim((string)($analysis['description'] ?? '')) === '') {
                     throw new RuntimeException('The AI returned an empty description.');
                 }

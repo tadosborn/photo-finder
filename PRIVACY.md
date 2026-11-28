@@ -59,6 +59,28 @@ versions (reduced to at most 1024 pixels on the long side, plus close-ups of the
 to Anthropic's Claude with your own Anthropic API key, the same service and key that describe your
 photos, to choose the best version. Batches otherwise run entirely on this PC.
 
+## People (recognising faces)
+
+**Faces are found and compared only on this PC.** The first time you open **People**, Photo
+Finder downloads two face models from OpenCV's model collection on Hugging Face (about 38 MB,
+plus the on-PC runtime above if it is not there yet). Nothing about you is sent with that
+download. No cloud service is asked who anyone is.
+
+For each face it finds, Photo Finder keeps its position in the photo, a small picture of the
+face, and 128 numbers that describe the face (a face signature, which is biometric data). These
+are stored in `%LOCALAPPDATA%\Photo Finder` (the index and `people\faces`) and never leave the
+PC. The names you give are stored there too. **People > Forget all faces** deletes every face,
+signature, picture and name. The names photos already carried in their own metadata stay.
+
+Names you confirm are used in three ways:
+- They are shown on the photo's People line and can be searched.
+- The photo is described again with the names. If a cloud AI describes your photos, that service
+  receives the photo (reduced, as for any description) and the names of the people in it, from
+  left to right. With an AI on this PC, nothing leaves it.
+- **Embed metadata** writes the names and where each face is into the photo file (IPTC
+  PersonInImage and MWG face regions). Anyone you give that file to can read them, shared
+  copies included.
+
 ## Sharing
 
 **Share** sends nothing anywhere by itself. **Share…** hands the photos to Windows' share window,

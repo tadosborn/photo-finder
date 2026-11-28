@@ -471,6 +471,59 @@ $apiKeySet = $settings['api_key'] !== '';
   .cu-name { color: var(--text); word-break: break-all; }
   .cu-path { word-break: break-all; }
   .cu-empty { text-align: center; color: var(--mute); padding: 50px 20px; font-size: 14px; }
+  /* People (faces found on this PC): Clean up's window. Text is --text / --mute on --bg and
+     --panel, as there; names over face pictures are white on black 85%. */
+  .pe-intro { max-width: 760px; font-size: 14px; line-height: 1.55; }
+  .pe-hint { color: var(--mute); font-size: 13px; margin: 0 0 12px; }
+  .pe-group { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 10px 12px; margin-bottom: 12px; }
+  .pe-faces { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pe-face { position: relative; width: 88px; height: 88px; margin: 0; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: #0a0c10; flex: none; }
+  .pe-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pe-face input { position: absolute; top: 4px; left: 4px; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+  .pe-face:has(input:checked) { border-color: var(--accent); }
+  .pe-face:has(input:not(:checked)) img { opacity: 0.45; }
+  .pe-face:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* A person's confirmed faces: a tick marks one to take off them, so unticked ones are not dimmed. */
+  #peConf .pe-face:has(input:not(:checked)) img { opacity: 1; }
+  #peConf .pe-face:has(input:not(:checked)) { border-color: transparent; }
+  #peConf .pe-face:has(input:checked) { border-color: var(--err-text); }
+  #peConf .pe-face:has(input:checked) img { opacity: 0.6; }
+  .pe-face .pe-open { position: absolute; right: 3px; bottom: 3px; padding: 0 6px; font-size: 12px; line-height: 18px; border-radius: 6px; background: rgba(0,0,0,0.85); color: #fff; border: none; }
+  .pe-more { color: var(--mute); font-size: 13px; padding: 0 6px; }
+  .pe-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+  .pe-row label { margin: 0; color: var(--text); }
+  .pe-row input[type=text], .pe-head input[type=text] { width: 220px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  .pe-n { color: var(--mute); font-size: 13px; }
+  .pe-err { color: var(--err-text); font-size: 13px; }
+  .pe-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .pe-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); }
+  .pe-card img, .pe-noface { width: 110px; height: 110px; border-radius: 50%; object-fit: cover; background: var(--panel2); display: block; }
+  .pe-card .pe-name { font-weight: 600; font-size: 14px; text-align: center; word-break: break-word; }
+  .pe-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .pe-head img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+  .pe-head h3 { margin: 0; font-size: 18px; }
+  .pe-sec { margin: 18px 0 8px; font-size: 15px; }
+  dialog.people button.danger { background: var(--err-bg); border-color: var(--err-bg); color: #fff; }
+  /* The photo view's faces: a box round each, the name under it (white on black 85%). */
+  dialog.lightbox .lb-faces-btn { background: rgba(0,0,0,0.75); color: #fff; border: none; border-radius: 20px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  dialog.lightbox .lb-faces-btn:hover { background: rgba(0,0,0,0.92); }
+  dialog.lightbox .lb-faces-btn[aria-pressed="true"] { background: #1b2a45; box-shadow: inset 0 0 0 2px #9dbcff; }
+  dialog.lightbox .lb-faces-btn:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.lightbox .lb-face-layer { position: absolute; pointer-events: none; }
+  dialog.lightbox .lb-face-layer[hidden] { display: none; }
+  dialog.lightbox .lb-face { position: absolute; padding: 0; background: transparent; border: 2px solid #ffd54f; border-radius: 6px; box-shadow: 0 0 0 1px rgba(0,0,0,0.7); cursor: pointer; pointer-events: auto; }
+  dialog.lightbox .lb-face.named { border-color: #7ee787; }
+  dialog.lightbox .lb-face.ignored { border-style: dashed; border-color: #b3bbc8; }
+  dialog.lightbox .lb-face:focus-visible { outline: 2px solid #9dbcff; outline-offset: 2px; }
+  dialog.lightbox .lb-face span { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 4px); white-space: nowrap; background: rgba(0,0,0,0.85); color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+  dialog.lightbox .lb-face-none { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(0,0,0,0.85); color: #fff; font-size: 13px; padding: 6px 10px; border-radius: 6px; white-space: nowrap; }
+  dialog.lightbox .lb-face-pop { position: absolute; z-index: 6; display: flex; gap: 10px; align-items: flex-start; width: 340px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  dialog.lightbox .lb-face-pop img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; flex: none; }
+  dialog.lightbox .lb-face-pop label { display: block; font-size: 13px; margin: 0 0 4px; color: var(--text); }
+  dialog.lightbox .lb-face-pop input[type=text] { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  dialog.lightbox .lb-face-pop .pe-row { margin-top: 8px; }
+  dialog.lightbox .lb-face-pop button { padding: 5px 10px; font-size: 12px; }
+  dialog.lightbox .lb-face-who { margin-top: 6px; font-size: 12px; color: var(--mute); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .cu-pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 18px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
   .cu-pager[hidden] { display: none; }
   .cu-foot { display: flex; align-items: center; gap: 10px; padding: 8px 18px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; color: var(--mute); }
@@ -573,6 +626,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <button id="consolidateBtn" type="button" title="Search this PC for photos that are not in your library yet, and gather them into it">Find photos on this PC</button>
   <button id="stopBtn" style="display:none">Stop</button>
   <button id="cleanupBtn" title="Find blurry, badly exposed and duplicate photos and move them to the Recycle Bin">Clean up</button>
+  <button id="peopleBtn" type="button" title="Find the faces in your photos and name the people in them (on this PC)">People</button>
   <button id="queueBtn" type="button" title="What Fix blur, Enlarge and batches are doing">Queue<span class="q-badge" id="queueBadge" hidden></span></button>
   <button id="logBtn" title="Show live worker log">Log</button>
   <button id="settingsBtn">Settings</button>
@@ -851,6 +905,7 @@ $apiKeySet = $settings['api_key'] !== '';
 <dialog id="lightbox" class="lightbox">
   <button class="lb-nav lb-prev" id="lbPrev" title="Previous (←)">‹</button>
   <img id="lbImg" alt="">
+  <div class="lb-face-layer" id="lbFaceLayer" hidden></div>
   <div class="lb-status" id="lbStatus" role="status" aria-live="polite"></div>
   <button class="lb-nav lb-next" id="lbNext" title="Next (→)">›</button>
   <div class="lb-counter" id="lbCounter"></div>
@@ -860,6 +915,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <button class="lb-rot-btn lb-rot-r" id="lbRotR" type="button" title="Rotate right (R)" aria-label="Rotate right">⟳</button>
     <button class="lb-fix-btn" id="lbFixBtn" type="button" title="Make a sharper copy of a blurred photo with AI">Fix blur</button>
     <button class="lb-enh-btn" id="lbEnhBtn" type="button" title="Fix colour, brightness and contrast; sharpen slightly soft photos">✨ Enhance</button>
+    <button class="lb-faces-btn" id="lbFacesBtn" type="button" aria-pressed="false" title="Show who is in this photo, and name the faces (F)">👤 Faces</button>
     <button class="lb-share-btn" id="lbShareBtn" type="button" title="Share this photo: email, nearby devices and other apps, copy or download (S)">Share</button>
     <button class="lb-del-btn" id="lbDelBtn" type="button" title="Move this photo, with its saved versions and kept original, to the Recycle Bin (Del)">🗑 Delete</button>
     <button class="lb-edit-btn" id="lbEditBtn" type="button" title="Edit metadata (E)">✎ Edit</button>
@@ -872,7 +928,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <div class="tags" id="lbWhere"></div>
     <div class="tags" id="lbPath"></div>
     <div class="lb-details" id="lbDetails"></div>
-    <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · R / Shift+R: rotate · I: toggle info · E: edit · S: share · Esc: close</div>
+    <div class="tags" style="margin-top:8px; opacity:0.6;">Arrow keys: navigate · R / Shift+R: rotate · I: toggle info · E: edit · F: faces · S: share · Esc: close</div>
   </div>
   <div class="lb-editor" id="lbEditor">
     <h3>Edit metadata <span class="manual-badge" id="lbManualBadge" style="display:none">manually edited — worker won't overwrite</span></h3>
@@ -1121,6 +1177,27 @@ $apiKeySet = $settings['api_key'] !== '';
   <p class="q-mute">Everything runs on this PC (free; nothing is sent anywhere), one photo at a time at low priority, so you can keep using Photo Finder or close it. Each fix is saved as its own copy next to the photo and, with more than one ticked, so is all of them together ("(fixed)"); the originals are not changed. Queue shows the progress; its "Review all results" shows every photo with its versions side by side, to choose which originals to replace.</p>
   <div class="b-status" id="bStatus" role="status"></div>
   <div class="b-row"><button type="button" id="bCancel">Cancel</button><button type="button" class="primary" id="bStart">Start</button></div>
+</dialog>
+<!-- ==== People (lib/People.php, faces.py: faces found and compared on this PC) ==== -->
+<dialog id="peopleDlg" class="cleanup people" aria-labelledby="peTitle">
+  <div class="cu-head">
+    <h2 id="peTitle">People</h2>
+    <span class="cu-status" id="peStatus" role="status"></span>
+    <button type="button" id="peScanBtn" hidden>Find faces</button>
+    <button type="button" id="peForgetBtn" hidden title="Delete every face found and every name given here (the names photos carry in their own metadata stay)">Forget all faces</button>
+    <button type="button" class="cu-close" id="peClose" aria-label="Close People" title="Close (Esc)">×</button>
+  </div>
+  <div class="cu-progress" id="peProgress" hidden>
+    <progress id="peProg" value="0" max="100"></progress>
+    <span id="peProgTxt" role="status"></span>
+    <button type="button" id="peStopBtn">Stop</button>
+  </div>
+  <div class="cu-tabs" role="tablist" aria-label="People">
+    <button type="button" role="tab" data-pe-tab="who" aria-selected="true" aria-controls="peBody">Who is this?<span class="cu-count" id="peCountWho">–</span></button>
+    <button type="button" role="tab" data-pe-tab="people" aria-selected="false" aria-controls="peBody">People<span class="cu-count" id="peCountPeople">–</span></button>
+  </div>
+  <div class="cu-body" id="peBody" role="tabpanel"></div>
+  <datalist id="pePeopleList"></datalist>
 </dialog>
 <!-- ==== Share (lib/Share.php makes the copies; Windows' share window, a download or the clipboard takes them) ==== -->
 <dialog id="shareDlg" class="batch share" aria-labelledby="shTitle">
@@ -1639,6 +1716,7 @@ function openLightbox(idx) {
   $('#lbWhere').innerHTML = where.join(' · ');
   $('#lbPath').textContent = r.path;
   lbLoadDetails(r);
+  lbFacesLoad();
   $('#lbCounter').textContent = (idx + 1) + ' / ' + lastResults.length;
   $('#lbPrev').style.visibility = idx > 0 ? 'visible' : 'hidden';
   $('#lbNext').style.visibility = idx < lastResults.length - 1 ? 'visible' : 'hidden';
@@ -1772,6 +1850,7 @@ $('#lbPrev').addEventListener('click', e => { e.stopPropagation(); navLightbox(-
 $('#lbNext').addEventListener('click', e => { e.stopPropagation(); navLightbox(1); });
 document.addEventListener('keydown', e => {
   if (!$('#lightbox').open || $('#shareDlg').open) return;
+  if (e.key === 'Escape' && $('#lbFacePop')) { e.preventDefault(); e.stopPropagation(); lbFacePopClose(); return; }
   // If the user is typing in an input/textarea (e.g. the editor), don't hijack keys.
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
@@ -1790,6 +1869,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'r') { e.preventDefault(); lbRotate('cw'); }
   else if (e.key === 'R') { e.preventDefault(); lbRotate('ccw'); }
   else if (e.key === 'Delete') { e.preventDefault(); deleteCurrentInLightbox(); }
+  else if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); lbFacesToggle(); }
   else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); lbShare(); }
 });
 
@@ -4935,6 +5015,428 @@ function lbShare() {
   if (lbIndex >= 0 && lastResults[lbIndex]) shOpen([lastResults[lbIndex].id], [lastResults[lbIndex]]);
 }
 $('#lbShareBtn').addEventListener('click', lbShare);
+
+// ==== People: the faces in your photos, found and compared on this PC (lib/People.php) ====
+// The user teaches it: "Who is this?" groups unnamed faces that look like one person; naming a
+// group names them (the unticked ones are marked "not them"); each person's page suggests faces
+// that look like them, ticked when very alike, and saving names the ticked and marks the rest
+// "not them". Names change the photo's People line and search, its description (re-described by
+// the indexer) and what Embed metadata writes.
+const pe = { tab: 'who', status: null, timer: null, people: [], namesLoaded: false, personId: null, page: 0 };
+const peFaceUrl = id => 'api.php?action=people_face&id=' + id;
+const peEsc = v => escapeHtml(v == null ? '' : String(v));
+const pePlural = (n, one, many) => n.toLocaleString() + ' ' + (n === 1 ? one : many);
+const peScanning = s => !!(s && s.scan && ['starting', 'running'].includes(s.scan.state));
+const peSettingUp = s => !!(s && s.setup && !s.setup.done && !s.setup.error);
+
+async function peOpen() {
+  $('#peopleDlg').showModal();
+  await peRefresh(true);
+}
+async function peRefresh(first) {
+  let s;
+  try { s = await api('people_status'); } catch (e) { $('#peStatus').textContent = e.message; return; }
+  pe.status = s;
+  // Opening People finds the faces in new photos by itself (on this PC, no cost).
+  if (first && s.ready && s.to_scan > 0 && !peScanning(s)) {
+    try { s = await api('people_scan', { body: {} }); pe.status = s; } catch (e) { toast(e.message, 'err'); }
+  }
+  peShowStatus(s);
+  if (!s.ready) peRenderSetup(s);
+  else if (first) peRender();
+  peSchedule();
+}
+function peSchedule() {
+  clearTimeout(pe.timer);
+  if (!$('#peopleDlg').open || !(peScanning(pe.status) || peSettingUp(pe.status))) return;
+  pe.timer = setTimeout(async () => {
+    const scanning = peScanning(pe.status), setting = peSettingUp(pe.status);
+    await peRefresh(false);
+    if (setting && pe.status.ready) { await peRefresh(true); return; }   // set up: find the faces
+    if (setting) peRenderSetup(pe.status);
+    if (scanning && !peScanning(pe.status) && pe.tab === 'who') peRender();   // all found: the groups
+  }, 2000);
+}
+function peShowStatus(s) {
+  $('#peCountWho').textContent = s.ready ? s.unnamed.toLocaleString() : '–';
+  $('#peCountPeople').textContent = s.ready ? s.people.toLocaleString() : '–';
+  const parts = [];
+  if (s.ready) {
+    parts.push(`${pePlural(s.faces, 'face', 'faces')} in ${(s.photos - s.to_scan).toLocaleString()} of ${pePlural(s.photos, 'photo', 'photos')}`);
+    parts.push(`${s.named.toLocaleString()} named`);
+    if (s.redescribe) parts.push(`${pePlural(s.redescribe, 'photo', 'photos')} waiting for a new description (Start indexing)`);
+  }
+  const scan = s.scan || {};
+  if (scan.state === 'error') parts.push(scan.error);
+  $('#peStatus').textContent = parts.join(' · ');
+  const running = peScanning(s);
+  $('#peProgress').hidden = !running;
+  if (running) {
+    const t = Math.max(1, scan.total || 1), d = scan.done || 0;
+    $('#peProg').value = Math.round(100 * d / t);
+    $('#peProgTxt').textContent = `Finding faces: ${d.toLocaleString()} of ${pePlural(t, 'photo', 'photos')}, ${pePlural(scan.faces || 0, 'face', 'faces')} so far. You can name people meanwhile.`;
+  }
+  $('#peScanBtn').hidden = !s.ready || running || !s.to_scan;
+  $('#peScanBtn').textContent = `Find faces in ${pePlural(s.to_scan || 0, 'new photo', 'new photos')}`;
+  $('#peForgetBtn').hidden = !s.ready || !(s.faces || s.people);
+}
+function peRenderSetup(s) {
+  const mb = Math.max(1, Math.round((s.download_bytes || 0) / 1048576));
+  const busy = peSettingUp(s);
+  $('#peBody').innerHTML = `<div class="pe-intro">
+    <p>People finds the faces in your photos and learns who is who from the names you give it. It all runs on this PC; faces are never sent anywhere. (Cloud AI services do not recognise people, by their own rules.)</p>
+    <p>Photos that already carry names in their metadata (from digiKam, Lightroom, Picasa or Windows Photo Gallery) teach it from the start.</p>
+    <p>When you name people, the AI that describes your photos rewrites those photos' descriptions with the names, and Embed metadata writes the names into the files.</p>
+    <p><button type="button" class="primary" id="peSetupBtn"${busy || s.setup_busy ? ' disabled' : ''}>Set up face recognition (download about ${mb} MB)</button></p>
+    <p class="pe-n" id="peSetupMsg" role="status"></p></div>`;
+  const msg = $('#peSetupMsg');
+  if (s.setup_busy) msg.textContent = 'Another download (Fix blur or Enlarge) is running; this can start when it has finished.';
+  if (busy) msg.textContent = (s.setup.status === 'installing' ? 'Installing…' : `Downloading ${s.setup.file || ''}: ${Math.round(100 * (s.setup.got || 0) / Math.max(1, s.setup.total || 1))}%`);
+  if (s.setup && s.setup.error) msg.textContent = s.setup.error;
+  $('#peSetupBtn').addEventListener('click', async () => {
+    $('#peSetupBtn').disabled = true;
+    try { pe.status = await api('people_setup', { body: {} }); peRenderSetup(pe.status); peSchedule(); }
+    catch (e) { msg.textContent = e.message; $('#peSetupBtn').disabled = false; }
+  });
+}
+function peRender() {
+  if (!pe.status || !pe.status.ready) { peRenderSetup(pe.status || {}); return; }
+  document.querySelectorAll('[data-pe-tab]').forEach(t => t.setAttribute('aria-selected', String(t.dataset.peTab === pe.tab)));
+  if (pe.tab === 'who') peRenderGroups();
+  else if (pe.personId) peRenderPerson(pe.personId);
+  else peRenderPeople();
+}
+async function peLoadNames(force) {
+  if (pe.namesLoaded && !force) return pe.people;
+  const r = await api('people_list');
+  pe.people = r.people;
+  pe.namesLoaded = true;
+  $('#pePeopleList').innerHTML = pe.people.map(p => `<option value="${peEsc(p.name)}"></option>`).join('');
+  return pe.people;
+}
+// A face picture with a tick box (a label, so clicking the picture ticks it) and a button that
+// opens its photo.
+function peTile(f, checked) {
+  const l = document.createElement('label');
+  l.className = 'pe-face';
+  l.dataset.face = f.id;
+  l.dataset.image = f.image_id;
+  l.innerHTML = `<img loading="lazy" alt="" src="${peFaceUrl(f.id)}"><input type="checkbox"${checked ? ' checked' : ''} aria-label="This face"><button type="button" class="pe-open" title="Open the photo" aria-label="Open the photo">⤢</button>`;
+  l.querySelector('.pe-open').addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    peOpenPhoto(f.image_id, [...l.parentElement.querySelectorAll('.pe-face')].map(x => x.dataset.image));
+  });
+  return l;
+}
+const peTicked = (box, on = true) => [...box.querySelectorAll('.pe-face')].filter(l => l.querySelector('input').checked === on).map(l => +l.dataset.face);
+async function peOpenPhoto(imageId, all) {
+  try {
+    const r = await api('people_photos', { body: { ids: [...new Set(all)] } });
+    const idx = r.results.findIndex(x => x.id === imageId);
+    if (idx >= 0) cuOpenLightbox(r.results, idx);
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function peAfterChange() {
+  pe.namesLoaded = false;
+  try { pe.status = await api('people_status'); peShowStatus(pe.status); } catch (e) {}
+}
+// A button that asks first: the first click arms it (red, 8 seconds), the second does it.
+function peArm(btn, armedText, fn) {
+  const label = btn.textContent;
+  let timer = null;
+  btn.addEventListener('click', async () => {
+    if (!btn.classList.contains('confirm-armed')) {
+      btn.classList.add('confirm-armed');
+      btn.textContent = armedText;
+      timer = setTimeout(() => { btn.classList.remove('confirm-armed'); btn.textContent = label; }, 8000);
+      return;
+    }
+    clearTimeout(timer);
+    btn.classList.remove('confirm-armed');
+    btn.textContent = label;
+    await fn();
+  });
+}
+
+async function peRenderGroups() {
+  const b = $('#peBody');
+  b.innerHTML = '<p class="pe-n">Grouping faces that look alike…</p>';
+  let g;
+  try { [g] = await Promise.all([api('people_groups'), peLoadNames(true)]); }
+  catch (e) { b.innerHTML = `<p class="pe-err">${peEsc(e.message)}</p>`; return; }
+  if (!g.groups.length) {
+    b.innerHTML = `<div class="cu-empty">${peScanning(pe.status) ? 'Faces are being found; the groups appear as it goes. <button type="button" id="peRegroup">Show groups now</button>'
+      : pe.status.faces ? 'No groups of unnamed faces left. Each person\'s page (the People tab) suggests the faces that look like them.' : 'No faces found yet.'}</div>`;
+    const rb = $('#peRegroup');
+    if (rb) rb.addEventListener('click', peRenderGroups);
+    return;
+  }
+  b.innerHTML = `<p class="pe-hint">Faces that look like one person, the largest groups first. Untick any face that is not them, then type who it is (or pick a name), or choose Ignore for people you do not need named. <button type="button" id="peRegroup">Group again</button></p>`;
+  $('#peRegroup').addEventListener('click', peRenderGroups);
+  g.groups.forEach((grp, gi) => {
+    const sec = document.createElement('section');
+    sec.className = 'pe-group';
+    sec.setAttribute('aria-label', `Group ${gi + 1}: ${pePlural(grp.size, 'face', 'faces')}`);
+    const faces = document.createElement('div');
+    faces.className = 'pe-faces';
+    grp.faces.forEach(f => faces.appendChild(peTile(f, true)));
+    if (grp.size > grp.faces.length) faces.insertAdjacentHTML('beforeend', `<span class="pe-more">and ${grp.size - grp.faces.length} more, shown after you name these</span>`);
+    const row = document.createElement('div');
+    row.className = 'pe-row';
+    row.innerHTML = `<label for="peName${gi}">Who is this?</label><input type="text" id="peName${gi}" list="pePeopleList" autocomplete="off"><button type="button" class="primary">Name them</button><button type="button">Ignore</button><span class="pe-err" role="status"></span>`;
+    const [nameBtn, ignBtn] = row.querySelectorAll('button');
+    const input = row.querySelector('input');
+    const msg = row.querySelector('.pe-err');
+    const count = () => {
+      const n = peTicked(faces).length;
+      nameBtn.textContent = n === grp.faces.length ? `Name them (${n})` : `Name the ticked (${n})`;
+      ignBtn.textContent = `Ignore (${n})`;
+      nameBtn.disabled = ignBtn.disabled = !n;
+    };
+    faces.addEventListener('change', count);
+    count();
+    const name = async () => {
+      const ids = peTicked(faces), not = peTicked(faces, false), who = input.value.trim();
+      if (!ids.length) return;
+      if (!who) { msg.textContent = 'Type a name first.'; input.focus(); return; }
+      nameBtn.disabled = true;
+      try {
+        const r = await api('people_assign', { body: { faces: ids, name: who } });
+        if (not.length) await api('people_reject', { body: { faces: not, person: r.person.id } });
+        toast(`${pePlural(ids.length, 'face', 'faces')} named ${r.person.name}.`, 'ok');
+        sec.remove();
+        peAfterChange();
+      } catch (e) { msg.textContent = e.message; nameBtn.disabled = false; }
+    };
+    nameBtn.addEventListener('click', name);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); name(); } });
+    ignBtn.addEventListener('click', async () => {
+      const ids = peTicked(faces);
+      if (!ids.length) return;
+      try { await api('people_ignore', { body: { faces: ids } }); sec.remove(); peAfterChange(); }
+      catch (e) { msg.textContent = e.message; }
+    });
+    sec.appendChild(faces);
+    sec.appendChild(row);
+    b.appendChild(sec);
+  });
+  if (g.total > g.groups.length) b.insertAdjacentHTML('beforeend', `<p class="pe-n">${pePlural(g.total - g.groups.length, 'more group follows', 'more groups follow')} as you name these (Group again).</p>`);
+}
+
+async function peRenderPeople() {
+  const b = $('#peBody');
+  let list;
+  try { list = await peLoadNames(true); } catch (e) { b.innerHTML = `<p class="pe-err">${peEsc(e.message)}</p>`; return; }
+  if (!list.length) { b.innerHTML = '<div class="cu-empty">Nobody is named yet. Name the groups under "Who is this?".</div>'; return; }
+  b.innerHTML = '<p class="pe-hint">Everyone you have named, most photos first. Open someone to confirm the faces that look like them.</p><div class="pe-people"></div>';
+  const grid = b.querySelector('.pe-people');
+  list.forEach(p => {
+    const c = document.createElement('button');
+    c.type = 'button';
+    c.className = 'pe-card';
+    c.innerHTML = `${p.cover ? `<img alt="" src="${peFaceUrl(p.cover)}">` : '<span class="pe-noface"></span>'}<span class="pe-name">${peEsc(p.name)}</span><span class="pe-n">${pePlural(p.photos, 'photo', 'photos')}</span>`;
+    c.addEventListener('click', () => { pe.personId = p.id; pe.page = 0; peRender(); });
+    grid.appendChild(c);
+  });
+}
+
+async function peRenderPerson(id) {
+  const b = $('#peBody');
+  b.innerHTML = '<p class="pe-n">Looking for faces like theirs…</p>';
+  let r;
+  try { [r] = await Promise.all([api('people_person', { qs: 'id=' + id + '&page=' + pe.page }), peLoadNames()]); }
+  catch (e) { b.innerHTML = `<p class="pe-err">${peEsc(e.message)}</p>`; return; }
+  const p = r.person, nm = peEsc(p.name);
+  const pages = Math.ceil(p.faces / r.per);
+  b.innerHTML = `<div class="pe-head">
+      <button type="button" id="peBack">‹ Everyone</button>
+      ${p.cover ? `<img alt="" src="${peFaceUrl(p.cover)}">` : ''}
+      <h3>${nm}</h3><span class="pe-n">${pePlural(p.photos, 'photo', 'photos')}</span>
+      <button type="button" id="pePhotosBtn">Show their photos</button>
+      <input type="text" id="peRenameIn" list="pePeopleList" autocomplete="off" aria-label="Name" value="${nm}"><button type="button" id="peRenameBtn">Rename</button>
+      <button type="button" id="peRemoveBtn">Remove from the list</button>
+    </div>
+    <p class="pe-hint">Renaming to the name of someone already in the list joins the two. Removing someone leaves their faces unnamed.</p>
+    <h4 class="pe-sec">Is this ${nm}? <span class="pe-n">${r.suggestions.length ? pePlural(r.suggestions.length, 'face looks', 'faces look') + ' like them' : 'No more faces look like them.'}</span></h4>
+    <div class="pe-faces" id="peSug"></div>
+    <div class="pe-row" id="peSugRow"><button type="button" class="primary" id="peSaveBtn"></button><span class="pe-n">Ticked: ${nm}. Unticked: not ${nm} (not suggested again). The ones ticked for you look most like them.</span><span class="pe-err" id="peSugMsg" role="status"></span></div>
+    <h4 class="pe-sec">${nm} <span class="pe-n">${pePlural(p.faces, 'face', 'faces')}${pages > 1 ? `, page ${pe.page + 1} of ${pages}` : ''}</span></h4>
+    <div class="pe-faces" id="peConf"></div>
+    <div class="pe-row"><button type="button" id="peUnBtn" disabled>Not ${nm}: take off the ticked</button>${pe.page > 0 ? '<button type="button" id="pePrev">‹ Newer</button>' : ''}${pe.page + 1 < pages ? '<button type="button" id="peNext">Older ›</button>' : ''}<span class="pe-err" id="peConfMsg" role="status"></span></div>`;
+  $('#peBack').addEventListener('click', () => { pe.personId = null; peRender(); });
+  $('#pePhotosBtn').addEventListener('click', () => { $('#q').value = '"' + p.name + '"'; $('#peopleDlg').close(); doSearch(); });
+  const sug = $('#peSug'), conf = $('#peConf');
+  r.suggestions.forEach(f => sug.appendChild(peTile(f, f.tick)));
+  r.confirmed.forEach(f => conf.appendChild(peTile(f, false)));
+  $('#peSugRow').hidden = !r.suggestions.length;
+  const saveBtn = $('#peSaveBtn'), unBtn = $('#peUnBtn');
+  const counts = () => {
+    const yes = peTicked(sug).length, no = peTicked(sug, false).length;
+    saveBtn.textContent = `Save: ${yes} ${yes === 1 ? 'is' : 'are'} ${p.name}, ${no} ${no === 1 ? 'is' : 'are'} not`;
+    const un = peTicked(conf).length;
+    unBtn.disabled = !un;
+    unBtn.textContent = `Not ${p.name}: take off the ticked (${un})`;
+  };
+  sug.addEventListener('change', counts);
+  conf.addEventListener('change', counts);
+  counts();
+  saveBtn.addEventListener('click', async () => {
+    const yes = peTicked(sug), no = peTicked(sug, false);
+    saveBtn.disabled = true;
+    try {
+      if (yes.length) await api('people_assign', { body: { faces: yes, person: p.id } });
+      if (no.length) await api('people_reject', { body: { faces: no, person: p.id } });
+      toast(`${pePlural(yes.length, 'face', 'faces')} confirmed as ${p.name}.`, 'ok');
+      await peAfterChange();
+      peRenderPerson(id);   // with more confirmed, more look like them
+    } catch (e) { $('#peSugMsg').textContent = e.message; saveBtn.disabled = false; }
+  });
+  unBtn.addEventListener('click', async () => {
+    try { await api('people_unassign', { body: { faces: peTicked(conf) } }); await peAfterChange(); peRenderPerson(id); }
+    catch (e) { $('#peConfMsg').textContent = e.message; }
+  });
+  const rename = async () => {
+    const name = $('#peRenameIn').value.trim();
+    if (!name || name === p.name) return;
+    try { const r2 = await api('people_rename', { body: { person: p.id, name } }); pe.personId = r2.person.id; await peAfterChange(); peRenderPerson(r2.person.id); }
+    catch (e) { $('#peConfMsg').textContent = e.message; }
+  };
+  $('#peRenameBtn').addEventListener('click', rename);
+  $('#peRenameIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); rename(); } });
+  peArm($('#peRemoveBtn'), `Click again to remove ${p.name}`, async () => {
+    try { await api('people_delete', { body: { person: p.id } }); pe.personId = null; await peAfterChange(); peRender(); }
+    catch (e) { $('#peConfMsg').textContent = e.message; }
+  });
+  const prev = $('#pePrev'), next = $('#peNext');
+  if (prev) prev.addEventListener('click', () => { pe.page--; peRenderPerson(id); });
+  if (next) next.addEventListener('click', () => { pe.page++; peRenderPerson(id); });
+}
+
+$('#peopleBtn').addEventListener('click', peOpen);
+$('#peClose').addEventListener('click', () => $('#peopleDlg').close());
+$('#peopleDlg').addEventListener('close', () => { clearTimeout(pe.timer); pe.timer = null; });
+document.querySelectorAll('[data-pe-tab]').forEach(t => t.addEventListener('click', () => { pe.tab = t.dataset.peTab; pe.personId = null; peRender(); }));
+$('#peScanBtn').addEventListener('click', async () => {
+  try { pe.status = await api('people_scan', { body: {} }); peShowStatus(pe.status); peSchedule(); } catch (e) { toast(e.message, 'err'); }
+});
+$('#peStopBtn').addEventListener('click', async () => { try { await api('people_scan_cancel', { body: {} }); } catch (e) {} });
+peArm($('#peForgetBtn'), 'Click again: forget every face and name', async () => {
+  try { pe.status = await api('people_forget', { body: {} }); pe.personId = null; pe.namesLoaded = false; peShowStatus(pe.status); peRender(); toast('Every face and name is forgotten.', 'ok'); }
+  catch (e) { toast(e.message, 'err'); }
+});
+
+// ---- The photo view's faces (F): a box round each face, its name under it; click to name it ----
+const lbf = { on: localStorage.getItem('pf.lbFaces') === '1', seq: 0, faces: [], scanned: false };
+$('#lbFacesBtn').setAttribute('aria-pressed', String(lbf.on));
+function lbFacesToggle() {
+  lbf.on = !lbf.on;
+  localStorage.setItem('pf.lbFaces', lbf.on ? '1' : '0');
+  $('#lbFacesBtn').setAttribute('aria-pressed', String(lbf.on));
+  lbFacesLoad();
+}
+$('#lbFacesBtn').addEventListener('click', lbFacesToggle);
+async function lbFacesLoad() {
+  const seq = ++lbf.seq;
+  lbFacePopClose();
+  lbf.faces = [];
+  const r = lastResults[lbIndex];
+  if (!lbf.on || !r) { $('#lbFaceLayer').hidden = true; return; }
+  try {
+    const d = await api('people_photo', { qs: 'id=' + encodeURIComponent(r.id) });
+    if (seq !== lbf.seq) return;
+    lbf.faces = d.faces;
+    lbf.scanned = d.scanned;
+  } catch (e) { return; }
+  lbFacesDraw();
+}
+function lbFacesDraw() {
+  const layer = $('#lbFaceLayer'), img = $('#lbImg');
+  layer.innerHTML = '';
+  if (!lbf.on || !$('#lightbox').open || img.classList.contains('lb-pending') || !img.naturalWidth) { layer.hidden = true; return; }
+  const dr = $('#lightbox').getBoundingClientRect(), ir = img.getBoundingClientRect();
+  Object.assign(layer.style, { left: (ir.left - dr.left) + 'px', top: (ir.top - dr.top) + 'px', width: ir.width + 'px', height: ir.height + 'px' });
+  layer.hidden = false;
+  if (!lbf.faces.length) {
+    layer.innerHTML = `<span class="lb-face-none">${lbf.scanned ? 'No faces found in this photo.' : 'Faces not found yet: open People to find them.'}</span>`;
+    return;
+  }
+  lbf.faces.forEach(f => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lb-face' + (f.name ? ' named' : '') + (f.ignored ? ' ignored' : '');
+    const [x, y, w, h] = f.box;
+    Object.assign(b.style, { left: (x * 100) + '%', top: (y * 100) + '%', width: (w * 100) + '%', height: (h * 100) + '%' });
+    b.setAttribute('aria-label', f.name ? 'Face: ' + f.name : 'Face not named; click to name it');
+    b.innerHTML = `<span>${peEsc(f.name || (f.ignored ? 'ignored' : 'Who?'))}</span>`;
+    b.addEventListener('click', e => { e.stopPropagation(); lbFacePop(f, b); });
+    layer.appendChild(b);
+  });
+}
+$('#lbImg').addEventListener('load', lbFacesDraw);
+window.addEventListener('resize', () => { if (lbf.on && $('#lightbox').open) lbFacesDraw(); });
+function lbFacePopClose() { const p = $('#lbFacePop'); if (p) p.remove(); }
+async function lbFacePop(f, anchor) {
+  lbFacePopClose();
+  try { await peLoadNames(); } catch (e) {}
+  const pop = document.createElement('div');
+  pop.id = 'lbFacePop';
+  pop.className = 'lb-face-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Who is this?');
+  pop.innerHTML = `<img alt="" src="${peFaceUrl(f.id)}"><div style="flex:1;min-width:0">
+      <label for="lbFaceName">Who is this?</label>
+      <input type="text" id="lbFaceName" list="pePeopleList" autocomplete="off" value="${peEsc(f.name || '')}">
+      <div class="lb-face-who" id="lbFaceWho"></div>
+      <div class="pe-row"><button type="button" class="primary" id="lbFaceSave">Save</button>${f.name ? `<button type="button" id="lbFaceClear">Not ${peEsc(f.name)}</button>` : ''}<button type="button" id="lbFaceIgnore">${f.ignored ? 'Stop ignoring' : 'Ignore'}</button></div>
+      <p class="pe-err" id="lbFaceMsg" role="status"></p></div>`;
+  pop.addEventListener('click', e => e.stopPropagation());
+  $('#lightbox').appendChild(pop);
+  const dr = $('#lightbox').getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+  const left = Math.min(Math.max(8, ar.left - dr.left), dr.width - pop.offsetWidth - 8);
+  const below = ar.bottom - dr.top + 28;
+  const top = below + pop.offsetHeight > dr.height - 8 ? Math.max(8, ar.top - dr.top - pop.offsetHeight - 8) : below;
+  Object.assign(pop.style, { left: left + 'px', top: top + 'px' });
+  const input = $('#lbFaceName'), msg = $('#lbFaceMsg');
+  input.focus();
+  const done = async () => {
+    lbFacePopClose();
+    pe.namesLoaded = false;
+    const r = lastResults[lbIndex];
+    try {
+      const row = await api('image_info', { qs: 'id=' + encodeURIComponent(r.id) });
+      r.faces = row.faces;
+      $('#lbFaces').textContent = r.faces ? '👤 people: ' + r.faces : '';
+    } catch (e) {}
+    lbFacesLoad();
+  };
+  const save = async () => {
+    const name = input.value.trim();
+    if (!name) { msg.textContent = 'Type a name.'; return; }
+    try { await api('people_assign', { body: { faces: [f.id], name } }); await done(); } catch (e) { msg.textContent = e.message; }
+  };
+  $('#lbFaceSave').addEventListener('click', save);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+  const clear = $('#lbFaceClear');
+  if (clear) clear.addEventListener('click', async () => { try { await api('people_unassign', { body: { faces: [f.id] } }); await done(); } catch (e) { msg.textContent = e.message; } });
+  $('#lbFaceIgnore').addEventListener('click', async () => { try { await api('people_ignore', { body: { faces: [f.id], ignored: !f.ignored } }); await done(); } catch (e) { msg.textContent = e.message; } });
+  if (!f.name && !f.ignored) {
+    api('people_who', { qs: 'face=' + f.id }).then(r => {
+      const w = $('#lbFaceWho');
+      if (!w) return;
+      const likely = r.who.filter(x => x.likely).slice(0, 3);
+      if (!likely.length) return;
+      w.textContent = 'Looks like:';
+      likely.forEach(x => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = x.person.name;
+        btn.addEventListener('click', () => { input.value = x.person.name; save(); });
+        w.appendChild(btn);
+      });
+    }).catch(() => {});
+  }
+}
 $('#selShareBtn').addEventListener('click', () => {
   const ids = [...selectedIds];
   const rows = new Map(lastResults.map(r => [r.id, r]));
