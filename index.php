@@ -756,7 +756,7 @@ $apiKeySet = $settings['api_key'] !== '';
       </div>
 
       <div class="set-pane" role="tabpanel" id="setPane-fixblur" aria-labelledby="setTab-fixblur" hidden>
-        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper version of a blurred photo; Enlarge (in Clean up's Small list and in the photo view) makes a larger one. Every version is saved as a copy next to the original and shown beside it; you can then put the best one in the original's place (the original goes to the Recycle Bin).</div>
+        <div class="hint first">Fix blur (in Clean up's Blurry list and in the photo view) makes a sharper version of a blurred photo; Enlarge (in Clean up's Small list and in the photo view) makes a larger one. Every version is saved as a copy next to the original and shown beside it; you can then put the best one in the original's place (the original is kept next to it as "name (original).jpg"; Clean up's Kept originals list deletes them in bulk when you choose).</div>
         <label>On this PC (free)</label>
         <div class="set-row">
           <span id="fbLocalState" class="hint" style="flex:1; margin:0;">Checking…</span>
@@ -883,6 +883,7 @@ $apiKeySet = $settings['api_key'] !== '';
     <button type="button" role="tab" id="cuTabExposure" data-cu-tab="exposure" aria-selected="false" aria-controls="cuBody">Too dark / too bright / blank<span class="cu-count" id="cuCountExposure">–</span></button>
     <button type="button" role="tab" id="cuTabDuplicates" data-cu-tab="duplicates" aria-selected="false" aria-controls="cuBody">Duplicates<span class="cu-count" id="cuCountDuplicates">–</span></button>
     <button type="button" role="tab" id="cuTabSmall" data-cu-tab="small" aria-selected="false" aria-controls="cuBody">Small<span class="cu-count" id="cuCountSmall">–</span></button>
+    <button type="button" role="tab" id="cuTabOriginals" data-cu-tab="originals" aria-selected="false" aria-controls="cuBody">Kept originals<span class="cu-count" id="cuCountOriginals">–</span></button>
   </div>
   <div class="cu-controls" id="cuCtlBlurry">
     <label for="cuBlurRange">Sensitivity</label>
@@ -903,6 +904,9 @@ $apiKeySet = $settings['api_key'] !== '';
       <option value="6">Copies and similar shots (bursts)</option>
     </select>
     <span class="hint">The best copy (most pixels, then largest file, then earliest date) is never selected for you.</span>
+  </div>
+  <div class="cu-controls" id="cuCtlOriginals" hidden>
+    <span class="hint">Originals kept by "Replace the original", next to the photo that replaced them. Select all and move them to the Recycle Bin when you no longer need them.</span>
   </div>
   <div class="cu-controls" id="cuCtlSmall" hidden>
     <label for="cuSmallSide">Smaller than</label>
@@ -1830,7 +1834,7 @@ function enhSaveState() {
   rb.textContent = enh.armed ? 'Confirm: replace the original' : 'Replace the original';
   hint.classList.toggle('warn', !!enh.armed);
   hint.textContent = none ? 'No changes to save.' : enh.armed
-    ? 'Click the red button within 8 seconds to replace “' + (d ? d.name : '') + '”: the original goes to the Recycle Bin (you can restore it from there) and the enhanced photo takes its name, date, place, description and people.'
+    ? 'Click the red button within 8 seconds to replace “' + (d ? d.name : '') + '”: the enhanced photo takes its name, date, place, description and people, and the original is kept next to it as “' + (d ? d.name.replace(/(\.[^.]*)?$/, ' (original)$1') : '') + '”.'
     : '“Save as a copy” saves “' + (d ? d.copy_name : '') + '” next to the original, with the same date, place, description and people; the original is not changed.';
 }
 function enhArm(on) {
@@ -1957,7 +1961,8 @@ async function enhSave(mode) {
       enh.saving = false;
       enhClose();
       if (at >= 0) openLightbox(at);
-      toast('Replaced “' + res.name + '”. The original is in the Recycle Bin.');
+      if (res.kept && at >= 0) { lastResults.splice(at + 1, 0, res.kept); if (inGrid) renderResults(lastResults); }
+      toast('Replaced “' + res.name + '”. The original is kept as “' + (res.kept ? res.kept.path.split('/').pop() : 'name (original).jpg') + '”.');
     }
     if (res.stats) setStats(res.stats);
   } catch (e) {
@@ -3343,15 +3348,15 @@ checkProviderSetup();
 // existing delete_files action, which moves files to the Recycle Bin. Nothing is pre-selected.
 const CU_PAGE = 120;        // cards per page (Blurry, Exposure)
 const CU_GROUP_PAGE = 40;   // groups per page (Duplicates)
-const CU_TABS = ['blurry', 'exposure', 'duplicates', 'small'];
+const CU_TABS = ['blurry', 'exposure', 'duplicates', 'small', 'originals'];
 const cu = {
   tab: 'blurry',
   cfg: { blur_default: 40, blur_min: 10, blur_max: 150, dup_default: 4, batch: 150 },
   status: null,
-  lists: { blurry: [], exposure: [], duplicates: [], small: [] },   // from the server (duplicates = groups)
-  view: { blurry: [], exposure: [], duplicates: [], small: [] },    // what the current filters show
-  sel: { blurry: new Set(), exposure: new Set(), duplicates: new Set(), small: new Set() },
-  page: { blurry: 0, exposure: 0, duplicates: 0, small: 0 },
+  lists: { blurry: [], exposure: [], duplicates: [], small: [], originals: [] },   // from the server (duplicates = groups)
+  view: { blurry: [], exposure: [], duplicates: [], small: [], originals: [] },    // what the current filters show
+  sel: { blurry: new Set(), exposure: new Set(), duplicates: new Set(), small: new Set(), originals: new Set() },
+  page: { blurry: 0, exposure: 0, duplicates: 0, small: 0, originals: 0 },
   loaded: false, analysing: false, stop: false, busy: false,
   armTimer: null, unkeepArmed: false, lbSaved: null,
 };
@@ -3519,6 +3524,8 @@ function cuCard(r, kind, pageItems, idx) {
   } else if (kind === 'exposure') {
     (r.problems || []).forEach(p => chips.appendChild(cuChip(p.text)));
     Object.values(r.described || {}).forEach(ph => chips.appendChild(cuChip('AI: "' + ph + '"', 'ai')));
+  } else if (kind === 'originals') {
+    chips.appendChild(cuChip(r.replaced_by ? 'Replaced by “' + r.replaced_by.name + '”' + (r.replaced_by.width ? ` (${r.replaced_by.width}×${r.replaced_by.height})` : '') : 'Kept original'));
   } else if (kind === 'small') {
     chips.appendChild(cuChip('Small: ' + (r.width * r.height / 1e6).toFixed(r.width * r.height < 1e6 ? 2 : 1) + ' megapixels'));
   } else {
@@ -3576,6 +3583,7 @@ function cuRender() {
       exposure: 'No photos that are too dark, too bright or blank.',
       duplicates: 'No duplicates found.',
       small: `No photos smaller than ${$('#cuSmallSide').value} px on the long side.`,
+      originals: 'No kept originals: "Replace the original" keeps one here each time it replaces a photo.',
     }[kind];
     body.innerHTML = '<div class="cu-empty"></div>';
     body.firstChild.textContent = empty + (cu.status && cu.status.remaining ? ' Some photos are not analysed yet.' : '');
@@ -3633,7 +3641,7 @@ function cuUpdateSelBar() {
   const n = cu.sel[cu.tab].size;
   $('#cuSelCount').textContent = n.toLocaleString() + ' selected';
   $('#cuKeepBtn').disabled = !n || cu.busy;
-  $('#cuFixSelBtn').hidden = cu.tab === 'duplicates';
+  $('#cuFixSelBtn').hidden = cu.tab === 'duplicates' || cu.tab === 'originals';
   $('#cuFixSelBtn').disabled = !n || cu.busy;
   $('#cuDeleteBtn').disabled = !n || cu.busy;
   const all = cu.tab === 'duplicates' ? cuSelectable('all').length : cu.view[cu.tab].length;
@@ -3689,6 +3697,7 @@ function cuSwitchTab(kind, focus) {
   $('#cuCtlExposure').hidden = kind !== 'exposure';
   $('#cuCtlDuplicates').hidden = kind !== 'duplicates';
   $('#cuCtlSmall').hidden = kind !== 'small';
+  $('#cuCtlOriginals').hidden = kind !== 'originals';
   $('#cuSelExtra').hidden = kind !== 'duplicates';
   cuDisarm();
   cuRender();
@@ -3769,13 +3778,14 @@ async function cuDelete() {
   cu.lists.blurry = cu.lists.blurry.filter(r => !gone.has(r.id));
   cu.lists.exposure = cu.lists.exposure.filter(r => !gone.has(r.id));
   cu.lists.small = cu.lists.small.filter(r => !gone.has(r.id));
+  cu.lists.originals = cu.lists.originals.filter(r => !gone.has(r.id));
   lastResults = lastResults.filter(r => !gone.has(r.id));
   gone.forEach(id => selectedIds.delete(id));
   renderResults(lastResults);
   cuShowResult(gone.size, failed);
   toast(`Moved ${cuPlural(gone.size, 'photo')} to the Recycle Bin` + (failed.length ? ` (${failed.length} failed)` : ''), failed.length ? 'err' : 'ok');
   try { await cuLoad('duplicates'); } catch (e) { toast(e.message, 'err'); }
-  cuFilter('blurry'); cuFilter('exposure'); cuFilter('small');
+  cuFilter('blurry'); cuFilter('exposure'); cuFilter('small'); cuFilter('originals');
   cuRender();
 }
 
@@ -3791,12 +3801,13 @@ async function cuKeep() {
     cu.lists.blurry = cu.lists.blurry.filter(x => !kept.has(x.id));
     cu.lists.exposure = cu.lists.exposure.filter(x => !kept.has(x.id));
     cu.lists.small = cu.lists.small.filter(x => !kept.has(x.id));
+    cu.lists.originals = cu.lists.originals.filter(x => !kept.has(x.id));
     if (r.status) cuSetStatus(r.status);
     toast(`Keeping ${cuPlural(ids.length, 'photo')}: ${ids.length === 1 ? 'it' : 'they'} won't be suggested again.`);
     await cuLoad('duplicates');
   } catch (e) { toast(e.message, 'err'); }
   cu.busy = false;
-  cuFilter('blurry'); cuFilter('exposure'); cuFilter('small');
+  cuFilter('blurry'); cuFilter('exposure'); cuFilter('small'); cuFilter('originals');
   cuRender();
 }
 
@@ -3849,12 +3860,12 @@ const DB_KIND = {
 };
 const DB_OP = {
   deblur: { title: 'Fix blur', local: 'local', cloud: 'cloud', chain: 'chain', verb: 'Fixing',
-    hint: 'On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. "Cloud AI on the on-PC result" lets the cloud AI finish what this PC started. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and moves the original to the Recycle Bin.' },
+    hint: 'On this PC suits camera shake and motion blur. Cloud AI (Google Gemini) can also help out-of-focus photos, but it redraws the picture, so check faces and text. "Cloud AI on the on-PC result" lets the cloud AI finish what this PC started. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and keeps the original next to it as "name (original).jpg".' },
   // Compare: every version the photo has (a batch's, or made one at a time), nothing to start.
   review: { title: 'Compare', local: '', cloud: '', chain: '', verb: '',
-    hint: 'Every version of this photo, each saved as a copy next to the original. Zoom in (2×, 4×) to compare. Pick the best ("Use this") and click "Replace the original" to put it in the original\'s place; the original goes to the Recycle Bin.' },
+    hint: 'Every version of this photo, each saved as a copy next to the original. Zoom in (2×, 4×) to compare. Pick the best ("Use this") and click "Replace the original" to put it in the original\'s place; the original is kept next to it as "name (original).jpg" (Clean up\'s Kept originals list deletes them in bulk).' },
   enlarge: { title: 'Enlarge', local: 'up_local', cloud: 'up_cloud', chain: '', verb: 'Enlarging',
-    hint: 'On this PC sharpens edges as it enlarges and adds nothing that was not there; busy textures can look a little smooth. Cloud AI (Google Gemini) redraws the photo at 2K with more fine detail, so check faces and text. Zoom in (2×, 4×) to compare. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and moves the original to the Recycle Bin.' },
+    hint: 'On this PC sharpens edges as it enlarges and adds nothing that was not there; busy textures can look a little smooth. Cloud AI (Google Gemini) redraws the photo at 2K with more fine detail, so check faces and text. Zoom in (2×, 4×) to compare. Every version is saved next to the original as it finishes; "Replace the original" puts the one you pick in its place and keeps the original next to it as "name (original).jpg".' },
 };
 const DB_ENLARGE_MAX = <?= (int)Deblur::ENLARGE_MAX_SIDE ?>;   // Deblur::enlargeInfo() decides; this only hides the viewer's button
 const db = { op: 'deblur', row: null, show: '', showing: '', timer: null, s: null, wantLocal: false, armed: '', pending: new Set(),
@@ -4274,7 +4285,7 @@ $('#dbReplaceBtn').addEventListener('click', async () => {
     const smaller = j.width && r.width && r.height && j.width * j.height < r.width * r.height * 0.9
       ? ` Note: this result (${j.width}×${j.height}) is smaller than the original (${r.width}×${r.height}).` : '';
     db.replaceMsg = 'Click the red button within 8 seconds to replace the original with ' + DB_KIND[kind].who
-      + ': the original goes to the Recycle Bin (you can restore it from there) and this version takes its name, description and place'
+      + ': this version takes its name, description and place, and the original is kept next to it as “' + cuBase(db.row.path).replace(/(\.[^.]*)?$/, ' (original)$1') + '”'
       + (j.saved ? ' (its saved copy, “' + j.saved + '”, goes too, so there is no duplicate; the other versions stay).' : '.') + smaller;
     dbStatus(db.replaceMsg);
     const rb = $('#dbReplaceBtn');
@@ -4305,8 +4316,10 @@ $('#dbReplaceBtn').addEventListener('click', async () => {
     dbSetOrig(db.row);
     setStats(res.stats);
     cuReplaced(db.row);
-    db.finished = '✓ Replaced “' + res.name + '” with ' + DB_KIND[kind].who + '. The old version is in the Recycle Bin' + (res.removed_copy ? '; the other saved versions stay next to it.' : '.');
-    toast('Replaced “' + res.name + '”. The old version is in the Recycle Bin.');
+    if (res.kept && i >= 0) { lastResults.splice(lastResults.findIndex(x => x.id === id) + 1, 0, res.kept); if (document.querySelector('.card[data-id="' + id + '"]')) renderResults(lastResults); }
+    const keptName = res.kept ? res.kept.path.split('/').pop() : '';
+    db.finished = '✓ Replaced “' + res.name + '” with ' + DB_KIND[kind].who + '. The original is kept as “' + keptName + '”' + (res.removed_copy ? '; the other saved versions stay next to it.' : '.');
+    toast('Replaced “' + res.name + '”. The original is kept as “' + keptName + '”.');
   } catch (e) {
     dbStatus(e.message, true);
   }
@@ -4590,7 +4603,7 @@ $('#rvReplace').addEventListener('click', async () => {
   if (!rv.armed) {
     rv.armed = true;
     rvFoot();
-    $('#rvSub').textContent = `Click the red button within 8 seconds to replace ${n} ${n === 1 ? 'original' : 'originals'} with the chosen versions: each original goes to the Recycle Bin (you can restore it from there) and the version takes its name, description and place.`;
+    $('#rvSub').textContent = `Click the red button within 8 seconds to replace ${n} ${n === 1 ? 'original' : 'originals'} with the chosen versions: each version takes its photo's name, description and place, and each original is kept next to it as “name (original).jpg” (Clean up's Kept originals list deletes them in bulk when you choose).`;
     rv.timer = setTimeout(() => { rv.armed = false; rvRender(); }, 8000);
     return;
   }
@@ -4610,6 +4623,7 @@ $('#rvReplace').addEventListener('click', async () => {
         rv.choices.delete(x.id);
         const at = lastResults.findIndex(y => y.id === x.id);
         if (at >= 0) { Object.assign(lastResults[at], x.image); changed = true; }
+        if (at >= 0 && x.kept) { lastResults.splice(at + 1, 0, x.kept); changed = true; }
         if (x.removed_copy) { lastResults = lastResults.filter(y => y.id !== x.removed_copy); changed = true; }
       });
       if (r.stats) setStats(r.stats);
@@ -4617,7 +4631,7 @@ $('#rvReplace').addEventListener('click', async () => {
   }
   rv.busy = false;
   if (changed) renderResults(lastResults);
-  toast(`Replaced ${ok} ${ok === 1 ? 'original' : 'originals'}; the old versions are in the Recycle Bin.` + (failed.length ? ` ${failed.length} failed: ${failed[0].error}` : ''), failed.length ? 'err' : 'ok', 8000);
+  toast(`Replaced ${ok} ${ok === 1 ? 'original' : 'originals'}; each original is kept next to its photo as “… (original)”, listed in Clean up's Kept originals.` + (failed.length ? ` ${failed.length} failed: ${failed[0].error}` : ''), failed.length ? 'err' : 'ok', 8000);
   await rvLoad(rv.page);
 });
 $('#rvClear').addEventListener('click', () => { rv.choices.clear(); rvDisarm(); rvRender(); });

@@ -88,6 +88,19 @@ function pf_image_size(string $path): ?array {
     return $o >= 5 && $o <= 8 ? [(int)$i[1], (int)$i[0]] : [(int)$i[0], (int)$i[1]];
 }
 
+/** Where "Replace the original" keeps the original: "<name> (original).<ext>" next to it, or
+ *  "(original 2)" and so on, never an existing file. Clean up lists these for deleting in bulk. */
+function pf_kept_original_path(string $path): string {
+    $dir = pf_norm_path(dirname($path));
+    $stem = pathinfo($path, PATHINFO_FILENAME);
+    $ext = pathinfo($path, PATHINFO_EXTENSION);
+    for ($n = 1; $n < 1000; $n++) {
+        $cand = $dir . '/' . $stem . ($n === 1 ? ' (original)' : " (original {$n})") . ($ext !== '' ? '.' . $ext : '');
+        if (!file_exists($cand)) return $cand;
+    }
+    throw new RuntimeException('Too many kept originals of this photo already.');
+}
+
 function pf_is_image_file(string $path): bool {
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
     return in_array($ext, PF_IMAGE_EXTS, true);

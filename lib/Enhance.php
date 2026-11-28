@@ -5,6 +5,7 @@ require_once __DIR__ . '/util.php';
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/Exif.php';
 require_once __DIR__ . '/Exporter.php';
+require_once __DIR__ . '/Thumb.php';   // the kept original's thumbnail
 
 /**
  * Photo enhancement: white balance, levels, brightness, contrast, saturation and mild
@@ -665,15 +666,22 @@ final class Enhance {
             @unlink($exifThumb);
         }
 
+        $kept = null;
         if ($mode === 'replace') {
-            $res = pf_recycle_files([$path])[$path] ?? ['ok' => false, 'error' => 'no response'];
-            if (!$res['ok']) {
+            // The original is kept next to it as "<name> (original).jpg" (Clean up's Kept originals
+            // list deletes them in bulk when the user chooses).
+            $keptPath = pf_kept_original_path($path);
+            if (!@rename($path, $keptPath)) {
                 @unlink($out);
-                throw new RuntimeException('Could not move the original to the Recycle Bin (' . $res['error'] . '). Nothing was changed.');
+                throw new RuntimeException('Could not rename the original to keep it (is it open in another program?). Nothing was changed.');
             }
             if (!self::moveInto($out, $path)) {
-                throw new RuntimeException('The original is in the Recycle Bin, but the enhanced photo could not be put in its place. It is at ' . $out);
+                @rename($keptPath, $path);
+                throw new RuntimeException('Could not put the enhanced photo in the original\'s place. Nothing was changed.');
             }
+            $keptId = self::indexCopy($row, $keptPath);
+            Thumb::ensureThumb($keptId, $keptPath);
+            $kept = self::rowForPage($keptId);
             $id = (string)$row['id'];
             clearstatcache(true, $path);
             Db::upsertPending($id, $path, (int)filesize($path), (int)filemtime($path));
@@ -696,6 +704,7 @@ final class Enhance {
             'mode' => $mode,
             'name' => basename($dest),
             'image' => self::rowForPage($id),
+            'kept' => $kept,
             'seconds' => $times,
             'stats' => Db::stats(),
         ];
@@ -753,7 +762,7 @@ final class Enhance {
     }
 
     /** The row the page's grid and lightbox use, plus v (file time) to refresh cached images. */
-    private static function rowForPage(string $id): array {
+    public static function rowForPage(string $id): array {
         $r = Db::getById($id) ?? [];
         $r['sort_date'] = ($r['taken_at'] ?? '') !== '' ? $r['taken_at'] : (($r['folder_year'] ?? '') !== '' ? $r['folder_year'] : null);
         $r['v'] = (int)($r['mtime'] ?? time());

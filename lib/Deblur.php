@@ -642,15 +642,23 @@ final class Deblur {
             @unlink($tmp);
             throw new RuntimeException('Could not copy the photo\'s metadata: ' . trim((string)($stderr ?: $stdout)));
         }
+        $kept = null;
         if ($mode === 'replace') {
-            $rec = pf_recycle_files([$path])[$path] ?? ['ok' => false, 'error' => 'no response'];
-            if (!$rec['ok']) {
+            // The original is kept next to it as "<name> (original).jpg" (Clean up's Kept originals
+            // list deletes them in bulk when the user chooses); this version takes its name,
+            // description and place.
+            $keptPath = pf_kept_original_path($path);
+            if (!@rename($path, $keptPath)) {
                 @unlink($tmp);
-                throw new RuntimeException('Could not move the original to the Recycle Bin (' . $rec['error'] . '). Nothing was changed.');
+                throw new RuntimeException('Could not rename the original to keep it (is it open in another program?). Nothing was changed.');
             }
             if (!@rename($tmp, $path) && !(@copy($tmp, $path) && @unlink($tmp))) {
-                throw new RuntimeException('The original is in the Recycle Bin, but the fixed photo could not be put in its place. It is at ' . $tmp);
+                @rename($keptPath, $path);
+                throw new RuntimeException('Could not put the new version in the original\'s place. Nothing was changed.');
             }
+            $keptId = Enhance::indexCopy($row, $keptPath);   // its description, people, date and size, before the row changes
+            Thumb::ensureThumb($keptId, $keptPath);
+            $kept = Enhance::rowForPage($keptId);
             $newId = (string)$row['id'];
             $dest = $path;
             clearstatcache(true, $path);
@@ -697,7 +705,8 @@ final class Deblur {
         $r = Db::getById($newId) ?? [];
         $r['sort_date'] = ($r['taken_at'] ?? '') !== '' ? $r['taken_at'] : (($r['folder_year'] ?? '') !== '' ? $r['folder_year'] : null);
         $r['v'] = (int)($r['mtime'] ?? time());
-        return ['ok' => true, 'mode' => $mode, 'name' => basename($dest), 'image' => $r, 'removed_copy' => $removed, 'stats' => Db::stats()];
+        return ['ok' => true, 'mode' => $mode, 'name' => basename($dest), 'image' => $r, 'removed_copy' => $removed,
+                'kept' => $kept, 'stats' => Db::stats()];
     }
 
     // ---- Batch: the same fixes for many photos, one after another, on this PC ----
@@ -1124,7 +1133,7 @@ final class Deblur {
                 if (!pf_path_inside_roots((string)$row['path'], $roots)) throw new RuntimeException('The photo is outside the photo folders.');
                 $res = self::save($row, $kind, 'replace');
                 $rep[$id] = ['kind' => $kind, 'name' => $res['name'], 'at' => time()];
-                $results[] = ['id' => $id, 'ok' => true, 'image' => $res['image'], 'removed_copy' => $res['removed_copy']];
+                $results[] = ['id' => $id, 'ok' => true, 'image' => $res['image'], 'removed_copy' => $res['removed_copy'], 'kept' => $res['kept']];
             } catch (Throwable $e) {
                 $results[] = ['id' => $id, 'ok' => false, 'error' => $e->getMessage()];
             }

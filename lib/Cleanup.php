@@ -522,6 +522,29 @@ final class Cleanup {
         }
     }
 
+    /** Originals kept by "Replace the original" ("<name> (original).jpg"), newest first, each with
+     *  the photo that replaced it (same folder, the name without the suffix) when it is indexed. */
+    public static function keptOriginals(): array {
+        $rows = Db::get()->query(
+            'SELECT ' . self::ROW_COLS . " FROM images
+             WHERE status IN ('ok', 'pending') AND (path LIKE '% (original).%' OR path LIKE '% (original %).%')
+               AND COALESCE(cleanup_keep, 0) = 0
+             ORDER BY mtime DESC, path"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        $byPath = Db::get()->prepare('SELECT id, path, width, height FROM images WHERE path = :p');
+        $out = [];
+        foreach ($rows as $r) {
+            $r = self::rowOut($r);
+            $now = (string)preg_replace('/ \(original(?: \d+)?\)(\.[^.\/]*)?$/i', '$1', (string)$r['path']);
+            $byPath->execute([':p' => $now]);
+            $n = $byPath->fetch(PDO::FETCH_ASSOC) ?: null;
+            $byPath->closeCursor();
+            $r['replaced_by'] = $n ? ['id' => (string)$n['id'], 'name' => basename((string)$n['path']), 'width' => (int)$n['width'], 'height' => (int)$n['height']] : null;
+            $out[] = $r;
+        }
+        return $out;
+    }
+
     // ------------------------------------------------------------------ duplicates
 
     /** Groups of copies and near-copies, best copy first in each group.

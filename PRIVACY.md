@@ -50,7 +50,9 @@ with your own Google API key, set in Settings > Fix blur. Google's privacy polic
 watermark. Nothing is sent to Google unless you use this button.
 
 Either way, each version is saved as a new file next to the original as soon as it is made; the
-original changes only if you click **Replace the original** (it goes to the Recycle Bin first).
+original changes only if you click **Replace the original**, and even then it is kept next to the new
+version as "name (original).jpg" (Clean up's **Kept originals** list deletes them in bulk when you
+choose).
 
 **Batch AI pick** (optional; a tick box when you fix photos in a batch): each photo and its
 versions (reduced to at most 1024 pixels on the long side, plus close-ups of the faces) are sent
@@ -81,8 +83,8 @@ The search index, thumbnails, settings and logs are stored in `%LOCALAPPDATA%\Ph
 Photo Finder's web interface listens on `127.0.0.1` only and refuses requests from other
 websites. It changes your photo files only when you ask it to: **Embed metadata** writes the
 descriptions and tags into the files; **Enhance** saves a copy (or, if you choose, replaces the
-original, which goes to the Recycle Bin first); **Fix blur** and **Enlarge** save each version as a copy
-and, if you choose, replace the original the same way; **Rotate** changes only the photo's orientation tag; **Find photos on this
+original, which is kept next to it as "name (original).jpg"); **Fix blur** and **Enlarge** save each
+version as a copy and, if you choose, replace the original the same way; **Rotate** changes only the photo's orientation tag; **Find photos on this
 PC** moves the photos you tick into your photo folder; deleting photos, including from **Clean
 up**, moves them to the Recycle Bin.
 

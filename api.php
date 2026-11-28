@@ -523,6 +523,9 @@ try {
                     if ($kind === 'exposure') {
                         pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::exposure()), 'status' => Cleanup::status()]);
                     }
+                    if ($kind === 'originals') {
+                        pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::keptOriginals()), 'status' => Cleanup::status()]);
+                    }
                     if ($kind === 'small') {
                         pf_json(['kind' => $kind, 'items' => array_map($slim, Cleanup::small()), 'status' => Cleanup::status()]);
                     }
@@ -532,7 +535,7 @@ try {
                         unset($g);
                         pf_json(['kind' => $kind] + $d + ['status' => Cleanup::status()]);
                     }
-                    pf_json(['error' => 'kind must be blurry, exposure, duplicates or small'], 400);
+                    pf_json(['error' => 'kind must be blurry, exposure, duplicates, small or originals'], 400);
                 }
                 case 'cleanup_keep': {
                     $in = pf_input_json();
