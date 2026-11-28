@@ -47,17 +47,25 @@ checked against a fixed SHA-256 before use.
 long side), or for the last of these the result made on this PC, is sent to Google's Gemini API
 with your own Google API key, set in Settings > Fix blur. Google's privacy policy and Gemini API terms apply
 (<https://policies.google.com/privacy>). Google marks its results with an invisible SynthID
-watermark. Nothing is sent to Google unless you use this button.
+watermark. Nothing is sent to Google unless you use this button, or choose cloud AI for a batch
+(below).
+
+**Batches** run on this PC unless you choose otherwise under **Run** when you start one:
+**On this PC, then cloud AI** sends each photo's on-PC result to Gemini (and, to enlarge, each
+small photo), and **Cloud AI only** sends each photo itself, in the same way and under the same
+terms as the buttons above. The batch window shows how many requests that makes and roughly what
+Google will charge.
 
 Either way, each version is saved as a new file next to the original as soon as it is made; the
 original changes only if you click **Replace the original**, and even then it is kept next to the new
 version as "name (original).jpg" (Clean up's **Versions & originals** list deletes them in bulk when you
-choose).
+choose). **Restore the original** puts it back in the photo's place whenever you choose, keeping
+the version that had replaced it next to it.
 
 **Batch AI pick** (optional; a tick box when you fix photos in a batch): each photo and its
 versions (reduced to at most 1024 pixels on the long side, plus close-ups of the faces) are sent
 to Anthropic's Claude with your own Anthropic API key, the same service and key that describe your
-photos, to choose the best version. Batches otherwise run entirely on this PC.
+photos, to choose the best version.
 
 ## People (recognising faces)
 

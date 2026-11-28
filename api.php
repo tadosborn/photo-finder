@@ -347,9 +347,19 @@ try {
             $sort = in_array($_GET['sort'] ?? '', ['new', 'old', 'folder', 'relevance', 'updated'], true) ? $_GET['sort'] : 'new';
             // Recently updated: only the last N days (1, 7 or 30); 0 = every photo.
             $days = max(0, min(366, (int)($_GET['days'] ?? 0)));
-            $rows = Db::search($q, $limit + 1, $offset, $sort, $days > 0 ? time() - $days * 86400 : 0);   // one extra row says whether there is more
+            $only = ($_GET['only'] ?? '') === 'fixed' ? 'fixed' : '';
+            $rows = Db::search($q, $limit + 1, $offset, $sort, $days > 0 ? time() - $days * 86400 : 0, $only);   // one extra row says whether there is more
             $more = count($rows) > $limit;
             if ($more) array_pop($rows);
+            if ($only === 'fixed') {
+                // Each with its kept original, to show the two side by side.
+                require_once __DIR__ . '/lib/Restore.php';
+                foreach ($rows as &$row) {
+                    $k = Restore::keptOriginal((string)$row['path']);
+                    $row['original_id'] = $k !== null ? pf_path_id($k) : null;
+                }
+                unset($row);
+            }
             pf_json(['query' => $q, 'count' => count($rows), 'offset' => $offset, 'more' => $more, 'results' => $rows]);
         }
         case 'search_ids': {
@@ -357,7 +367,7 @@ try {
             $q = (string)($_GET['q'] ?? '');
             $sort = in_array($_GET['sort'] ?? '', ['new', 'old', 'folder', 'relevance', 'updated'], true) ? $_GET['sort'] : 'new';
             $days = max(0, min(366, (int)($_GET['days'] ?? 0)));
-            $rows = Db::search($q, 100000, 0, $sort, $days > 0 ? time() - $days * 86400 : 0);
+            $rows = Db::search($q, 100000, 0, $sort, $days > 0 ? time() - $days * 86400 : 0, ($_GET['only'] ?? '') === 'fixed' ? 'fixed' : '');
             pf_json(['ids' => array_column($rows, 'id')]);
         }
         case 'reset_errors': {
@@ -500,7 +510,30 @@ try {
                 pf_json(['error' => 'outside configured photo folders'], 403);
             }
             require_once __DIR__ . '/lib/Exif.php';
-            pf_json(Exif::details((string)$row['path']) + ['alt' => isset($row['gps_alt']) && $row['gps_alt'] !== null ? (float)$row['gps_alt'] : null]);
+            require_once __DIR__ . '/lib/Restore.php';
+            $kept = Restore::keptOriginal((string)$row['path']);
+            pf_json(Exif::details((string)$row['path']) + ['alt' => isset($row['gps_alt']) && $row['gps_alt'] !== null ? (float)$row['gps_alt'] : null,
+                'kept_original' => $kept !== null ? basename($kept) : null]);
+        }
+        // ---- Restore the original (lib/Restore.php): undo "Replace the original" ----
+        case 'restore_original': {
+            require_once __DIR__ . '/lib/Restore.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            $in = pf_input_json();
+            $row = Db::getById(preg_replace('/[^a-f0-9]/i', '', (string)($in['id'] ?? '')));
+            if (!$row) pf_json(['error' => 'not found'], 404);
+            pf_json(Restore::restore($row) + ['stats' => Db::stats()]);
+        }
+        case 'restore_list': {
+            require_once __DIR__ . '/lib/Restore.php';
+            pf_json(['photos' => Restore::restorable()]);
+        }
+        case 'restore_many': {
+            require_once __DIR__ . '/lib/Restore.php';
+            if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
+            set_time_limit(0);
+            $in = pf_input_json();
+            pf_json(Restore::restoreMany(is_array($in['ids'] ?? null) ? $in['ids'] : []));
         }
         case 'image_info': {
             $id = (string)($_GET['id'] ?? '');
@@ -759,11 +792,13 @@ try {
             require_once __DIR__ . '/lib/Deblur.php';
             if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') pf_json(['error' => 'POST required'], 405);
             $in = pf_input_json();
-            pf_json(['ok' => true, 'batch' => Deblur::batchStart(is_array($in['ids'] ?? null) ? $in['ids'] : [], is_array($in['steps'] ?? null) ? $in['steps'] : [], !empty($in['ai']))]);
+            pf_json(['ok' => true, 'batch' => Deblur::batchStart(is_array($in['ids'] ?? null) ? $in['ids'] : [], is_array($in['steps'] ?? null) ? $in['steps'] : [], !empty($in['ai']),
+                (string)($in['engine'] ?? 'local'))]);
         }
         case 'batch_ai_available': {
             require_once __DIR__ . '/lib/Deblur.php';
-            pf_json(['available' => Deblur::aiAvailable()]);
+            // What the batch window offers: the AI pick (Claude), cloud AI (Gemini key) and its price.
+            pf_json(['available' => Deblur::aiAvailable()] + Deblur::batchOptions());
         }
         case 'batch_review': {
             require_once __DIR__ . '/lib/Deblur.php';
@@ -810,7 +845,10 @@ try {
             }
             switch ($action) {
                 case 'deblur_status':
-                    pf_json(Deblur::status($id));
+                    require_once __DIR__ . '/lib/Restore.php';
+                    $kept = Restore::keptOriginal((string)$row['path']);
+                    pf_json(Deblur::status($id) + ['kept_original' => $kept !== null ? basename($kept) : null,
+                        'kept_original_id' => $kept !== null ? pf_path_id($kept) : null]);
                 case 'deblur_image': {
                     // The job's own picture, or the copy it saved (next to the photo, so inside the folders too).
                     $f = (Deblur::jobStatus($id, $kind)['state'] ?? '') === 'done' ? Deblur::resultFile($id, $kind) : '';

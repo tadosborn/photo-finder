@@ -83,7 +83,10 @@ final class Deblur {
      *  "all fixes" version. A batch's blur removal and enlargement are 'local' and 'up_local'. */
     public const KINDS = ['local', 'cloud', 'chain', 'up_local', 'up_cloud', 'color', 'up_local_2x', 'fixed', 'fixed_2x'];
     /** The kinds a batch makes ('_2x': the 2x size of a 4x enlargement, for the AI to choose between). */
-    public const BATCH_KINDS = ['local', 'color', 'up_local_2x', 'up_local', 'fixed_2x', 'fixed'];
+    public const BATCH_KINDS = ['local', 'color', 'up_local_2x', 'up_local', 'fixed_2x', 'fixed', 'cloud', 'chain', 'up_cloud'];
+    /** How a batch fixes blur and enlarges: on this PC (free), on this PC then cloud AI (both kept,
+     *  to compare), or cloud AI only. Colour correction is always on this PC. */
+    public const BATCH_ENGINES = ['local', 'chain', 'cloud'];
     private const CLOUD_KINDS = ['cloud', 'chain', 'up_cloud'];
     public const SUFFIX = ['local' => 'deblurred', 'cloud' => 'restored', 'chain' => 'deblurred, restored',
                            'up_local' => 'enlarged', 'up_cloud' => 'AI enlarged', 'color' => 'enhanced', 'up_local_2x' => 'enlarged 2x',
@@ -98,8 +101,8 @@ final class Deblur {
 
     /** Gemini image-editing models offered in Settings (prices from Google's pricing page, Nov 2026). */
     public const GEMINI_MODELS = [
-        'gemini-nano-banana-2.1' => ['label' => 'Nano Banana 2.1, 2K', 'size' => '2K', 'cost' => 'about $0.05 per photo'],
-        'gemini-3.1-flash-lite-image' => ['label' => 'Nano Banana 2 Lite, 1K (cheaper, smaller)', 'size' => '1K', 'cost' => 'about $0.03 per photo'],
+        'gemini-nano-banana-2.1' => ['label' => 'Nano Banana 2.1, 2K', 'size' => '2K', 'cost' => 'about $0.05 per photo', 'price' => 0.05],
+        'gemini-3.1-flash-lite-image' => ['label' => 'Nano Banana 2 Lite, 1K (cheaper, smaller)', 'size' => '1K', 'cost' => 'about $0.03 per photo', 'price' => 0.03],
     ];
     public const GEMINI_DEFAULT = 'gemini-nano-banana-2.1';
     public const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
@@ -495,60 +498,69 @@ final class Deblur {
                     throw new RuntimeException('The result from this PC is gone. Fix it on this PC again first.');
                 }
             }
-            $s = pf_load_settings();
-            $key = trim((string)($s['gemini_api_key'] ?? ''));
-            if ($key === '') throw new RuntimeException('No Google Gemini API key is set.');
-            $model = $kind === 'up_cloud' ? self::upCloudModel() : self::cloudModel();
-            [$jpeg, $w, $h] = self::cloudInput($src);
-            $body = [
-                'model' => $model,
-                'input' => [
-                    ['type' => 'text', 'text' => self::PROMPTS[$kind]],
-                    ['type' => 'image', 'mime_type' => 'image/jpeg', 'data' => base64_encode($jpeg)],
-                ],
-                'response_format' => ['type' => 'image', 'mime_type' => 'image/jpeg', 'aspect_ratio' => self::nearestRatio($w, $h),
-                                      'image_size' => self::GEMINI_MODELS[$model]['size']],
-            ];
-            $url = self::geminiUrl($s);
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($body), CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $key],
-                CURLOPT_CONNECTTIMEOUT => 20, CURLOPT_TIMEOUT => 240,
-            ]);
-            pf_curl_tls($ch);
-            $resp = curl_exec($ch);
-            $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            $err = curl_error($ch);
-            curl_close($ch);
-            if ($resp === false) throw new RuntimeException('Could not reach Google (' . $err . ').');
-            $j = json_decode((string)$resp, true);
-            if ($code !== 200) {
-                $msg = is_array($j) ? (string)($j['error']['message'] ?? '') : '';
-                throw new RuntimeException('Google answered HTTP ' . $code . ($msg !== '' ? ': ' . $msg : '.'));
-            }
-            $img = is_array($j) ? self::findImage($j) : null;
-            if ($img === null) {
-                $text = is_array($j) ? self::findText($j) : '';
-                throw new RuntimeException('Google returned no picture' . ($text !== '' ? ': ' . mb_substr($text, 0, 200) : '.'));
-            }
-            $bin = base64_decode($img, true);
-            if ($bin === false || !@getimagesizefromstring($bin)) throw new RuntimeException('Google returned something that is not a picture.');
+            [$bin, $info, $model] = self::cloudImage($src, $kind);
             $out = self::jobFile($id, $kind, 'jpg');
-            $info = getimagesizefromstring($bin);
-            if (($info[2] ?? 0) !== IMAGETYPE_JPEG) {          // asked for JPEG; convert if it sent PNG
-                $gd = imagecreatefromstring($bin);
-                if (!$gd) throw new RuntimeException('Could not read the picture Google returned.');
-                imagejpeg($gd, $out, 95);
-            } else {
-                file_put_contents($out, $bin);
-            }
+            file_put_contents($out, $bin);
             $state = ['state' => 'done', 'started' => $state['started'], 'seconds' => time() - $state['started'], 'model' => $model,
                       'width' => (int)$info[0], 'height' => (int)$info[1], 'updated' => time()];
         } catch (Throwable $e) {
             $state = ['state' => 'error', 'error' => $e->getMessage(), 'updated' => time()];
         }
         self::writeJson($jf, $state);
+    }
+
+    /** Photo file $src sent to Google's Gemini for $kind ('cloud' / 'chain': remove blur, 'up_cloud':
+     *  enlarge), upright. Returns [JPEG bytes, getimagesize of them, model]. */
+    private static function cloudImage(string $src, string $kind): array {
+        $s = pf_load_settings();
+        $key = trim((string)($s['gemini_api_key'] ?? ''));
+        if ($key === '') throw new RuntimeException('No Google Gemini API key is set.');
+        $model = $kind === 'up_cloud' ? self::upCloudModel() : self::cloudModel();
+        [$jpeg, $w, $h] = self::cloudInput($src);
+        $body = [
+            'model' => $model,
+            'input' => [
+                ['type' => 'text', 'text' => self::PROMPTS[$kind]],
+                ['type' => 'image', 'mime_type' => 'image/jpeg', 'data' => base64_encode($jpeg)],
+            ],
+            'response_format' => ['type' => 'image', 'mime_type' => 'image/jpeg', 'aspect_ratio' => self::nearestRatio($w, $h),
+                                  'image_size' => self::GEMINI_MODELS[$model]['size']],
+        ];
+        $url = self::geminiUrl($s);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($body), CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $key],
+            CURLOPT_CONNECTTIMEOUT => 20, CURLOPT_TIMEOUT => 240,
+        ]);
+        pf_curl_tls($ch);
+        $resp = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        if ($resp === false) throw new RuntimeException('Could not reach Google (' . $err . ').');
+        $j = json_decode((string)$resp, true);
+        if ($code !== 200) {
+            $msg = is_array($j) ? (string)($j['error']['message'] ?? '') : '';
+            throw new RuntimeException('Google answered HTTP ' . $code . ($msg !== '' ? ': ' . $msg : '.'));
+        }
+        $img = is_array($j) ? self::findImage($j) : null;
+        if ($img === null) {
+            $text = is_array($j) ? self::findText($j) : '';
+            throw new RuntimeException('Google returned no picture' . ($text !== '' ? ': ' . mb_substr($text, 0, 200) : '.'));
+        }
+        $bin = base64_decode($img, true);
+        if ($bin === false || !@getimagesizefromstring($bin)) throw new RuntimeException('Google returned something that is not a picture.');
+        $info = getimagesizefromstring($bin);
+        if (($info[2] ?? 0) !== IMAGETYPE_JPEG) {          // asked for JPEG; convert if it sent PNG
+            $gd = imagecreatefromstring($bin);
+            if (!$gd) throw new RuntimeException('Could not read the picture Google returned.');
+            ob_start();
+            imagejpeg($gd, null, 95);
+            $bin = (string)ob_get_clean();
+            $info = getimagesizefromstring($bin);
+        }
+        return [$bin, $info, $model];
     }
 
     /** settings 'gemini_url' overrides the endpoint for tests (https, or an address on this PC). */
@@ -693,6 +705,7 @@ final class Deblur {
             Db::upsertPending($newId, $path, (int)filesize($path), (int)filemtime($path));
             Db::touchUpdated($newId);
             Db::rescanFaces($newId);
+            Db::setReplacedWith($newId, isset($job['suffix']) ? (string)$job['suffix'] : self::SUFFIX[$kind]);
             @unlink(PF_THUMBS . '/' . $newId . '.jpg');
         } else {
             $dest = self::copyPath($path, $kind, isset($job['suffix']) ? (string)$job['suffix'] : null);
@@ -770,16 +783,21 @@ final class Deblur {
 
     /** Queue $ids for the $steps (BATCH_STEPS) and start the runner. Photos outside the photo
      *  folders are left out; so are photos already fixed by an earlier batch with the same steps. */
-    public static function batchStart(array $ids, array $steps, bool $ai = false): array {
+    public static function batchStart(array $ids, array $steps, bool $ai = false, string $engine = 'local'): array {
         $steps = array_values(array_intersect(self::BATCH_STEPS, $steps));
         if (!$steps) throw new RuntimeException('Choose at least one fix.');
+        if (!in_array($engine, self::BATCH_ENGINES, true)) throw new InvalidArgumentException('Unknown way to run the batch.');
         $b = self::batchStatus();
         if ($b && ($b['state'] ?? '') === 'running') throw new RuntimeException('A batch is already running. Wait for it to finish, or stop it in Queue.');
-        if (in_array('deblur', $steps, true) && !self::isReady()) {
+        $local = $engine !== 'cloud';
+        if ($local && in_array('deblur', $steps, true) && !self::isReady()) {
             throw new RuntimeException('Removing blur on this PC is not set up yet: open "Fix blur" on any one photo first (a one-time download).');
         }
-        if (in_array('enlarge', $steps, true) && !self::isUpscaleReady()) {
+        if ($local && in_array('enlarge', $steps, true) && !self::isUpscaleReady()) {
             throw new RuntimeException('Enlarging on this PC is not set up yet: open "Enlarge" on any one small photo first (a one-time download).');
+        }
+        if ($engine !== 'local' && array_intersect(['deblur', 'enlarge'], $steps) && !self::hasCloudKey()) {
+            throw new RuntimeException('Cloud AI uses your Google Gemini API key: enter it in Settings, or run the batch on this PC.');
         }
         if ($ai && !self::aiAvailable()) {
             throw new RuntimeException('The AI pick uses Claude, the AI that describes your photos: choose Claude and enter its API key in Settings, or untick the AI pick.');
@@ -791,14 +809,14 @@ final class Deblur {
             $id = (string)preg_replace('/[^a-f0-9]/', '', $id);
             $row = $id !== '' ? Db::getById($id) : null;
             if (!$row || !pf_path_inside_roots((string)$row['path'], $roots)) continue;
-            if (self::batchAlreadyDone($id, $steps)) { $already++; continue; }
+            if (self::batchAlreadyDone($id, $steps, $engine)) { $already++; continue; }
             $items[] = ['id' => $id, 'name' => basename((string)$row['path']), 'path' => (string)$row['path'], 'state' => 'queued'];
         }
         if (!$items) {
             throw new RuntimeException($already ? 'Every selected photo was already fixed this way by an earlier batch.' : 'None of the selected photos can be fixed.');
         }
         @unlink(self::batchCancelFile());
-        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'ai' => $ai, 'state' => 'running', 'items' => $items, 'already' => $already,
+        $b = ['id' => bin2hex(random_bytes(4)), 'steps' => $steps, 'engine' => $engine, 'ai' => $ai, 'state' => 'running', 'items' => $items, 'already' => $already,
               'current' => -1, 'started' => time(), 'updated' => time()];
         self::writeJson(self::batchFile(), $b);
         try {
@@ -810,6 +828,14 @@ final class Deblur {
             throw $e;
         }
         return self::batchStatus() ?? $b;
+    }
+
+    /** For the batch window: whether cloud AI can be used (a Gemini key) and what each call costs. */
+    public static function batchOptions(): array {
+        return ['cloud' => self::hasCloudKey(), 'local_ready' => self::isReady(), 'up_ready' => self::isUpscaleReady(),
+                'cloud_price' => (float)(self::GEMINI_MODELS[self::cloudModel()]['price'] ?? 0.05),
+                'up_cloud_price' => (float)(self::GEMINI_MODELS[self::upCloudModel()]['price'] ?? 0.05),
+                'cloud_side' => self::CLOUD_ENLARGE_SIDE];
     }
 
     /** Ask the runner to stop: the step in progress is ended, the rest is not started. */
@@ -845,7 +871,7 @@ final class Deblur {
                 return !is_file(self::batchCancelFile());
             };
             try {
-                $b['items'][$i] = array_merge($b['items'][$i], self::batchOne((string)$b['items'][$i]['id'], $b['steps'], (string)$b['id'], !empty($b['ai']), $tick));
+                $b['items'][$i] = array_merge($b['items'][$i], self::batchOne((string)$b['items'][$i]['id'], $b['steps'], (string)$b['id'], !empty($b['ai']), $tick, (string)($b['engine'] ?? 'local')));
             } catch (DeblurCancelled $e) {
                 $b['items'][$i]['state'] = 'cancelled';
                 $cancelled = true;
@@ -874,7 +900,7 @@ final class Deblur {
      *  corrected, 'up_local' enlarged); when more than one applies, they are also applied in
      *  turn (blur, then colour, then enlarge) as its 'fixed' version. Every version is saved as a
      *  copy next to the photo, so they can all be compared side by side and one put in place. */
-    private static function batchOne(string $id, array $steps, string $batchId, bool $ai, callable $tick): array {
+    private static function batchOne(string $id, array $steps, string $batchId, bool $ai, callable $tick, string $engine = 'local'): array {
         $row = Db::getById($id);
         if (!$row || !is_file((string)$row['path'])) throw new RuntimeException('The photo is no longer on disk.');
         $work = self::batchWorkDir();
@@ -887,11 +913,25 @@ final class Deblur {
             [self::python(), '-I', PF_ROOT . '/deblur.py', self::model(), $in, $to, $prog], $prog, $step, $tick);
         $enlarge = fn(string $in, string $to, int $scale, string $step) => self::runPython(
             [self::python(), '-I', PF_ROOT . '/enlarge.py', self::upscaleModel(), $in, $to, $prog, (string)$scale], $prog, $step, $tick);
+        $cloud = function (string $in, string $kind, string $to, string $step) use ($tick): void {
+            if (!$tick($step)) throw new DeblurCancelled();
+            file_put_contents($to, self::cloudImage($in, $kind)[0]);
+        };
 
-        // Each fix on its own.
+        // Each fix on its own (on this PC, then cloud AI on that result, or cloud AI only).
         if (in_array('deblur', $steps, true)) {
-            $deblur($orig, "$work/$id-d.jpg", 'removing blur');
-            $out['local'] = ["$work/$id-d.jpg", 'blur removed'];
+            if ($engine !== 'cloud') {
+                $deblur($orig, "$work/$id-d.jpg", 'removing blur');
+                $out['local'] = ["$work/$id-d.jpg", 'blur removed'];
+            }
+            if ($engine === 'chain') {
+                $cloud("$work/$id-d.jpg", 'chain', "$work/$id-dx.jpg", 'cloud AI on the result from this PC');
+                $out['chain'] = ["$work/$id-dx.jpg", 'blur removed, then redrawn by cloud AI'];
+            }
+            if ($engine === 'cloud') {
+                $cloud($orig, 'cloud', "$work/$id-dc.jpg", 'cloud AI removing blur');
+                $out['cloud'] = ["$work/$id-dc.jpg", 'blur removed by cloud AI'];
+            }
         }
         if (in_array('color', $steps, true)) {
             if (!$tick('correcting colour')) throw new DeblurCancelled();
@@ -900,19 +940,23 @@ final class Deblur {
         }
         if (in_array('enlarge', $steps, true)) {
             $e = self::enlargeInfo(['path' => $orig]);
-            if ($e['ok']) {
+            if ($engine !== 'cloud' && $e['ok']) {
                 $enlarge($orig, "$work/$id-e.jpg", $e['scale'], 'enlarging');
                 $out['up_local'] = ["$work/$id-e.jpg", 'enlarged ' . $e['scale'] . '×'];
-            } else {
-                $notes[] = 'already large, not enlarged';
             }
+            if ($engine !== 'local' && $e['cloud_ok']) {
+                $cloud($orig, 'up_cloud', "$work/$id-ec.jpg", 'cloud AI enlarging');
+                $out['up_cloud'] = ["$work/$id-ec.jpg", 'enlarged by cloud AI'];
+            }
+            if (!isset($out['up_local']) && !isset($out['up_cloud'])) $notes[] = 'already large, not enlarged';
         }
         if (!$out) return ['state' => 'skipped', 'note' => ucfirst(implode('; ', $notes) ?: 'nothing to change') . '.'];
 
         // All of them in turn, when more than one applies.
         if (count($out) > 1) {
-            $cur = $out['local'][0] ?? '';
-            $parts = $cur !== '' ? ['blur removed'] : [];
+            $blur = $engine === 'cloud' ? 'cloud' : ($engine === 'chain' ? 'chain' : 'local');   // the blur fix the chosen way gave
+            $cur = $out[$blur][0] ?? '';
+            $parts = $cur !== '' ? [$out[$blur][1]] : [];
             if (isset($out['color'])) {
                 if ($cur === '') {
                     $cur = $out['color'][0];
@@ -922,7 +966,11 @@ final class Deblur {
                     if (self::autoColour($cur, "$work/$id-dc.jpg")) { $cur = "$work/$id-dc.jpg"; $parts[] = 'colour corrected'; }
                 }
             }
-            if (isset($out['up_local']) && $cur !== '') {
+            if ($engine === 'cloud' && isset($out['up_cloud']) && $cur !== '') {
+                $cloud($cur, 'up_cloud', "$work/$id-f.jpg", 'all fixes: cloud AI enlarging');
+                $cur = "$work/$id-f.jpg";
+                $parts[] = $out['up_cloud'][1];
+            } elseif (isset($out['up_local']) && $cur !== '' && self::enlargeInfo(['path' => $cur])['ok']) {
                 $enlarge($cur, "$work/$id-f.jpg", self::enlargeInfo(['path' => $cur])['scale'], 'all fixes: enlarging');
                 $cur = "$work/$id-f.jpg";
                 $parts[] = $out['up_local'][1];
@@ -952,7 +1000,7 @@ final class Deblur {
             $title = str_starts_with($kind, 'fixed') ? 'All fixes: ' . $label : ucfirst($label);
             self::writeJson(self::jobFile($id, $kind, 'json'), [
                 'state' => 'done', 'started' => $t0, 'seconds' => time() - $t0, 'width' => (int)$w, 'height' => (int)$h, 'updated' => time(),
-                'batch' => $batchId, 'batch_steps' => $steps, 'label' => 'Batch: ' . $title,
+                'batch' => $batchId, 'batch_steps' => $steps, 'batch_engine' => $engine, 'label' => 'Batch: ' . $title,
             ]);
             try {
                 $res = self::save($row, $kind, 'copy');
@@ -993,10 +1041,11 @@ final class Deblur {
     }
 
     /** Whether photo $id already has a version from a batch with these $steps. */
-    private static function batchAlreadyDone(string $id, array $steps): bool {
+    private static function batchAlreadyDone(string $id, array $steps, string $engine = 'local'): bool {
         foreach (self::BATCH_KINDS as $k) {
             $j = self::jobStatus($id, $k);
-            if (($j['state'] ?? '') === 'done' && !empty($j['saved']) && ($j['batch_steps'] ?? null) === $steps) return true;
+            if (($j['state'] ?? '') === 'done' && !empty($j['saved']) && ($j['batch_steps'] ?? null) === $steps
+                && ($j['batch_engine'] ?? 'local') === $engine) return true;
         }
         return false;
     }

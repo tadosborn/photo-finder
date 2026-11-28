@@ -166,6 +166,16 @@ final class Db {
             face_id INTEGER NOT NULL,
             person_id INTEGER NOT NULL,
             PRIMARY KEY (face_id, person_id))');
+        // What replaced the photo ("enhanced", "deblurred"...), for Restore's name for that version.
+        if (!in_array('replaced_with', $colNames, true)) {
+            $pdo->exec('ALTER TABLE images ADD COLUMN replaced_with TEXT');
+            // Photos replaced before this was recorded: the ones with "<name> (original).<ext>" beside them.
+            $mark = $pdo->prepare("UPDATE images SET replaced_with = 'replaced' WHERE path = :p AND replaced_with IS NULL");
+            foreach ($pdo->query("SELECT path FROM images WHERE path LIKE '% (original).%'")->fetchAll(PDO::FETCH_COLUMN) as $kept) {
+                $p = preg_replace('/ \(original\)(\.[^.\/]*)$/i', '$1', (string)$kept);
+                if (is_string($p) && $p !== $kept) $mark->execute([':p' => $p]);
+            }
+        }
         foreach (['faces_scanned_at' => 'INTEGER', 'faces_meta' => 'TEXT', 'regions_extra' => 'TEXT'] as $col => $type) {
             if (!in_array($col, $colNames, true)) {
                 $pdo->exec("ALTER TABLE images ADD COLUMN {$col} {$type}");
@@ -699,6 +709,11 @@ final class Db {
 
     /** Photo $id shows new pixels (replaced by a fix): People finds its faces again, keeping who
      *  each one is by where it is (People::importPhoto). */
+    /** Photo $id was replaced by a version labelled $label (lib/Restore.php names it so if undone). */
+    public static function setReplacedWith(string $id, string $label): void {
+        self::get()->prepare('UPDATE images SET replaced_with = :l WHERE id = :id')->execute([':l' => $label, ':id' => $id]);
+    }
+
     public static function rescanFaces(string $id): void {
         self::get()->prepare('UPDATE images SET faces_scanned_at = NULL WHERE id = :id')->execute([':id' => $id]);
     }
@@ -712,8 +727,9 @@ final class Db {
         self::get()->prepare('UPDATE images SET gallery_hidden = :h WHERE id = :id')->execute([':h' => $hidden ? 1 : 0, ':id' => $id]);
     }
 
-    /** $since > 0: only photos updated (updated_at) at or after that Unix time. */
-    public static function search(string $query, int $limit = 100, int $offset = 0, string $sort = 'new', int $since = 0): array {
+    /** $since > 0: only photos updated (updated_at) at or after that Unix time. $only 'fixed': only
+     *  photos a fix replaced (their original kept beside them). */
+    public static function search(string $query, int $limit = 100, int $offset = 0, string $sort = 'new', int $since = 0, string $only = ''): array {
         $query = trim($query);
         $date = "COALESCE(NULLIF(i.taken_at, ''), NULLIF(i.folder_year, ''))";
         $cols = "i.id, i.path, i.description, i.tags, i.faces, i.width, i.height, i.lat, i.lon, i.taken_at, i.updated_at, {$date} AS sort_date";
@@ -725,7 +741,7 @@ final class Db {
             default     => "({$date} IS NULL), {$date} DESC, i.path",
         };
         // Inlined as an int: PDO binds as TEXT, and an INTEGER column compares less than any TEXT.
-        $recent = $since > 0 ? ' AND i.updated_at >= ' . $since : '';
+        $recent = ($since > 0 ? ' AND i.updated_at >= ' . $since : '') . ($only === 'fixed' ? ' AND i.replaced_with IS NOT NULL' : '');
         $page = function (PDOStatement $stmt) use ($limit, $offset): array {
             $stmt->bindValue(':n', $limit, PDO::PARAM_INT);
             $stmt->bindValue(':o', $offset, PDO::PARAM_INT);
