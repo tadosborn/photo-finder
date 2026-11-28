@@ -68,6 +68,7 @@ $apiKeySet = $settings['api_key'] !== '';
   .viewbar select:focus-visible, .more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .viewbar .viewbar-gap { width: 10px; }
   .viewbar .viewbar-count { margin-left: auto; }
+  .viewbar .viewbar-btn { padding: 5px 12px; font-size: 13px; }
   .group-head { grid-column: 1 / -1; margin: 14px 0 0; font-size: 16px; font-weight: 600; color: var(--text); display:flex; align-items:baseline; gap:10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
   .group-head:first-child { margin-top: 0; }
   .group-head .group-count { font-size: 12px; font-weight: 400; color: var(--mute); }
@@ -670,6 +671,7 @@ $apiKeySet = $settings['api_key'] !== '';
       <option value="none">No grouping</option>
     </select>
     <span class="viewbar-count" id="viewCount" aria-live="polite"></span>
+    <button type="button" id="viewSelAllBtn" class="viewbar-btn" title="Select every photo shown here, all pages: then Fix selected (colour correction, blur, enlarging), Share or Delete">Select all</button>
   </div>
   <div id="results" class="grid"></div>
   <div id="empty" class="empty" style="display:none"></div>
@@ -1426,7 +1428,14 @@ function renderResults(rows) {
   const empty = $('#empty');
   lastResults = rows;
   grid.innerHTML = '';
+  // Drop any selected ids that are no longer in the result set (an empty one too: nothing chosen
+  // may stay selected out of sight). After Select all, every photo the view matches stays
+  // selected, loaded on screen or not.
+  const present = new Set(rows.map(r => r.id));
+  const keep = view.matchIds || present;
+  selectedIds.forEach(id => { if (!keep.has(id)) selectedIds.delete(id); });
   if (!rows.length) {
+    updateSelBar();
     empty.style.display = 'block';
     const within = view.days === 1 ? 'the last day' : 'the last ' + view.days + ' days';
     empty.textContent = view.days
@@ -1437,9 +1446,6 @@ function renderResults(rows) {
     return;
   }
   empty.style.display = 'none';
-  // Drop any selected ids that are no longer in the result set.
-  const present = new Set(rows.map(r => r.id));
-  selectedIds.forEach(id => { if (!present.has(id)) selectedIds.delete(id); });
   const frag = document.createDocumentFragment();
   const heads = groupHeadings(rows);
   rows.forEach((row, idx) => {
@@ -1570,7 +1576,7 @@ function groupHeadings(rows) {
 // ---- Selection + deletion ----
 function updateSelBar() {
   const n = selectedIds.size;
-  $('#selCount').textContent = n + ' selected';
+  $('#selCount').textContent = n.toLocaleString() + ' selected';
   $('#selbar').classList.toggle('show', n > 0);
   $('#selDeleteBtn').textContent = n > 1 ? `Delete selected (${n})` : 'Delete selected';
   $('#selFixBtn').textContent = n > 1 ? `Fix selected (${n})…` : 'Fix selected…';
@@ -1631,10 +1637,22 @@ async function deletePhotos(ids) {
   } catch (e) { toast(e.message, 'err'); return null; }
 }
 
-$('#selAllBtn').addEventListener('click', () => {
-  lastResults.forEach(r => selectedIds.add(r.id));
-  renderResults(lastResults);
-});
+// Select all: every photo the view matches (its search and Show filter), every page, not only the
+// ones loaded so far, so Fix selected (Enhance's colour correction among the fixes), Share and
+// Delete can take a whole search or the whole library.
+async function selectAllMatching() {
+  const q = $('#q').value.trim();
+  const sort = view.group === 'folder' ? 'folder' : view.sort;
+  try {
+    const r = await api('search_ids', { qs: 'q=' + encodeURIComponent(q) + '&sort=' + sort + '&days=' + view.days });
+    view.matchIds = new Set(r.ids);
+    r.ids.forEach(id => selectedIds.add(id));
+    renderResults(lastResults);
+    if (r.ids.length > lastResults.length) toast(`All ${r.ids.length.toLocaleString()} photos selected, including the ones further down.`, 'ok');
+  } catch (e) { toast(e.message, 'err'); }
+}
+$('#selAllBtn').addEventListener('click', selectAllMatching);
+$('#viewSelAllBtn').addEventListener('click', selectAllMatching);
 $('#selClearBtn').addEventListener('click', () => {
   selectedIds.clear();
   renderResults(lastResults);
@@ -2181,6 +2199,7 @@ const PAGE = 200;
 async function doSearch(append = false) {
   if (view.loading) return;
   view.loading = true;
+  if (!append) view.matchIds = null;   // a new view: Select all applies to the one it was used in
   const q = $('#q').value.trim();
   const sort = view.group === 'folder' ? 'folder' : view.sort;
   const offset = append ? lastResults.length : 0;
@@ -4810,7 +4829,7 @@ const bs = { src: 'cu' };   // where the selection comes from: Clean up's list (
 function bSelected() {
   const ids = bs.src === 'grid' ? [...selectedIds] : [...cu.sel[cu.tab]];
   const rows = new Map((bs.src === 'grid' ? lastResults : (cu.lists[cu.tab] || [])).map(r => [r.id, r]));
-  return { ids, rows: ids.map(id => rows.get(id)).filter(Boolean) };
+  return { ids, rows: ids.map(id => rows.get(id) || { id }) };
 }
 // A rough time from each photo's size: on this PC a blur fix takes about 6 s per 448 px tile,
 // an enlargement about 0.25 s per 112 px tile, colour a few seconds.

@@ -352,6 +352,14 @@ try {
             if ($more) array_pop($rows);
             pf_json(['query' => $q, 'count' => count($rows), 'offset' => $offset, 'more' => $more, 'results' => $rows]);
         }
+        case 'search_ids': {
+            // Every photo the gallery's view matches (Select all): the same search, all pages.
+            $q = (string)($_GET['q'] ?? '');
+            $sort = in_array($_GET['sort'] ?? '', ['new', 'old', 'folder', 'relevance', 'updated'], true) ? $_GET['sort'] : 'new';
+            $days = max(0, min(366, (int)($_GET['days'] ?? 0)));
+            $rows = Db::search($q, 100000, 0, $sort, $days > 0 ? time() - $days * 86400 : 0);
+            pf_json(['ids' => array_column($rows, 'id')]);
+        }
         case 'reset_errors': {
             $n = Db::resetErrors();
             pf_json(['reset' => $n, 'stats' => Db::stats()]);
