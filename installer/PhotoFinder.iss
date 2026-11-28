@@ -412,10 +412,36 @@ function SetTimer(hWnd, nIDEvent, uElapse, lpTimerFunc: Longword): Longword;
 external 'SetTimer@user32.dll stdcall';
 function KillTimer(hWnd, nIDEvent: Longword): Bool;
 external 'KillTimer@user32.dll stdcall';
+function SetWindowPos(hWnd, hWndInsertAfter: Longword; X, Y, cx, cy: Integer; uFlags: Longword): Bool;
+external 'SetWindowPos@user32.dll stdcall';
+
+{ An update is started by the app, in the background, and Windows keeps a background program's
+  window behind the others: the progress window then sat unseen behind the browser. Bring it to
+  the front and keep it above other windows while Setup works (HWND_TOPMOST), then let go. }
+procedure KeepProgressInFront(OnTop: Boolean);
+begin
+  if OnTop then
+  begin
+    BringToFrontAndRestore;
+    SetWindowPos(WizardForm.Handle, $FFFFFFFF { HWND_TOPMOST }, 0, 0, 0, 0, $0001 or $0002 or $0040 { NOSIZE, NOMOVE, SHOWWINDOW });
+  end else
+    SetWindowPos(WizardForm.Handle, $FFFFFFFE { HWND_NOTOPMOST }, 0, 0, 0, 0, $0001 or $0002 or $0010 { NOSIZE, NOMOVE, NOACTIVATE });
+end;
 
 var
   ProgressFile, ProgressStep, ProgressMessage: String;
   ProgressTicks, ProgressTotalTicks: Integer;   { half seconds on the current step / in all }
+
+{ install.ps1's steps, by the percent it reports with each (5, 15, 50, 60, 75, 95; 100 = done). }
+function SetupStepNumber(Percent: Integer): Integer;
+begin
+  if Percent <= 5 then Result := 1
+  else if Percent <= 15 then Result := 2
+  else if Percent <= 50 then Result := 3
+  else if Percent <= 60 then Result := 4
+  else if Percent <= 75 then Result := 5
+  else Result := 6;
+end;
 
 procedure ShowSetupProgress(Arg1, Arg2, Arg3, Arg4: Longword);
 var
@@ -435,7 +461,10 @@ begin
     if GetArrayLength(Lines) >= 3 then ProgressMessage := Lines[2];
     Percent := StrToIntDef(Trim(Lines[0]), -1);
     if (Percent >= 0) and (Percent <= 100) then WizardForm.ProgressGauge.Position := Percent;
-    Caption := 'Setting up Photo Finder: ' + ProgressStep + '...';
+    if Percent >= 100 then
+      Caption := 'Setting up Photo Finder: done'
+    else
+      Caption := 'Setting up Photo Finder, step ' + IntToStr(SetupStepNumber(Percent)) + ' of 6: ' + ProgressStep + '...';
     { A slow step (antivirus scanning the new files, say) visibly keeps counting. }
     if ProgressTicks >= 6 then Caption := Caption + ' ' + IntToStr(ProgressTicks div 2) + ' s';
   end else
@@ -452,6 +481,11 @@ var
   Params, DirsFile, LogFile: String;
   TimerID: Longword;
 begin
+  if CurStep = ssInstall then
+  begin
+    KeepProgressInFront(True);   { the progress window is shown from here on, also in an update }
+    Exit;
+  end;
   if CurStep <> ssPostInstall then Exit;
   DirsFile := '';
 
@@ -495,6 +529,7 @@ begin
     KillTimer(0, TimerID);
   end;
   ShowSetupProgress(0, 0, 0, 0);
+  KeepProgressInFront(False);
   Log('install.ps1 exit ' + IntToStr(Code) + '; last step: ' + ProgressStep + '; last message: ' + ProgressMessage);
   DeleteFile(ProgressFile);
   if DirsFile <> '' then DeleteFile(DirsFile);
