@@ -69,9 +69,13 @@ $apiKeySet = $settings['api_key'] !== '';
   .viewbar .viewbar-gap { width: 10px; }
   .viewbar .viewbar-count { margin-left: auto; }
   .viewbar .viewbar-btn { padding: 5px 12px; font-size: 13px; }
+  .viewbar .viewbar-btn:disabled { opacity: 1; color: var(--mute); }
   .group-head { grid-column: 1 / -1; margin: 14px 0 0; font-size: 16px; font-weight: 600; color: var(--text); display:flex; align-items:baseline; gap:10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
   .group-head:first-child { margin-top: 0; }
   .group-head .group-count { font-size: 12px; font-weight: 400; color: var(--mute); }
+  .group-head label { display: flex; align-items: center; gap: 10px; margin: 0; cursor: pointer; font: inherit; color: inherit; }
+  .group-head .group-sel { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+  .viewbar .viewbar-sel { display: flex; align-items: center; gap: 6px; }
   .more-wrap { text-align: center; padding: 22px 0 8px; }
   dialog.settings { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 0; max-width: 780px; width: 94%; }
   /* Settings: tabs, each sized to fit without scrolling; the body keeps one height so the
@@ -636,7 +640,8 @@ $apiKeySet = $settings['api_key'] !== '';
 <div id="selbar" class="selbar">
   <span class="sel-count" id="selCount">0 selected</span>
   <button type="button" id="selAllBtn">Select all</button>
-  <button type="button" id="selClearBtn">Clear</button>
+  <button type="button" id="selInvertBtn">Invert selection</button>
+  <button type="button" id="selClearBtn">Select none</button>
   <button type="button" id="selShareBtn" title="Share the selected photos: email, nearby devices and other apps, or download them">Share selected…</button>
   <button type="button" id="selFixBtn" title="Fix the selected photos one after another on this PC; each gets a copy next to it">Fix selected…</button>
   <span class="sel-spacer"></span>
@@ -671,7 +676,12 @@ $apiKeySet = $settings['api_key'] !== '';
       <option value="none">No grouping</option>
     </select>
     <span class="viewbar-count" id="viewCount" aria-live="polite"></span>
-    <button type="button" id="viewSelAllBtn" class="viewbar-btn" title="Select every photo shown here, all pages: then Fix selected (colour correction, blur, enlarging), Share or Delete">Select all</button>
+    <span class="viewbar-sel" role="group" aria-label="Select">
+      <span>Select</span>
+      <button type="button" id="viewSelAllBtn" class="viewbar-btn" aria-label="Select all" title="Select every photo shown here, all pages: then Fix selected (colour correction, blur, enlarging), Share or Delete. Each group heading has its own tick box.">All</button>
+      <button type="button" id="viewSelInvertBtn" class="viewbar-btn" aria-label="Invert selection" title="Select the photos shown here that are not selected, and unselect the ones that are">Invert</button>
+      <button type="button" id="viewSelNoneBtn" class="viewbar-btn" aria-label="Select none" title="Unselect every photo" disabled>None</button>
+    </span>
   </div>
   <div id="results" class="grid"></div>
   <div id="empty" class="empty" style="display:none"></div>
@@ -1005,6 +1015,7 @@ $apiKeySet = $settings['api_key'] !== '';
   <div class="cu-actions">
     <button type="button" id="cuSelAll">Select all</button>
     <button type="button" id="cuSelNone">Select none</button>
+    <button type="button" id="cuSelInvert">Invert selection</button>
     <button type="button" id="cuSelExtra" hidden>Select all extra copies</button>
     <span class="cu-selcount" id="cuSelCount" role="status">0 selected</span>
     <span class="spacer"></span>
@@ -1453,7 +1464,17 @@ function renderResults(rows) {
       const g = heads.get(idx);
       const h = document.createElement('h2');
       h.className = 'group-head';
-      h.textContent = g.label;
+      h.dataset.start = idx;
+      h.dataset.count = g.count;
+      const lab = document.createElement('label');
+      const gcb = document.createElement('input');
+      gcb.type = 'checkbox';
+      gcb.className = 'group-sel';
+      gcb.title = 'Select every photo in ' + g.label;
+      gcb.addEventListener('change', () => toggleGroup(idx, gcb.checked));
+      lab.appendChild(gcb);
+      lab.appendChild(document.createTextNode(g.label));
+      h.appendChild(lab);
       const c = document.createElement('span');
       c.className = 'group-count';
       c.textContent = g.count + (g.count === 1 ? ' photo' : ' photos') + (g.more ? '+' : '');
@@ -1490,6 +1511,7 @@ function renderResults(rows) {
     frag.appendChild(card);
   });
   grid.appendChild(frag);
+  syncGroupChecks();
   updateSelBar();
 }
 
@@ -1577,6 +1599,7 @@ function groupHeadings(rows) {
 function updateSelBar() {
   const n = selectedIds.size;
   $('#selCount').textContent = n.toLocaleString() + ' selected';
+  $('#viewSelNoneBtn').disabled = !n;
   $('#selbar').classList.toggle('show', n > 0);
   $('#selDeleteBtn').textContent = n > 1 ? `Delete selected (${n})` : 'Delete selected';
   $('#selFixBtn').textContent = n > 1 ? `Fix selected (${n})…` : 'Fix selected…';
@@ -1591,7 +1614,45 @@ function toggleSelect(id, on) {
     const cb = card.querySelector('.sel');
     if (cb) cb.checked = on;
   }
+  syncGroupChecks();
   updateSelBar();
+}
+
+// Each group heading's tick box: ticked when all its photos are selected, half when some are.
+function syncGroupChecks() {
+  document.querySelectorAll('#results .group-head').forEach(h => {
+    const start = +h.dataset.start;
+    const ids = lastResults.slice(start, start + +h.dataset.count).map(r => r.id);
+    const n = ids.filter(id => selectedIds.has(id)).length;
+    const cb = h.querySelector('.group-sel');
+    if (!cb) return;
+    cb.checked = n > 0 && n === ids.length;
+    cb.indeterminate = n > 0 && n < ids.length;
+  });
+}
+// The page shows selectedIds without being drawn again (so it keeps its place).
+function syncSelectionUI() {
+  document.querySelectorAll('#results .card').forEach(card => {
+    const on = selectedIds.has(card.dataset.id);
+    card.classList.toggle('selected', on);
+    const cb = card.querySelector('.sel');
+    if (cb) cb.checked = on;
+  });
+  syncGroupChecks();
+  updateSelBar();
+}
+// A group heading's tick box: every photo in the group. A group that goes on past the photos
+// loaded so far is loaded to its end first.
+async function toggleGroup(start, on) {
+  let g = groupHeadings(lastResults).get(start);
+  for (let i = 0; on && g && g.more && view.more && i < 50; i++) {
+    while (view.loading) await new Promise(r => setTimeout(r, 100));
+    await doSearch(true);
+    g = groupHeadings(lastResults).get(start);
+  }
+  if (!g) return;
+  lastResults.slice(start, start + g.count).forEach(r => { if (on) selectedIds.add(r.id); else selectedIds.delete(r.id); });
+  syncSelectionUI();
 }
 
 /** Recycle the given photo ids (files → Recycle Bin) and drop them from the
@@ -1640,23 +1701,42 @@ async function deletePhotos(ids) {
 // Select all: every photo the view matches (its search and Show filter), every page, not only the
 // ones loaded so far, so Fix selected (Enhance's colour correction among the fixes), Share and
 // Delete can take a whole search or the whole library.
-async function selectAllMatching() {
+async function matchingIds() {
   const q = $('#q').value.trim();
   const sort = view.group === 'folder' ? 'folder' : view.sort;
   try {
     const r = await api('search_ids', { qs: 'q=' + encodeURIComponent(q) + '&sort=' + sort + '&days=' + view.days });
     view.matchIds = new Set(r.ids);
-    r.ids.forEach(id => selectedIds.add(id));
-    renderResults(lastResults);
-    if (r.ids.length > lastResults.length) toast(`All ${r.ids.length.toLocaleString()} photos selected, including the ones further down.`, 'ok');
-  } catch (e) { toast(e.message, 'err'); }
+    return r.ids;
+  } catch (e) { toast(e.message, 'err'); return null; }
+}
+async function selectAllMatching() {
+  const ids = await matchingIds();
+  if (!ids) return;
+  ids.forEach(id => selectedIds.add(id));
+  syncSelectionUI();
+  if (ids.length > lastResults.length) toast(`All ${ids.length.toLocaleString()} photos selected, including the ones further down.`, 'ok');
+}
+// Invert: of every photo the view matches (all pages), the unselected ones become the selection.
+async function invertSelection() {
+  const ids = await matchingIds();
+  if (!ids) return;
+  const next = ids.filter(id => !selectedIds.has(id));
+  selectedIds.clear();
+  next.forEach(id => selectedIds.add(id));
+  syncSelectionUI();
+}
+function selectNone() {
+  selectedIds.clear();
+  view.matchIds = null;
+  syncSelectionUI();
 }
 $('#selAllBtn').addEventListener('click', selectAllMatching);
 $('#viewSelAllBtn').addEventListener('click', selectAllMatching);
-$('#selClearBtn').addEventListener('click', () => {
-  selectedIds.clear();
-  renderResults(lastResults);
-});
+$('#selInvertBtn').addEventListener('click', invertSelection);
+$('#viewSelInvertBtn').addEventListener('click', invertSelection);
+$('#viewSelNoneBtn').addEventListener('click', selectNone);
+$('#selClearBtn').addEventListener('click', selectNone);
 $('#selDeleteBtn').addEventListener('click', async () => {
   const ids = [...selectedIds];
   if (!ids.length) return;
@@ -3843,6 +3923,7 @@ function cuUpdateSelBar() {
   $('#cuSelAll').textContent = cu.tab === 'duplicates' ? `Select all but the best copies (${all.toLocaleString()})` : `Select all (${all.toLocaleString()})`;
   $('#cuSelAll').disabled = !all || cu.busy;
   $('#cuSelNone').disabled = !n || cu.busy;
+  $('#cuSelInvert').disabled = !all || cu.busy;
   const extra = cuSelectable('extra').length;
   $('#cuSelExtra').textContent = `Select all extra copies (${extra.toLocaleString()})`;
   $('#cuSelExtra').disabled = !extra || cu.busy;
@@ -5538,6 +5619,12 @@ $('#cuDupMode').addEventListener('change', async () => {
 });
 $('#cuSelAll').addEventListener('click', () => cuSelectIds(cu.tab === 'duplicates' ? cuSelectable('all') : cuIds(cu.tab)));
 $('#cuSelNone').addEventListener('click', () => cuSelectIds([]));
+// Invert: of what Select all would select (for duplicates, everything but the best copies), the
+// unselected become the selection.
+$('#cuSelInvert').addEventListener('click', () => {
+  const cur = cu.sel[cu.tab];
+  cuSelectIds((cu.tab === 'duplicates' ? cuSelectable('all') : cuIds(cu.tab)).filter(id => !cur.has(id)));
+});
 $('#cuSelExtra').addEventListener('click', () => cuSelectIds(cuSelectable('extra')));
 $('#cuKeepBtn').addEventListener('click', cuKeep);
 $('#cuDeleteBtn').addEventListener('click', () => {

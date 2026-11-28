@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 // The one place Photo Finder's version lives. build.ps1 reads it to stamp the installer,
 // so a release is made by bumping this.
-const PF_VERSION = '1.0.16';
+const PF_VERSION = '1.0.17';
 
 // Where installed copies look for a newer build (Settings > Updates can turn the automatic
 // check off): the latest GitHub release of this repository. A release is offered only if it
